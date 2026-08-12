@@ -167,11 +167,13 @@ both: firmware bootloader
 # Build ALL firmware combinations (5 configs)
 all-firmware:
 	@echo "Building ALL firmware combinations..."
-	@$(MAKE) f4-mchf
-	@$(MAKE) f4-ovi40
-	@$(MAKE) f4-small
-	@$(MAKE) f7-ovi40
-	@$(MAKE) h7-ovi40
+	@$(MAKE) f4-mchf && cp mchf-eclipse/fw-mchf.bin fw-mchf_f4-mchf.bin && cp mchf-eclipse/fw-mchf.dfu fw-mchf_f4-mchf.dfu
+	@$(MAKE) f4-ovi40 && cp mchf-eclipse/fw-mchf.bin fw-mchf_f4-ovi40.bin && cp mchf-eclipse/fw-mchf.dfu fw-mchf_f4-ovi40.dfu
+	@$(MAKE) f4-small && cp mchf-eclipse/fw-mchf.bin fw-mchf_f4-small.bin && cp mchf-eclipse/fw-mchf.dfu fw-mchf_f4-small.dfu
+	@$(MAKE) f7-ovi40 && cp mchf-eclipse/fw-mchf.bin fw-mchf_f7-ovi40.bin && cp mchf-eclipse/fw-mchf.dfu fw-mchf_f7-ovi40.dfu
+	@$(MAKE) h7-ovi40 && cp mchf-eclipse/fw-mchf.bin fw-mchf_h7-ovi40.bin && cp mchf-eclipse/fw-mchf.dfu fw-mchf_h7-ovi40.dfu
+	@$(MAKE) f7-mchf && cp mchf-eclipse/fw-mchf.bin fw-mchf_f7-mchf.bin && cp mchf-eclipse/fw-mchf.dfu fw-mchf_f7-mchf.dfu
+	@$(MAKE) h7-mchf && cp mchf-eclipse/fw-mchf.bin fw-mchf_h7-mchf.bin && cp mchf-eclipse/fw-mchf.dfu fw-mchf_h7-mchf.dfu
 	@echo "ALL firmware builds completed!"
 	@ls -la fw-mchf_*.bin 2>/dev/null || true
 
@@ -182,6 +184,8 @@ all-bootloader:
 	@$(MAKE) BUILDFOR=F4 BOARD=ovi40 bootloader && cp mchf-eclipse/bl-mchf.bin bl-mchf_f4-ovi40.bin && cp mchf-eclipse/bl-mchf.dfu bl-mchf_f4-ovi40.dfu
 	@$(MAKE) BUILDFOR=F7 BOARD=ovi40 bootloader && cp mchf-eclipse/bl-mchf.bin bl-mchf_f7-ovi40.bin && cp mchf-eclipse/bl-mchf.dfu bl-mchf_f7-ovi40.dfu
 	@$(MAKE) BUILDFOR=H7 BOARD=ovi40 bootloader && cp mchf-eclipse/bl-mchf.bin bl-mchf_h7-ovi40.bin && cp mchf-eclipse/bl-mchf.dfu bl-mchf_h7-ovi40.dfu
+	@$(MAKE) BUILDFOR=F7 BOARD=mchf bootloader && cp mchf-eclipse/bl-mchf.bin bl-mchf_f7-mchf.bin && cp mchf-eclipse/bl-mchf.dfu bl-mchf_f7-mchf.dfu
+	@$(MAKE) BUILDFOR=H7 BOARD=mchf bootloader && cp mchf-eclipse/bl-mchf.bin bl-mchf_h7-mchf.bin && cp mchf-eclipse/bl-mchf.dfu bl-mchf_h7-mchf.dfu
 	@echo "ALL bootloader builds completed!"
 	@ls -la bl-mchf_*.bin 2>/dev/null || true
 
