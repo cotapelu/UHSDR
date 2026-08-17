@@ -330,3 +330,11 @@ infrastructure      # CI, tests, docs
 - [x] **T7.1** Fully remove USB Host dead code paths from `files.mak` and source
 - [x] **T7.2** Reduce scattered `#ifdef` below 20 (removed 87 dead/debug instances)
 - [x] **T7.3** Complete `ui_driver.c` split into focused modules
+
+### Phase 8: Bootloader Build Fix (ongoing)
+- [x] **T8.1** Fix `make` bootloader builds for all 6 combinations
+  - Pass `CONFIGFLAGS` from root Makefile to sub-make
+  - Add `clean-bootloader` between builds to avoid config contamination
+  - Add missing bootloader deps: `uhsdr_board.c`, `uhsdr_fault.c`, `ui_lcd_layouts.c`
+  - Add `bootloader_stubs.c` for UI functions referenced by layout tables
+  - Increase bootloader linker `rom` size to 64KB (F4/F7) and 256KB (H7)

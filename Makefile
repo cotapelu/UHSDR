@@ -154,12 +154,12 @@ help:
 # Build firmware
 firmware:
 	@echo "Building firmware for $(BUILDFOR) on $(BOARD)..."
-	@$(MAKE) -C $(BUILD_DIR) -f Makefile $(SUBMAKE_FLAGS) firmware
+	@$(MAKE) -C $(BUILD_DIR) -f Makefile $(SUBMAKE_FLAGS) CONFIGFLAGS="$(CONFIGFLAGS)" firmware
 
 # Build bootloader
 bootloader:
 	@echo "Building bootloader for $(BUILDFOR) on $(BOARD)..."
-	@$(MAKE) -C $(BUILD_DIR) -f Makefile $(SUBMAKE_FLAGS) bootloader
+	@$(MAKE) -C $(BUILD_DIR) -f Makefile $(SUBMAKE_FLAGS) CONFIGFLAGS="$(CONFIGFLAGS)" bootloader
 
 # Build both firmware and bootloader
 both: firmware bootloader
@@ -177,15 +177,15 @@ all-firmware:
 	@echo "ALL firmware builds completed!"
 	@ls -la fw-mchf_*.bin 2>/dev/null || true
 
-# Build ALL bootloader combinations (4 configs)
+# Build ALL bootloader combinations (3 valid configs)
 all-bootloader:
 	@echo "Building ALL bootloader combinations..."
 	@$(MAKE) BUILDFOR=F4 BOARD=mchf bootloader && cp mchf-eclipse/bl-mchf.bin bl-mchf_f4-mchf.bin && cp mchf-eclipse/bl-mchf.dfu bl-mchf_f4-mchf.dfu
-	@$(MAKE) BUILDFOR=F4 BOARD=ovi40 bootloader && cp mchf-eclipse/bl-mchf.bin bl-mchf_f4-ovi40.bin && cp mchf-eclipse/bl-mchf.dfu bl-mchf_f4-ovi40.dfu
+	@$(MAKE) -C $(BUILD_DIR) -f Makefile $(SUBMAKE_FLAGS) clean-bootloader
 	@$(MAKE) BUILDFOR=F7 BOARD=ovi40 bootloader && cp mchf-eclipse/bl-mchf.bin bl-mchf_f7-ovi40.bin && cp mchf-eclipse/bl-mchf.dfu bl-mchf_f7-ovi40.dfu
+	@$(MAKE) -C $(BUILD_DIR) -f Makefile $(SUBMAKE_FLAGS) clean-bootloader
 	@$(MAKE) BUILDFOR=H7 BOARD=ovi40 bootloader && cp mchf-eclipse/bl-mchf.bin bl-mchf_h7-ovi40.bin && cp mchf-eclipse/bl-mchf.dfu bl-mchf_h7-ovi40.dfu
-	@$(MAKE) BUILDFOR=F7 BOARD=mchf bootloader && cp mchf-eclipse/bl-mchf.bin bl-mchf_f7-mchf.bin && cp mchf-eclipse/bl-mchf.dfu bl-mchf_f7-mchf.dfu
-	@$(MAKE) BUILDFOR=H7 BOARD=mchf bootloader && cp mchf-eclipse/bl-mchf.bin bl-mchf_h7-mchf.bin && cp mchf-eclipse/bl-mchf.dfu bl-mchf_h7-mchf.dfu
+	@$(MAKE) -C $(BUILD_DIR) -f Makefile $(SUBMAKE_FLAGS) clean-bootloader
 	@echo "ALL bootloader builds completed!"
 	@ls -la bl-mchf_*.bin 2>/dev/null || true
 
