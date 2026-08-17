@@ -11,6 +11,7 @@ addons:
   apt:
     packages:
       libc6-i386
+      cppcheck
 
 cache:
   directories:
@@ -54,6 +55,7 @@ script:
     - cd ../fw-f4-small
     - make $MAKEFLAGS -f $ROOTLOC/Makefile OPT_GCC_ARM=$GCC_DIR CONFIGFLAGS="-DUI_BRD_MCHF -DRF_BRD_MCHF -DIS_SMALL_BUILD" ROOTLOC=$ROOTLOC all
     - cd ..
+    - bash scripts/static_analysis.sh
 before_deploy:
     - sudo apt-get install -y doxygen graphviz
     - make docs > /dev/null && tar -czf docs.tar.gz -C .. docs
