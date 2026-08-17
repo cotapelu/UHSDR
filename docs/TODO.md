@@ -270,7 +270,7 @@ typedef struct {
 - [x] **T4.4** Split `audio_driver.c` into modules
 - [x] **T4.5** Rewrite diag/trace without newlib
 - [x] **T4.6** Replace magic numbers with constants
-- [ ] **T4.7** Encapsulate global state in context structs
+- [x] **T4.7** Encapsulate global state in context structs
 
 ### Phase 5: Infrastructure (ongoing)
 - [x] **T5.1** Add CI pipeline (build all 9 configs)

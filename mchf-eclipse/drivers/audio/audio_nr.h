@@ -79,7 +79,28 @@ typedef struct NoiseReduction2 // declaration
 	int16_t						power_threshold_int;
 } NoiseReduction2;
 
-extern NoiseReduction2  NR2; // declaration, definition is in audio_nr.c
+typedef struct NoiseReduction // declaration
+{
+    float32_t                   last_iFFT_result [NR_FFT_L_2 / 2];
+    float32_t                   last_sample_buffer_L [NR_FFT_L_2 / 2];
+    float32_t                   FFT_buffer[NR_FFT_L_2 * 2];
+    float32_t                   Nest[NR_FFT_L_2 / 2][2]; // noise estimates for the current and the last FFT frame
+    float32_t                   vk; // saved 0.24kbytes
+    float32_t                   SNR_prio[NR_FFT_L_2 / 2];
+    float32_t                   SNR_post[NR_FFT_L_2 / 2];
+    float32_t                   SNR_post_pos; // saved 0.24kbytes
+    float32_t                   Hk_old[NR_FFT_L_2 / 2];
+//  float32_t                   VAD;
+//  float32_t                   VAD_Esch; // holds the VAD sum for the Esh & Vary 2009 type of VAD
+//  float32_t                   notch1_f;
+//  bool                        notch1_enable;
+//  float32_t                   notch2_f;
+//  bool                        notch2_enable;
+    //ulong                     long_tone_counter;
+    uint16_t current_buffer_idx;
+    bool was_here;
+
+} NoiseReduction;
 
 typedef struct
 {
@@ -108,8 +129,29 @@ typedef struct
 
 } audio_nr_params_t;
 
-extern audio_nr_params_t nr_params;
+// Context structure encapsulating all NR module state
+typedef struct
+{
+    NoiseReduction nr;
+    NoiseReduction2 nr2;
+    audio_nr_params_t params;
+    int32_t in_head, in_tail, out_head, out_tail;
+    NR_Buffer* in_buffers[NR_BUFFER_FIFO_SIZE];
+    NR_Buffer* out_buffers[NR_BUFFER_FIFO_SIZE];
+} AudioNr_Context_t;
 
+// Default global context instance
+extern AudioNr_Context_t g_audio_nr_ctx;
+
+// Backward-compatible aliases for external code
+#define NR2 g_audio_nr_ctx.nr2
+#define nr_params g_audio_nr_ctx.params
+
+void AudioNr_InitContext(AudioNr_Context_t* ctx);
+static inline AudioNr_Context_t* AudioNr_GetDefaultContext(void)
+{
+    return &g_audio_nr_ctx;
+}
 
 void NR_Init(void);
 
