@@ -7040,13 +7040,6 @@ bool UiDriver_TimerExpireAndRewind(SysClockTimers sct,uint32_t now, uint32_t div
 
 
 
-#ifdef USE_USBHOST
-#include "usb_host.h"
-#include "usbh_core.h"
-#include "usbh_hid_keybd.h"
-extern USBH_HandleTypeDef hUsbHostHS;
-#endif
-
 /**
  * This handler is activated by the Audio-Interrupt with a frequency of 1500 Hz via PendSV interrupt.
  * However, since this handler may run longer than 0.66uS it cannot be used to keep track of time
@@ -7150,143 +7143,6 @@ void UiDriver_Callback_AudioISR()
 
 }
 
-static void UiDriver_HandleUSB_Keyboard()
-{
-#ifdef USE_USBKEYBOARD
-    if(USBH_HID_GetDeviceType(&hUsbHostHS) == HID_KEYBOARD)
-    {
-        HID_KEYBD_Info_TypeDef *k_pinfo = USBH_HID_GetKeybdInfo(&hUsbHostHS);
-
-        const uint32_t kb_buffer_size = (sizeof(k_pinfo->keys)/sizeof(k_pinfo->keys[0]));
-        static uint8_t keys_buffer[sizeof(k_pinfo->keys)/sizeof(k_pinfo->keys[0])] = { 0 };
-
-        /*
-         * Regarding -> https://www.usb.org/sites/default/files/documents/hid1_11.pdf 72p.
-         *
-         * The order of keycodes in array fields has no significance. Order determination
-         * is done by the host software comparing the contents of the previous report to
-         * the current report. If two or more keys are reported in one report, their order is
-         * indeterminate. Keyboards may buffer events that would have otherwise
-         * resulted in multiple event in a single report.
-         *
-         * So, the code below is keeping the previous report from the keyboard to compare
-         * with the next one and filter out multi-pressed keys. Later this could be used
-         * to determine long press key or repeat key if it's holding - for example:
-         *
-         * Start recording F1-button if F5 was pressed for 2 sec...
-         */
-        if(k_pinfo != NULL)
-        {
-            /*
-             * The discussion about code below was there
-             * -> https://github.com/df8oe/UHSDR/pull/1702
-             */
-            for( uint32_t idx = 0; idx < kb_buffer_size; idx++ )
-            {
-                bool is_exist_in_buffer = false;
-                for( uint32_t i = 0; i < kb_buffer_size; i++ )
-                {
-                    /*
-                     * Looking for the same symbol in prev. array by iterating over this array.
-                     */
-                    if ( keys_buffer[i] == k_pinfo->keys[idx])
-                    {
-                        /*
-                         * if symbol presents in both arrays that means
-                         * it's already handled and we need to ignore it.
-                         */
-                        is_exist_in_buffer = true;
-                        break;
-                    }
-                }
-                if ( is_exist_in_buffer == true )
-                {
-                    /*
-                     * The same character was found in previous report,
-                     * so, Ignoring this one
-                     */
-                    continue;
-                }
-                else
-                {
-                    switch(k_pinfo->keys[idx])
-                    {
-                    case KEY_ESCAPE:
-                      DigiModes_TxBufferReset();
-                      break;
-                    case KEY_BACKSPACE:
-                        UiDriver_TextMsgClear();
-                      break;
-                    case KEY_F1:
-                      RadioManagement_Request_TxOn();
-                      break;
-                    case KEY_F2:
-                      RadioManagement_Request_TxOff();
-                      break;
-                    case KEY_F5:
-                        if (k_pinfo->lshift)
-                        {
-                            UiAction_RecordKeyerBtn1();
-                        }
-                        else
-                        {
-                            UiAction_PlayKeyerBtn1();
-                        }
-                        break;
-                    case KEY_F6:
-                        if (k_pinfo->lshift)
-                        {
-                            UiAction_RecordKeyerBtn2();
-                        }
-                        else
-                        {
-                            UiAction_PlayKeyerBtn2();
-                        }
-                        break;
-                    case KEY_F7:
-                        if (k_pinfo->lshift)
-                        {
-                            UiAction_RecordKeyerBtn3();
-                        }
-                        else
-                        {
-                            UiAction_PlayKeyerBtn3();
-                        }
-                        break;
-                    case KEY_F8:
-                        if (k_pinfo->lshift)
-                        {
-                            UiAction_ToggleBufferedTXMode();
-                        }
-                        else
-                        {
-                            UiAction_ToggleKeyerMode();
-                        }
-                      break;
-
-                    }
-
-                    uint8_t kbdChar = USBH_HID_GetASCIICode( k_pinfo, idx );
-                    if (kbdChar != '\0')
-                    {
-                      // FIXME seems we can push only into Digi_buffer....
-                      if (is_demod_rtty() || is_demod_psk() || ts.dmod_mode == DEMOD_CW)
-                      {
-                          DigiModes_TxBufferPutChar( kbdChar, KeyBoard );
-                      }
-                      else
-                      {
-                          UiDriver_TextMsgPutChar( kbdChar );
-                      }
-                    }
-                }
-            }
-            memcpy( keys_buffer, k_pinfo->keys, sizeof(k_pinfo->keys));
-        }
-    }
-#endif // USE_USBKEYBOARD
-}
-
 void UiDriver_TaskHandler_MainTasks()
 {
 
@@ -7308,10 +7164,6 @@ void UiDriver_TaskHandler_MainTasks()
 	}
 #endif
 	// END CALLED AS OFTEN AS POSSIBLE
-
-#ifdef USE_USBHOST
-    MX_USB_HOST_Process();
-#endif // USE_USBHOST
 
 	// BELOW ALL CALLING IS BASED ON SYSCLOCK 10ms clock
 	if (UiDriver_TimerExpireAndRewind(SCTimer_ENCODER_KEYS,now,1))
@@ -7336,7 +7188,6 @@ void UiDriver_TaskHandler_MainTasks()
 		    Codec_RestartI2S();
 		    ts.twinpeaks_tested = TWINPEAKS_WAIT;
 		}
-        UiDriver_HandleUSB_Keyboard();
 	}
 
 	UiSpectrum_Redraw();

@@ -154,13 +154,8 @@
 #define USE_RTTY_PROCESSOR
 
 // OPTION
-#define USE_USBHOST
-#ifdef USE_USBHOST
-    // define additional USBHOST related "switches" only here!
-    // #define USE_USBDRIVE
-    #define USE_USBKEYBOARD
-#endif
-
+// USB Host support removed from firmware - bootloader retains USB Host for DFU
+// #define USE_USBHOST
 
 // use the STM32 internal RTC with an external quartz and
 // M1 and F3 connected to PD14 and PD15 (D0 and D1 of LCD) instead of PC14 and PC15 (to which the 32768 Hz quartz has to be connected)

@@ -325,3 +325,8 @@ infrastructure      # CI, tests, docs
 - [x] **T6.2** Add bootloader safety (CRC, anti-rollback, boot counter)
 - [x] **T6.3** Add power management (sleep mode, low-power idle)
 - [x] **T6.4** Update platform documentation with new features
+
+### Phase 7: Hardening & Technical Debt (ongoing)
+- [x] **T7.1** Fully remove USB Host dead code paths from `files.mak` and source
+- [ ] **T7.2** Reduce scattered `#ifdef` below 20
+- [ ] **T7.3** Complete `ui_driver.c` split into focused modules
