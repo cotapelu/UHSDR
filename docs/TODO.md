@@ -276,7 +276,7 @@ typedef struct {
 - [x] **T5.1** Add CI pipeline (build all 9 configs)
 - [x] **T5.2** Add unit test framework
 - [x] **T5.3** Add static analysis (cppcheck, clang-tidy)
-- [ ] **T5.4** Add size regression detection
+- [x] **T5.4** Add size regression detection
 - [ ] **T5.5** Add WCET analysis for ISR tasks
 - [x] **T5.6** Add stack usage profiling
 
