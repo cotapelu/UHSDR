@@ -1,4 +1,5 @@
 /*  -*-  mode: c; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4; coding: utf-8  -*-  */
+#include <stdint.h>
 /************************************************************************************
  **                                                                                 **
  **                                        UHSDR                                    **
@@ -33,6 +34,12 @@ enum
     BOOT_DFU = 0x99,
     BOOT_FIRMWARE = 0x66993300,
 };
+
+#define BOOTLOADER_MAX_BOOT_FAILURES 3
+
+/* Bootloader safety functions */
+uint32_t Bootloader_GetBootCounter(void);
+void Bootloader_ResetBootCounter(void);
 
 #ifdef __cplusplus
 }

@@ -339,6 +339,14 @@ int Bootloader_Main()
         // we had that and it is pain to debug, see #1610 in GitHub!
         if (uhsdrBl_IsValidApplication(APPLICATION_ADDRESS))
         {
+            /* Bootloader safety: Check boot counter before jumping */
+            if (Bootloader_GetBootCounter() >= BOOTLOADER_MAX_BOOT_FAILURES)
+            {
+                Bootloader_PrintLine("Boot failure limit reached!");
+                Bootloader_PrintLine("Please reflash firmware.");
+                BootFail_Handler(5);
+            }
+            
             UhsdrBl_JumpToApplication(APPLICATION_ADDRESS);
         }
         else
