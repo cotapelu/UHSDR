@@ -1,310 +1,321 @@
-# UHSDR - Technical Debt & Improvement Roadmap
+# UHSDR Platform TODO — Multi-MCU Optimization Roadmap
 
-> **Generated from static analysis of codebase**  
-> Last updated: 2024
+> **Based on:** AGENTS.md v5.0 + full codebase scan (2010 files, ~1.69M lines)  
+> **Last updated:** 2025-08-17  
+> **Scope:** STM32F4 (mcHF), STM32F7 (OVI40), STM32H7 (OVI40)
 
 ---
 
-## 📋 Executive Summary
+## 📊 Executive Summary
 
-| Category | Score | Status |
-|----------|-------|--------|
-| **Filter Bank / Demodulation** | ⭐⭐⭐⭐⭐ | Production Ready |
-| **CW Keyer / FreeDV** | ⭐⭐⭐⭐ | Production Ready |
-| **AGC / NR / Noise Blanker** | ⭐⭐ | **Needs Rewrite** |
-| **Architecture / Modularity** | ⭐⭐ | High Coupling |
-| **Testing / CI** | ⭐ | Missing |
-| **Documentation** | ⭐⭐ | Sparse |
+| Category | Issues | Status |
+|---|---|---|
+| **Safety Critical** | 4 | 🔴 Missing |
+| **MCU Abstraction** | 8 | 🟠 Incomplete |
+| **Memory & Cache** | 5 | 🟠 Broken on F7/H7 |
+| **Code Quality** | 12 | 🟡 Tech debt |
+| **Build System** | 3 | 🟢 OK |
+| **Documentation** | 2 | 🟡 Sparse |
 
-**Overall: 2.5/5** — *Hobby/Research grade, not Production ready*
+**Overall Platform Health: 3/5** — *Functional but not production-hardened*
 
 ---
 
 ## 🔴 CRITICAL — Must Fix Before Production
 
-### 1. Firmware Validation in Bootloader
-**File:** `mchf-eclipse/src/bootloader/bootloader_main.c`  
-**Risk:** Flash corruption → permanent brick  
-**Fix:** Add CRC32/signature verification before `JumpToApplication()`
-
-```c
-// TODO: Add in uhsdrBl_IsValidApplication()
-bool validate_firmware_image(uint32_t addr) {
-    // 1. Check vector table sanity
-    // 2. Verify CRC32 of firmware image
-    // 3. Verify Ed25519 signature (optional)
-    // 4. Check version compatibility
-}
-```
-
-### 2. Watchdog Timer
-**File:** `src/uhsdr_main.c`  
+### 1. Watchdog Timer (All MCUs)
 **Risk:** DSP hang → requires power cycle  
-**Fix:** Enable IWDG, refresh in superloop
+**Status:** HAL driver exists, product code never calls it  
+**File:** `mchf-eclipse/src/uhsdr_main.c`
 
 ```c
 // TODO: Add in mchfMain()
+IWDG_HandleTypeDef hiwdg;
+hiwdg.Instance = IWDG;
+hiwdg.Init.Prescaler = IWDG_PRESCALER_64;
+hiwdg.Init.Reload = 4095;  // ~26s timeout
+hiwdg.Init.Window = 4095;
 HAL_IWDG_Init(&hiwdg);
-// In superloop:
+
+// In main loop (must be <26s):
 HAL_IWDG_Refresh(&hiwdg);
 ```
 
-### 3. Firmware CRC/Integrity Check
-**File:** `mchf-eclipse/src/bootloader/bootloader_main.c`  
-**Risk:** Silent flash corruption  
-**Fix:** CRC32 at build time, verify at boot
+### 2. F7/H7 Fault Handlers (F7, H7)
+**Risk:** Silent crash, no diagnostics  
+**Status:** Empty `while(1)` loops on F7/H7; F4 has register dump  
+**File:** `mchf-eclipse/basesw/ovi40/Src/stm32f7xx_it.c`, `mchf-eclipse/basesw/ovi40-h7/Src/stm32h7xx_it.c`
+
+```c
+// TODO: Match F4 implementation
+void HardFault_Handler(void) __attribute__((naked));
+void HardFault_Handler(void) {
+    // Extract stack frame, call Debug_FaultGetRegistersFromStack()
+    // Same as F4: stm32f4xx_it.c:162
+}
+```
+
+### 3. BusFault_Handler on F7/H7 (F7, H7)
+**Risk:** RAM detection impossible on F7/H7  
+**Status:** Only exists on F4 (`uhsdr_board.c:395`)  
+**File:** `mchf-eclipse/hardware/uhsdr_board.c`
+
+```c
+// TODO: Add BusFault_Handler for F7/H7 RAM detection
+// Or use linker-provided RAM sizes instead
+```
+
+### 4. Stack Guard Enforcement (All MCUs)
+**Risk:** Stack overflow corrupts adjacent memory  
+**Status:** Canary exists (`uhsdr_canary.c`) but not enforced  
+**File:** `mchf-eclipse/misc/uhsdr_canary.c`
+
+```c
+// TODO: Add periodic stack check in main loop
+if (!StackGuard_Check()) {
+    // Log error, safe state
+}
+```
 
 ---
 
-## 🟠 HIGH PRIORITY — Core DSP Modules Need Rewrite
+## 🟠 HIGH PRIORITY — Hardware Support
 
-### 4. Noise Reduction (`audio_nr.c`) — **877 lines, single function**
-**Problems:**
-- `spectral_noise_reduction()` = 877 lines (god function)
-- Spectral subtraction (1990s) → musical artifacts
-- O(N²) complexity, not real-time safe
-- No modular structure
+### 5. H7 RAM Detection (H7)
+**Risk:** Hardcoded 512KB, wrong on 1MB/2MB variants  
+**Status:** `retval = 512` with TODO comment  
+**File:** `mchf-eclipse/hardware/uhsdr_board.c:469`
 
-**Target:** Modular, <5% CPU on Cortex-M7
-- Option A: Wiener filter with decision-directed SNR
-- Option B: RNNoise (DNN, 1.5KB model, ~10% CPU on M7)
-- Option C: Minimum statistics (Martin Rainer)
+```c
+// TODO: Implement real RAM detection for H7
+// Use ID_DDR (0x1FF1E880) or iterate memory regions
+```
 
-**Files:** `audio_nr.c`, `audio_nr.h`
+### 6. I2C Timing Abstraction (F7, H7)
+**Risk:** I2C speed change broken on F7/H7  
+**Status:** F4-only, FIXME comment  
+**File:** `mchf-eclipse/hardware/uhsdr_hw_i2c.c:75`
 
-### 5. Noise Blanker (`audio_nr.c`)
-**Problems:**
-- Simple threshold `|x|² > thresh`
-- Cannot distinguish impulse vs signal
-- No correlation-based detection
+```c
+// FIXME: F7PORT: I2C Clock Timing works differently on F7
+// Need timing register calculation instead of simple ClockSpeed
+```
 
-**Target:** Correlation-based impulse detection
-- Exploit cyclostationarity of man-made noise
-- Correlation over 2-4 symbols
+### 7. H7 RTC Support (H7)
+**Risk:** RTC not initialized on H7  
+**Status:** FIXME comment  
+**File:** `mchf-eclipse/hardware/uhsdr_rtc.c:128`
 
-### 6. AGC (`audio_agc.c`) — **WDSP 2005 port**
-**Problems:**
-- Complex state machine (300+ lines `AudioAgc_SetupAgcWdsp`)
-- Magic thresholds everywhere
-- Pumping on SSB
-- No dual-loop (RF + IF)
+### 8. Cache Maintenance for DMA Buffers (F7, H7)
+**Risk:** Data corruption on cached memory  
+**Status:** Only `Board_Reboot()` and bootloader call `SCB_CleanDCache()`  
+**Affected buffers:**
+- LCD pixelbuffer: `mchf-eclipse/drivers/ui/lcd/ui_lcd_hy28.c:1174`
+- FFT ring buffer: `mchf-eclipse/drivers/ui/lcd/ui_spectrum.h:192`
+- Audio DMA buffers (if in cached memory)
 
-**Target:** Modern dual-loop AGC
-- RF gain (slow) + IF gain (fast)
-- Look-ahead peak detection
-- Psychoacoustic loudness (EBU R128)
+```c
+// TODO: Add cache maintenance macros
+#define DMA_BUFFER_CLEAN(addr, len)      SCB_CleanDCache((addr), (len))
+#define DMA_BUFFER_INVALIDATE(addr, len) SCB_InvalidateDCache((addr), (len))
+```
 
----
+### 9. SPI DMA on H7 (H7)
+**Risk:** Disabled, FIXME comment  
+**Status:** `#ifndef STM32H7` at `ui_lcd_hy28.c:28`  
+**File:** `mchf-eclipse/drivers/ui/lcd/ui_lcd_hy28.c`
 
-## 🟡 MEDIUM PRIORITY — Optimization & Modernization
-
-### 7. Convolution Engine (`audio_convolution.c`)
-- Overlap-add naive → Overlap-save + FFT pruning
-- Real-only FFT pruning (50% ops)
-- CMSIS-DSP `arm_fir_fast_q31` for short filters
-
-### 8. Auto Notch (`audio_nr.c` — currently disabled)
-- Biquad per-bin → unstable
-- **Target:** RLS/LMS adaptive lattice (track 8 tones, <2% CPU)
-
-### 9. CW Keyer (`cw_gen.c`)
-- Straight key pause too long
-- Add interpolation for smoother edges
-- Runtime FM CTCSS generation (replace hardcoded table)
-
-### 10. S-Meter Calibration
-- Per-band dBm offset in EEPROM
-- True dBm/dBm/Hz readout (EBU R128)
+```c
+// FIXME: H7 Port, re-enable DMA once SPI display is working
+#ifndef STM32H7
+  #define USE_SPI_DMA
+#endif
+```
 
 ---
 
-## 🟢 MEDIUM — Architecture & Code Quality
+## 🟡 MEDIUM PRIORITY — Code Quality
 
-### 11. God Functions Split
-| Function | Lines | Target |
-|----------|-------|--------|
-| `UiDriver_TaskHandler_MainTasks` | 249 | Split into sub-tasks |
-| `UiDriver_CheckEncoderTwo` | 266 | Extract encoder logic |
-| `AudioDriver_RxProcessor` | 340 | Split RX chain stages |
-| `RadioManagement_SwitchTxRx` | 185 | Extract TX/RX switch logic |
+### 10. Scattered `#ifdef` Cleanup (All)
+**Count:** 49 instances in product code  
+**Target:** <20 remaining  
+**Files:** `ui_lcd_hy28.c`, `ui_spectrum.c`, `ui_driver.c`, `audio_driver.c`, `uhsdr_board.c`, `uhsdr_hw_i2c.c`, `uhsdr_rtc.c`
 
-### 12. Magic Numbers → Constants
+```c
+// Consolidate into uhsdr_mcu.h + board_configs/
+// Example:
+// BEFORE:
+#ifdef STM32F4
+    lcd_spi_prescaler = SPI_PRESCALE_LCD_DEFAULT;
+#endif
+#ifdef STM32F7
+    lcd_spi_prescaler = SPI_PRESCALE_LCD_DEFAULT;
+#endif
+
+// AFTER:
+lcd_spi_prescaler = SPI_PRESCALE_LCD_DEFAULT;  // Defined in uhsdr_mcu.h
+```
+
+### 11. Audio Interface Vtable (All)
+**Risk:** Direct HAL calls scattered  
+**Status:** I2S (F4) vs SAI (F7/H7) in `uhsdr_hw_i2s.c`  
+**File:** `mchf-eclipse/drivers/audio/codec/uhsdr_hw_i2s.c`
+
+```c
+// TODO: Abstract I2S vs SAI
+typedef struct {
+    HAL_StatusTypeDef (*start_rx)(void *buf, uint32_t len);
+    HAL_StatusTypeDef (*start_tx)(void *buf, uint32_t len);
+    void (*stop)(void);
+} audio_if_t;
+```
+
+### 12. USB Host Dead Code (All)
+**Risk:** Compiled but never initialized, wastes flash  
+**Status:** In `files.mak` unconditionally  
+**File:** `mchf-eclipse/files.mak`
+
+```c
+// TODO: Gate behind USE_USBHOST config
+// Or remove if not needed
+```
+
+### 13. Split Large Files (All)
+| File | Lines | Target |
+|---|---|---|
+| `ui_driver.c` | 7653 | <2000 |
+| `audio_driver.c` | 3051 | <1500 |
+| `ui_lcd_hy28.c` | 2824 | <1500 |
+| `uhsdr_board.c` | 759 | OK |
+| `uhsdr_keypad.c` | ~300 | OK |
+
+### 14. Reduce newlib Usage (All)
+**Risk:** Heavy runtime, not suitable for bare-metal  
+**Status:** `drivers/diag/trace_impl.c` uses newlib  
+**File:** `mchf-eclipse/drivers/diag/Trace.c:29`
+
+```c
+// TODO: rewrite it to no longer use newlib, it is way too heavy
+```
+
+### 15. Magic Numbers → Constants (All)
 **Files with most magic numbers:**
 - `audio_nr.c`: 543 unique
 - `audio_driver.c`: 189 unique
 - `ui_driver.c`: 151 unique
+- `ui_spectrum.c`: ~100 unique
 
-**Fix:** Centralize in `audio_constants.h` / `ui_constants.h`
-
-### 13. Global State Reduction
+### 16. Global State Reduction (All)
 **File-scope variables per file:**
 - `audio_nr.c`: 23
 - `audio_driver.c`: 20
 - `ui_driver.c`: 13
 
-**Fix:** Encapsulate in context structs, pass as parameter
-
-### 14. Error Handling
-**Current:** `Error_Handler()` = `while(1)`
-**Target:** 
-- Error codes + recovery strategies
-- Crash dump to EEPROM (PC, LR, stack)
-- Graceful degradation (disable NR, not brick)
+**Target:** Encapsulate in context structs
 
 ---
 
-## 🔵 LOW PRIORITY — Modern Features
+## 🟢 LOW PRIORITY — Nice to Have
 
-### 15. Modern Noise Reduction (DNN)
-- Integrate RNNoise (1.5KB model, MIT license)
-- ~10% CPU on Cortex-M7
-- Massive quality improvement
+### 17. Performance Budgets (All)
+- WCET analysis for ISR and critical tasks
+- CPU load profiling per MCU
+- Stack usage watermark
 
-### 16. Parametric EQ
-- User-adjustable PEQ (3-5 bands)
-- Linear-phase FIR option
+### 18. Power Management (All)
+- Sleep mode configuration
+- Low-power idle state
+- Current consumption profiling
 
-### 17. Adaptive Noise Blanker
-- Correlation-based impulse detection
-- Cyclostationary detection
+### 19. Toolchain Qualification (All)
+- Document compiler versions
+- Build profile definitions
+- Reproducible builds
 
-### 17. Diversity RX
-- Phase-coherent dual antenna
-- Maximal ratio combining
-
-### 18. Secure Boot
-- Ed25519 firmware signature
-- Anti-rollback counter
-
----
-
-## 🏗️ INFRASTRUCTURE
-
-### 19. Build System
-- [ ] Enable `-Werror -Wshadow -Wconversion -Wdouble-promotion`
-- [ ] Fix all warnings (currently 50+)
-- [ ] Add `-fstack-protector-strong`
-- [ ] Add `-fstack-clash-protection`
-
-### 20. Static Analysis
-- [ ] Cppcheck in CI
-- [ ] Clang-tidy (MISRA C subset)
-- [ ] Coverity Scan (free for open source)
-
-### 21. Unit Testing
-- [ ] Unity test framework
-- [ ] Test DSP filters (impulse response, frequency response)
-- [ ] Test AGC (step response, attack/decay)
-- [ ] Test NR (SNR improvement metric)
-- [ ] Test CW keyer (timing accuracy)
-
-### 22. CI/CD Pipeline
-- [ ] GitHub Actions: build all 9 configs (F4/F7/H7 × mchf/ovi40)
-- [ ] Size regression detection
-- [ ] Binary artifact upload
-- [ ] Release automation
-
-### 22. Documentation
-- [ ] Architecture diagram (Mermaid)
-- [ ] DSP algorithm docs (LaTeX → PDF)
-- [ ] API reference (Doxygen + Graphviz)
-- [ ] Porting guide for new boards
+### 20. Migration Guide (All)
+- Incremental plan to adopt MAL
+- Phase-by-phase rollout
+- Rollback strategy
 
 ---
 
-## 📦 DEPENDENCIES TO UPDATE
+## 📋 Detailed Task Breakdown
 
-| Library | Current | Target |
-|---------|---------|--------|
-| CMSIS-DSP | 1.x | Latest 1.13+ |
-| CMSIS-Core | 5.x | Latest 5.9+ |
-| FreeRTOS | N/A | Optional v11+ |
-| TinyUSB | N/A | Replace custom USB stack |
-| mbedTLS | N/A | For secure boot |
+### Phase 1: Safety Critical (1-2 weeks)
+- [ ] **T1.1** Add `HAL_IWDG_Init()` in `uhsdr_main.c`
+- [ ] **T1.2** Add `HAL_IWDG_Refresh()` in main loop (every 1s)
+- [ ] **T1.3** Implement F7/H7 HardFault_Handler with register dump
+- [ ] **T1.4** Implement F7/H7 MemManage_Handler with register dump
+- [ ] **T1.5** Implement F7/H7 UsageFault_Handler with register dump
+- [ ] **T1.6** Add BusFault_Handler on F7/H7 (or use linker RAM sizes)
+- [ ] **T1.7** Add always-on stack guard check in main loop
 
----
+### Phase 2: Hardware Support (2-3 weeks)
+- [ ] **T2.1** Implement H7 RAM detection (replace hardcoded 512KB)
+- [ ] **T2.2** Add F7/H7 I2C timing calculation
+- [ ] **T2.3** Implement H7 RTC init
+- [ ] **T2.4** Fix H7 SPI DMA (remove `#ifndef STM32H7`)
+- [ ] **T2.5** Add cache maintenance macros to `uhsdr_mcu.h`
 
-## 📊 METRICS TARGETS
+### Phase 3: Cache & Memory (1-2 weeks)
+- [ ] **T3.1** Add cache clean/invalidate to LCD pixelbuffer DMA
+- [ ] **T3.2** Add cache invalidate to FFT ring buffer read
+- [ ] **T3.3** Add audio interface vtable (I2S vs SAI)
+- [ ] **T3.4** Audit all DMA buffers for cache alignment
 
-| Metric | Current | Target |
-|--------|---------|--------|
-| Cyclomatic Complexity (avg) | 15/100 LOC | <10/100 LOC |
-| Function length (avg) | 29-89 lines | <50 lines |
-| Functions >200 lines | 6 | 0 |
-| Magic numbers/file | 150-500 | <20 |
-| Global vars/file | 13-23 | <5 |
-| Test coverage | 0% | >80% (DSP) |
-| Build warnings | 50+ | 0 (`-Werror`) |
-| Binary size (F4 fw) | 414 KB | <380 KB |
+### Phase 4: Cleanup (1-2 weeks)
+- [ ] **T4.1** Remove USB Host dead code or gate behind `USE_USBHOST`
+- [ ] **T4.2** Remove scattered `#ifdef` (target: <20 remaining)
+- [ ] **T4.3** Split `ui_driver.c` into modules
+- [ ] **T4.4** Split `audio_driver.c` into modules
+- [ ] **T4.5** Rewrite diag/trace without newlib
+- [ ] **T4.6** Replace magic numbers with constants
+- [ ] **T4.7** Encapsulate global state in context structs
 
----
-
-## 🗓️ SUGGESTED ROADMAP
-
-### Phase 1: Safety (1-2 weeks)
-- [ ] Firmware CRC in bootloader
-- [ ] Watchdog timer
-- [ ] Stack guard
-- [ ] Config save debounce
-
-### Phase 2: Core DSP Rewrite (6-8 weeks)
-- [ ] NR modularization + Wiener/RNNoise
-- [ ] Adaptive Noise Blanker
-- [ ] AGC redesign (dual-loop)
-- [ ] Auto-notch RLS
-
-### Phase 3: Architecture (4-6 weeks)
-- [ ] Split god functions
-- [ ] Encapsulate global state
-- [ ] Error handling framework
-- [ ] Magic numbers cleanup
-
-### Phase 4: Infrastructure (2-4 weeks)
-- [ ] CI pipeline (9 configs)
-- [ ] Unit test framework
-- [ ] Static analysis
-- [ ] Documentation
-
-### Phase 5: Modern Features (ongoing)
-- [ ] RNNoise integration
-- [ ] Parametric EQ
-- [ ] Secure boot
-- [ ] Diversity RX
+### Phase 5: Infrastructure (ongoing)
+- [ ] **T5.1** Add CI pipeline (build all 9 configs)
+- [ ] **T5.2** Add unit test framework
+- [ ] **T5.3** Add static analysis (cppcheck, clang-tidy)
+- [ ] **T5.4** Add size regression detection
+- [ ] **T5.5** Add WCET analysis for ISR tasks
+- [ ] **T5.6** Add stack usage profiling
 
 ---
 
-## 🏷️ LABELS FOR ISSUE TRACKER
+## 🗂️ Issue Tracker Labels
 
 ```
-critical-safety     # Firmware validation, watchdog
-critical-dsp        # NR, Blanker, AGC rewrite
-high-architecture   # God functions, global state
-high-optimization   # Convolution, magic numbers
-medium-feature      # DNN NR, EQ, Diversity
-low-infra           # CI, tests, docs
+critical-safety     # Watchdog, fault handlers, stack guard
+critical-hw         # H7 RAM, I2C, RTC, SPI DMA
+high-cache          # Cache maintenance for DMA
+high-refactor       # #ifdef cleanup, file splits
+medium-quality      # Magic numbers, global state, newlib
+low-feature         # Performance budgets, power mgmt
+infrastructure      # CI, tests, docs
 ```
 
 ---
 
-## 📝 HOW TO CONTRIBUTE
+## 📝 How to Contribute
 
-1. Pick an issue with `good-first-issue` label
-2. Create branch: `fix/nr-wiener-filter`
-3. Write test first (TDD)
-4. Implement with `-Werror`
-5. Run all 9 configs in CI
-6. Submit PR with benchmarks
-
----
-
-## 📚 REFERENCES
-
-- [WDSP AGC Paper](http://www.wd5eaq.com/agc/) — Original AGC algorithm
-- [RNNoise](https://github.com/xiph/rnnoise) — DNN noise suppression
-- [Martin Rainer Minimum Statistics](https://www.researchgate.net/publication/220565280) — Noise estimation
-- [EBU R128](https://tech.ebu.ch/docs/tech/tech-r128.pdf) — Loudness standard
-- [MISRA C:2012](https://www.misra.org.uk/) — Coding standard
+1. Pick an issue with appropriate label
+2. Create branch: `fix/watchdog-init` or `hw/h7-ram-detect`
+3. Implement with `-Werror`
+4. Test on affected MCU(s)
+5. Update `docs/TODO.md` with completion date
+6. Submit PR
 
 ---
 
-*This TODO is a living document. Update after each major refactor.*
+## 📚 References
+
+- [AGENTS.md](../AGENTS.md) — Platform architecture baseline
+- [UHSDR Codebase](https://github.com/df8oe/UHSDR) — Original repository
+- [STM32F4xx HAL](https://www.st.com/en/embedded-software/stm32cubef4.html)
+- [STM32F7xx HAL](https://www.st.com/en/embedded-software/stm32cubef7.html)
+- [STM32H7xx HAL](https://www.st.com/en/embedded-software/stm32cubelh7.html)
+- [CMSIS-DSP](https://developer.arm.com/architectures/cpu-architecture/cortex-m/cortex-m-ecosystem/cmsis/cmsis-dsp)
+
+---
+
+*This TODO is a living document. Update after each completed task.*
