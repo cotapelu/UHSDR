@@ -678,6 +678,15 @@ const char* Board_BootloaderVersion()
 }
 
 /**
+ * @brief Enter low-power idle mode using WFI
+ */
+void Board_EnterLowPowerIdle(void)
+{
+    /* Enter sleep mode - CPU wakes on any interrupt */
+    __WFI();
+}
+
+/**
  * @brief set PA bias at the LM2931CDG (U18) using DAC Channel 2
  */
 void Board_SetPaBiasValue(uint16_t bias)

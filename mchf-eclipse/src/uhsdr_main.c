@@ -476,6 +476,10 @@ int mchfMain(void)
 
         // UI events processing
         UiDriver_TaskHandler_MainTasks();
+
+        // Enter low-power idle mode when no work is pending
+        // WFI wakes on audio ISR, SysTick, encoders, keys, USB, etc.
+        Board_EnterLowPowerIdle();
     }
     return 0;
 }

@@ -765,6 +765,21 @@ uint32_t Board_RamSizeGet(void);
 void Board_RamSizeDetection(void);
 const char* Board_BootloaderVersion(void);
 
+/**
+ * @brief Enter low-power idle mode (sleep) when CPU has no pending work
+ *
+ * Uses WFI (Wait For Interrupt) to put the CPU into sleep mode.
+ * The CPU wakes on any enabled interrupt:
+ *   - Audio DMA ISR (1.5kHz) - highest priority
+ *   - SysTick / ts.sysclock (100Hz)
+ *   - Encoder / keypad GPIO interrupts
+ *   - USB, I2C, SPI interrupts
+ *
+ * Must be called from main loop only, NOT from ISR context.
+ * Watchdog must be kicked before calling this function.
+ */
+void Board_EnterLowPowerIdle(void);
+
 // in main.c
 void CriticalError(uint32_t error);
 

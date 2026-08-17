@@ -323,5 +323,5 @@ infrastructure      # CI, tests, docs
 ### Phase 6: Verification & Polish (ongoing)
 - [x] **T6.1** Verify all 9 firmware builds compile cleanly
 - [x] **T6.2** Add bootloader safety (CRC, anti-rollback, boot counter)
-- [ ] **T6.3** Add power management (sleep mode, low-power idle)
+- [x] **T6.3** Add power management (sleep mode, low-power idle)
 - [ ] **T6.4** Update platform documentation with new features
