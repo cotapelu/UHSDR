@@ -126,10 +126,11 @@ bool Rtc_isEnabled()
 #ifdef USE_RTC_LSE
 
     // FIXME: H7 Port
-#ifndef STM32H7
-    __HAL_RCC_PWR_CLK_ENABLE();
+#if defined(STM32H7)
+    // H7 uses AHB1 for PWR clock, enable it explicitly
+    RCC->AHB1ENR |= RCC_AHB1ENR_PWREN;
 #else
-    __HAL_RCC_RTC_CLK_ENABLE();
+    __HAL_RCC_PWR_CLK_ENABLE();
 #endif
 
     HAL_PWR_EnableBkUpAccess();

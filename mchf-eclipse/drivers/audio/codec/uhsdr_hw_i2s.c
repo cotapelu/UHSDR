@@ -65,6 +65,80 @@ void UhsdrHwI2s_Codec_ClearTxDmaBuffer()
     memset((void*)&dma.iq_buf.out, 0, sizeof(dma.iq_buf.out));
 }
 
+static void UhsdrHwI2s_SetBitWidth(void);
+
+#ifdef UI_BRD_MCHF
+static void audio_if_i2s_start(void)
+{
+    UhsdrHwI2s_SetBitWidth();
+    HAL_I2SEx_TransmitReceive_DMA(&hi2s3,(uint16_t*)dma.iq_buf.out,(uint16_t*)dma.iq_buf.in,sizeof(dma.iq_buf.in)/sizeof(dma.iq_buf.in[0].l));
+}
+
+static void audio_if_i2s_stop(void)
+{
+    HAL_I2S_DMAStop(&hi2s3);
+}
+
+static void audio_if_i2s_clear_tx(void)
+{
+    UhsdrHwI2s_Codec_ClearTxDmaBuffer();
+}
+
+static void audio_if_i2s_set_bit_width(void)
+{
+    UhsdrHwI2s_SetBitWidth();
+}
+#endif
+
+#ifdef UI_BRD_OVI40
+static void audio_if_sai_start(void)
+{
+    UhsdrHwI2s_SetBitWidth();
+    memset((void*)&dma.audio_buf,0,sizeof(dma.audio_buf));
+    memset((void*)&dma.iq_buf,0,sizeof(dma.iq_buf));
+
+    HAL_SAI_Receive_DMA(&hsai_BlockA1,(uint8_t*)dma.audio_buf.in,sizeof(dma.audio_buf.in)/sizeof(dma.audio_buf.in[0].l));
+    HAL_SAI_Transmit_DMA(&hsai_BlockB1,(uint8_t*)dma.audio_buf.out,sizeof(dma.audio_buf.out)/sizeof(dma.audio_buf.out[0].l));
+
+    HAL_SAI_Receive_DMA(&hsai_BlockA2,(uint8_t*)dma.iq_buf.in,sizeof(dma.iq_buf.in)/sizeof(dma.iq_buf.in[0].l));
+    HAL_SAI_Transmit_DMA(&hsai_BlockB2,(uint8_t*)dma.iq_buf.out,sizeof(dma.iq_buf.out)/sizeof(dma.iq_buf.out[0].l));
+}
+
+static void audio_if_sai_stop(void)
+{
+    HAL_SAI_DMAStop(&hsai_BlockA1);
+    HAL_SAI_DMAStop(&hsai_BlockB1);
+    HAL_SAI_DMAStop(&hsai_BlockA2);
+    HAL_SAI_DMAStop(&hsai_BlockB2);
+}
+
+static void audio_if_sai_clear_tx(void)
+{
+    UhsdrHwI2s_Codec_ClearTxDmaBuffer();
+}
+
+static void audio_if_sai_set_bit_width(void)
+{
+    UhsdrHwI2s_SetBitWidth();
+}
+#endif
+
+#if defined(UI_BRD_MCHF)
+const audio_if_t audio_if = {
+    .start = audio_if_i2s_start,
+    .stop = audio_if_i2s_stop,
+    .clear_tx = audio_if_i2s_clear_tx,
+    .set_bit_width = audio_if_i2s_set_bit_width,
+};
+#elif defined(UI_BRD_OVI40)
+const audio_if_t audio_if = {
+    .start = audio_if_sai_start,
+    .stop = audio_if_sai_stop,
+    .clear_tx = audio_if_sai_clear_tx,
+    .set_bit_width = audio_if_sai_set_bit_width,
+};
+#endif
+
 // #define PROFILE_APP
 static void MchfHw_Codec_HandleBlock(uint16_t which)
 {
@@ -200,35 +274,11 @@ static void UhsdrHwI2s_SetBitWidth()
 
 void UhsdrHwI2s_Codec_StartDMA()
 {
-    UhsdrHwI2s_SetBitWidth();
-
-#ifdef UI_BRD_MCHF
-    HAL_I2SEx_TransmitReceive_DMA(&hi2s3,(uint16_t*)dma.iq_buf.out,(uint16_t*)dma.iq_buf.in,sizeof(dma.iq_buf.in)/sizeof(dma.iq_buf.in[0].l));
-#endif
-#ifdef UI_BRD_OVI40
-    // we clean the buffers since we don't know if we are in a "cleaned" memory segement
-    memset((void*)&dma.audio_buf,0,sizeof(dma.audio_buf));
-    memset((void*)&dma.iq_buf,0,sizeof(dma.iq_buf));
-
-    HAL_SAI_Receive_DMA(&hsai_BlockA1,(uint8_t*)dma.audio_buf.in,sizeof(dma.audio_buf.in)/sizeof(dma.audio_buf.in[0].l));
-    HAL_SAI_Transmit_DMA(&hsai_BlockB1,(uint8_t*)dma.audio_buf.out,sizeof(dma.audio_buf.out)/sizeof(dma.audio_buf.out[0].l));
-
-    HAL_SAI_Receive_DMA(&hsai_BlockA2,(uint8_t*)dma.iq_buf.in,sizeof(dma.iq_buf.in)/sizeof(dma.iq_buf.in[0].l));
-    HAL_SAI_Transmit_DMA(&hsai_BlockB2,(uint8_t*)dma.iq_buf.out,sizeof(dma.iq_buf.out)/sizeof(dma.iq_buf.out[0].l));
-
-#endif
+    audio_if.start();
 }
-
 
 void UhsdrHwI2s_Codec_StopDMA(void)
 {
-#ifdef UI_BRD_MCHF
-    HAL_I2S_DMAStop(&hi2s3);
-#endif
-#ifdef UI_BRD_OVI40
-    HAL_SAI_DMAStop(&hsai_BlockA1);
-    HAL_SAI_DMAStop(&hsai_BlockB1);
-    HAL_SAI_DMAStop(&hsai_BlockA2);
-    HAL_SAI_DMAStop(&hsai_BlockB2);
-#endif
+    audio_if.stop();
 }
+

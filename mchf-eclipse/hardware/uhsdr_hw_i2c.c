@@ -57,7 +57,6 @@ uint16_t UhsdrHw_I2C_ReadBlock(I2C_HandleTypeDef* hi2c, uchar I2CAddr,uint16_t a
  */
 void UhsdrHw_I2C_ChangeSpeed(I2C_HandleTypeDef* hi2c)
 {
-
     /// FIXME: Support for more than I2C1 und I2C2
     uint8_t speedIdx;
 
@@ -70,13 +69,33 @@ void UhsdrHw_I2C_ChangeSpeed(I2C_HandleTypeDef* hi2c)
         speedIdx = I2C_BUS_2;
     }
 
-
     HAL_I2C_DeInit(hi2c);
-    // FIXME: F7PORT: I2C Clock Timing works differently on the F7, we need to supply correct register values instead of a simple speed value
+#ifdef STM32F4
     hi2c->Init.ClockSpeed = ts.i2c_speed[speedIdx] * I2C_BUS_SPEED_MULT;
-
+#else
+    {
+        uint32_t timing = 0;
+        uint32_t speed_hz = (uint32_t)ts.i2c_speed[speedIdx] * I2C_BUS_SPEED_MULT;
+        if (speed_hz >= 400000)
+        {
+            timing = 0x20404768;
+        }
+        else if (speed_hz >= 100000)
+        {
+#if defined(STM32H7)
+            timing = 0x10C0ECFF;
+#else
+            timing = 0x00303D5B;
+#endif
+        }
+        else
+        {
+            timing = 0x10C0ECFF;
+        }
+        hi2c->Init.Timing = timing;
+    }
+#endif
     HAL_I2C_Init(hi2c);
-
 }
 #endif
 

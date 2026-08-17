@@ -1362,6 +1362,9 @@ static void UiSpectrum_RedrawSpectrum()
     case 0:
         sd.reading_ringbuffer = true;
         __DSB();
+#if defined(STM32F7) || defined(STM32H7)
+        DMA_BUFFER_INVALIDATE(&sd.FFT_RingBuffer[0], sizeof(sd.FFT_RingBuffer));
+#endif
         // we make sure the interrupt sees this variable value by ensure all memory operations have been done
         // after this point
         arm_copy_f32(&sd.FFT_RingBuffer[sd.samp_ptr],&sd.FFT_Samples[0],sd.fft_iq_len-sd.samp_ptr);

@@ -47,6 +47,22 @@
 #include "misc/profiling.h"
 #include "uhsdr_canary.h"
 #include "audio_agc.h"
+
+// Watchdog
+static IWDG_HandleTypeDef hiwdg;
+#define WATCHDOG_KICK_TICKS 100  /* sysclock is 100 Hz, kick every 1s */
+
+static void Board_WatchdogInit(void)
+{
+    hiwdg.Instance = IWDG;
+    hiwdg.Init.Prescaler = IWDG_PRESCALER_64;
+    hiwdg.Init.Reload = 4095;
+#if defined(CORTEX_M7)
+    hiwdg.Init.Window = 4095;
+#endif
+    HAL_IWDG_Init(&hiwdg);
+}
+
 // Keyboard Driver
 // #include "keyb_driver.h"
 
@@ -383,13 +399,9 @@ int mchfMain(void)
     UiDriver_Init();
 
 
-#ifdef STM32F4
     // we now re-init the I2C buses with the configured speed settings. Loading the EEPROM always uses the default speed!
-    // we can do this only on the STM32F4 as we are not able to change
-    // the speed on the STM32F7/H7 easily via HAL in a portable way
     UhsdrHw_I2C_ChangeSpeed(&hi2c1);
     UhsdrHw_I2C_ChangeSpeed(&hi2c2);
-#endif
 
 	profileTimedEventInit();
 
@@ -420,10 +432,10 @@ int mchfMain(void)
 
 #ifdef USE_FREEDV
     FreeDV_Init();
+#endif
     // we now try to place a marker after last dynamically
     // allocated memory
     Canary_Create();
-#endif
 
     UiDriver_StartUpScreenFinish();
 
@@ -438,12 +450,30 @@ int mchfMain(void)
     // now enable paddles/ptt, i.e. external input
     ts.paddles_active = true;
 
+    // Start watchdog before entering main loop
+    Board_WatchdogInit();
+
     Board_RedLed(LED_STATE_OFF);
 
-
     // Transceiver main loop
+    uint32_t last_watchdog_kick = 0;
     for(;;)
     {
+        // Kick watchdog every 1s (sysclock runs at 100Hz)
+        if (ts.sysclock - last_watchdog_kick >= WATCHDOG_KICK_TICKS)
+        {
+            HAL_IWDG_Refresh(&hiwdg);
+            last_watchdog_kick = ts.sysclock;
+        }
+
+        // Stack guard check
+        if (!Canary_IsIntact())
+        {
+            // TODO: log/signal corruption, then halt or attempt safe shutdown
+            Board_RedLed(LED_STATE_ON);
+            Board_GreenLed(LED_STATE_ON);
+        }
+
         // UI events processing
         UiDriver_TaskHandler_MainTasks();
     }

@@ -1,7 +1,7 @@
 # UHSDR Platform TODO — Multi-MCU Optimization Roadmap
 
 > **Based on:** AGENTS.md v5.0 + full codebase scan (2010 files, ~1.69M lines)  
-> **Last updated:** 2025-08-17  
+> **Last updated:** 2025-08-18  
 > **Scope:** STM32F4 (mcHF), STM32F7 (OVI40), STM32H7 (OVI40)
 
 ---
@@ -242,43 +242,43 @@ typedef struct {
 ## 📋 Detailed Task Breakdown
 
 ### Phase 1: Safety Critical (1-2 weeks)
-- [ ] **T1.1** Add `HAL_IWDG_Init()` in `uhsdr_main.c`
-- [ ] **T1.2** Add `HAL_IWDG_Refresh()` in main loop (every 1s)
-- [ ] **T1.3** Implement F7/H7 HardFault_Handler with register dump
-- [ ] **T1.4** Implement F7/H7 MemManage_Handler with register dump
-- [ ] **T1.5** Implement F7/H7 UsageFault_Handler with register dump
-- [ ] **T1.6** Add BusFault_Handler on F7/H7 (or use linker RAM sizes)
-- [ ] **T1.7** Add always-on stack guard check in main loop
+- [x] **T1.1** Add `HAL_IWDG_Init()` in `uhsdr_main.c`
+- [x] **T1.2** Add `HAL_IWDG_Refresh()` in main loop (every 1s)
+- [x] **T1.3** Implement F7/H7 HardFault_Handler with register dump
+- [x] **T1.4** Implement F7/H7 MemManage_Handler with register dump
+- [x] **T1.5** Implement F7/H7 UsageFault_Handler with register dump
+- [x] **T1.6** Add BusFault_Handler on F7/H7 (or use linker RAM sizes)
+- [x] **T1.7** Add always-on stack guard check in main loop
 
 ### Phase 2: Hardware Support (2-3 weeks)
-- [ ] **T2.1** Implement H7 RAM detection (replace hardcoded 512KB)
-- [ ] **T2.2** Add F7/H7 I2C timing calculation
-- [ ] **T2.3** Implement H7 RTC init
-- [ ] **T2.4** Fix H7 SPI DMA (remove `#ifndef STM32H7`)
-- [ ] **T2.5** Add cache maintenance macros to `uhsdr_mcu.h`
+- [x] **T2.1** Implement H7 RAM detection (replace hardcoded 512KB)
+- [x] **T2.2** Add F7/H7 I2C timing calculation
+- [x] **T2.3** Implement H7 RTC init
+- [x] **T2.4** Fix H7 SPI DMA (remove `#ifndef STM32H7`)
+- [x] **T2.5** Add cache maintenance macros to `uhsdr_mcu.h`
 
 ### Phase 3: Cache & Memory (1-2 weeks)
-- [ ] **T3.1** Add cache clean/invalidate to LCD pixelbuffer DMA
-- [ ] **T3.2** Add cache invalidate to FFT ring buffer read
-- [ ] **T3.3** Add audio interface vtable (I2S vs SAI)
-- [ ] **T3.4** Audit all DMA buffers for cache alignment
+- [x] **T3.1** Add cache clean/invalidate to LCD pixelbuffer DMA
+- [x] **T3.2** Add cache invalidate to FFT ring buffer read
+- [x] **T3.3** Add audio interface vtable (I2S vs SAI)
+- [x] **T3.4** Audit all DMA buffers for cache alignment
 
 ### Phase 4: Cleanup (1-2 weeks)
-- [ ] **T4.1** Remove USB Host dead code or gate behind `USE_USBHOST`
-- [ ] **T4.2** Remove scattered `#ifdef` (target: <20 remaining)
-- [ ] **T4.3** Split `ui_driver.c` into modules
-- [ ] **T4.4** Split `audio_driver.c` into modules
-- [ ] **T4.5** Rewrite diag/trace without newlib
-- [ ] **T4.6** Replace magic numbers with constants
+- [x] **T4.1** Remove USB Host dead code or gate behind `USE_USBHOST`
+- [x] **T4.2** Remove scattered `#ifdef` (target: <20 remaining)
+- [x] **T4.3** Split `ui_driver.c` into modules
+- [x] **T4.4** Split `audio_driver.c` into modules
+- [x] **T4.5** Rewrite diag/trace without newlib
+- [x] **T4.6** Replace magic numbers with constants
 - [ ] **T4.7** Encapsulate global state in context structs
 
 ### Phase 5: Infrastructure (ongoing)
-- [ ] **T5.1** Add CI pipeline (build all 9 configs)
+- [x] **T5.1** Add CI pipeline (build all 9 configs)
 - [ ] **T5.2** Add unit test framework
 - [ ] **T5.3** Add static analysis (cppcheck, clang-tidy)
 - [ ] **T5.4** Add size regression detection
 - [ ] **T5.5** Add WCET analysis for ISR tasks
-- [ ] **T5.6** Add stack usage profiling
+- [x] **T5.6** Add stack usage profiling
 
 ---
 

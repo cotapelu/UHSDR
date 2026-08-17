@@ -60,4 +60,13 @@ inline static mchf_cpu_t MchfHW_Cpu()
 inline static void GPIO_ToggleBits(GPIO_TypeDef *PORT, uint32_t PINS) { (PORT)->ODR ^= (PINS); }
 inline static void GPIO_ReadInputDataBit(GPIO_TypeDef *PORT, uint32_t PINS) { (PORT)->IDR = (PINS); }
 
+/* Cache maintenance for DMA buffers on F7/H7 */
+#if defined(STM32F7) || defined(STM32H7)
+#define DMA_BUFFER_CLEAN(addr, len)      SCB_CleanDCache((addr), (len))
+#define DMA_BUFFER_INVALIDATE(addr, len) SCB_InvalidateDCache((addr), (len))
+#else
+#define DMA_BUFFER_CLEAN(addr, len)
+#define DMA_BUFFER_INVALIDATE(addr, len)
+#endif
+
 #endif

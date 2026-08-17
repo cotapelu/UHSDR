@@ -47,6 +47,7 @@
 
 #include "audio_management.h"
 #include "ui_driver.h"
+#include "ui_driver_utils.h"
 
 #include "ui_configuration.h"
 #include "config_storage.h"
@@ -298,76 +299,6 @@ bool UiDriver_CheckTouchRegion(const UiArea_t* tr_p)
 				(ts.tp->hr_y <= (tr_p->y+tr_p->h))) &&
 				(ts.tp->hr_y >= (tr_p->y));
 
-}
-
-
-int32_t change_and_limit_int(volatile int32_t val, int32_t change, int32_t min, int32_t max)
-{
-	val +=change;
-	if (val< min)
-	{
-		val = min;
-	}
-	else if (val>  max)
-	{
-		val = max;
-	}
-	return val;
-}
-
-
-uint32_t change_and_limit_uint(volatile uint32_t val, int32_t change, uint32_t min, uint32_t max)
-{
-	if (change < 0 && ( -change  > (val - min)))
-	{
-		val = min;
-	}
-	else if (change > 0 && change >  max - val)
-	{
-		val = max;
-	}
-	else
-	{
-		val +=change;
-	}
-	return val;
-}
-
-uint32_t change_and_wrap_uint(volatile uint32_t val, int32_t change, uint32_t min, uint32_t max)
-{
-	if (change  > ((int32_t)max - (int32_t)val))
-	{
-		val = min;
-	}
-	else if ((change + (int32_t)val) <  (int32_t)min)
-	{
-		val = max;
-	}
-	else
-	{
-		val +=change;
-	}
-	return val;
-}
-
-void incr_wrap_uint8(volatile uint8_t* ptr, uint8_t min, uint8_t max )
-{
-	*ptr = (change_and_wrap_uint(*ptr,+1,min,max))&0xff;
-}
-
-void incr_wrap_uint16(volatile uint16_t* ptr, uint16_t min, uint16_t max )
-{
-	*ptr = (change_and_wrap_uint(*ptr,+1,min,max))&0xff;
-}
-
-void decr_wrap_uint8(volatile uint8_t* ptr, uint8_t min, uint8_t max )
-{
-	*ptr = (change_and_wrap_uint(*ptr,-1,min,max))&0xff;
-}
-
-void decr_wrap_uint16(volatile uint16_t* ptr, uint16_t min, uint16_t max )
-{
-	*ptr = (change_and_wrap_uint(*ptr,-1,min,max))&0xff;
 }
 
 bool is_touchscreen_pressed()

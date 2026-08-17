@@ -8,6 +8,7 @@ misc/serial_eeprom.c \
 misc/uhsdr_canary.c \
 misc/uhsdr_math.c \
 hardware/uhsdr_board.c \
+hardware/uhsdr_fault.c \
 hardware/uhsdr_hw_i2c.c \
 hardware/uhsdr_hmc1023.c \
 hardware/uhsdr_keypad.c \
@@ -38,6 +39,7 @@ drivers/ui/encoder/ui_rotary.c \
 drivers/ui/radio_management.c \
 drivers/ui/ui_configuration.c \
 drivers/ui/ui_driver.c \
+drivers/ui/ui_driver_utils.c \
 drivers/freedv/c2wideband.c \
 drivers/freedv/codebook.c \
 drivers/freedv/codebookd.c \
@@ -146,6 +148,7 @@ drivers/audio/codec/codec.c \
 drivers/audio/codec/uhsdr_hw_i2s.c \
 drivers/audio/audio_agc.c \
 drivers/audio/audio_driver.c \
+drivers/audio/audio_driver_filters.c \
 drivers/audio/audio_filter.c \
 drivers/audio/audio_convolution.c \
 drivers/audio/audio_nr.c \

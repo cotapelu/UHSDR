@@ -22,5 +22,14 @@ void UhsdrHwI2s_Codec_StopDMA(void);
 
 void UhsdrHwI2s_Codec_ClearTxDmaBuffer(void);
 
+typedef struct {
+    void (*start)(void);
+    void (*stop)(void);
+    void (*clear_tx)(void);
+    void (*set_bit_width)(void);
+} audio_if_t;
+
+extern const audio_if_t audio_if;
+
 #endif
 

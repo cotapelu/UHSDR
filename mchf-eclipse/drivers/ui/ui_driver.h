@@ -243,6 +243,15 @@ void UiDriver_UpdateDSPmode(uint8_t new_dsp_mode);
 bool UiDriver_CheckTouchRegion(const UiArea_t* tr_p);
 void UiDriver_Power2String(char* txt, size_t txt_len,uint32_t power_mW);
 
+int32_t change_and_limit_int(volatile int32_t val, int32_t change, int32_t min, int32_t max);
+uint32_t change_and_limit_uint(volatile uint32_t val, int32_t change, uint32_t min, uint32_t max);
+uint32_t change_and_wrap_uint(volatile uint32_t val, int32_t change, uint32_t min, uint32_t max);
+
+void incr_wrap_uint8(volatile uint8_t* ptr, uint8_t min, uint8_t max);
+void incr_wrap_uint16(volatile uint16_t* ptr, uint16_t min, uint16_t max);
+void decr_wrap_uint8(volatile uint8_t* ptr, uint8_t min, uint8_t max);
+void decr_wrap_uint16(volatile uint16_t* ptr, uint16_t min, uint16_t max);
+
 uint32_t UiDriver_GetNBColor(void);
 
 void UiDriver_InitBandSet(void);

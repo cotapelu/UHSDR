@@ -13,6 +13,7 @@
 ************************************************************************************/
 
 #include "uhsdr_board.h"
+#include "uhsdr_fault.h"
 #include "ui_configuration.h"
 #include "ui_lcd_hy28.h"
 #include <stdio.h>
@@ -385,14 +386,30 @@ void Board_Reboot()
 // #pragma GCC optimize("O0")
 
 static volatile bool busfault_detected;
+static volatile bool ram_detect_in_progress;
 
 #define TEST_ADDR_192 (0x20000000 + 0x0001FFFC)
 #define TEST_ADDR_256 (0x20000000 + 0x0002FFFC)
 #define TEST_ADDR_512 (0x20000000 + 0x0005FFFC)
+#define TEST_ADDR_H7_1M (0x24000000 + 0x00100000 - 4)
 
 // function below mostly based on http://stackoverflow.com/questions/23411824/determining-arm-cortex-m3-ram-size-at-run-time
 
-__attribute__ ((naked)) void BusFault_Handler(void) {
+__attribute__ ((naked)) void BusFault_Handler_RamDetect(void);
+
+__attribute__ ((naked)) void BusFault_Handler(void)
+{
+    if (ram_detect_in_progress)
+    {
+        BusFault_Handler_RamDetect();
+    }
+    else
+    {
+        FaultHandler_Common();
+    }
+}
+
+__attribute__ ((naked)) void BusFault_Handler_RamDetect(void) {
   /* NAKED function so we can be sure that SP is correct when we
    * run our asm code below */
 
@@ -448,6 +465,7 @@ __attribute__ ((noinline)) bool is_ram_at(volatile uint32_t* where) {
 
 uint32_t Board_RamSizeGet() {
     uint32_t retval = 0;
+    ram_detect_in_progress = true;
     // we enable the bus fault
     // we now get bus faults if we access not  available  memory
     // instead of hard faults
@@ -466,12 +484,18 @@ uint32_t Board_RamSizeGet() {
     // we'll get hard faults as usual if we access wrong addresses
     SCB->SHCSR &= ~SCB_SHCSR_BUSFAULTENA_Msk;
 #elif defined(STM32H7)
-    //  TODO make it detect the really available RAM
-    retval = 512;
+    SCB->SHCSR |= SCB_SHCSR_BUSFAULTENA_Msk;
+    if (is_ram_at((volatile uint32_t*)TEST_ADDR_H7_1M)){
+        retval=1024;
+    } else if (is_ram_at((volatile uint32_t*)TEST_ADDR_512)){
+        retval=512;
+    }
+    SCB->SHCSR &= ~SCB_SHCSR_BUSFAULTENA_Msk;
 #else
     #warning Unkown processor, cannot determine ramsize
     retval = 0;
 #endif
+    ram_detect_in_progress = false;
     return retval;
 }
 

@@ -25,10 +25,7 @@
 #define hspiDisplay hspi2
 #define SPI_DISPLAY SPI2
 
-#ifndef STM32H7
-  // FIXME: H7 Port, re-enable DMA once SPI display is working
-  #define USE_SPI_DMA
-#endif
+#define USE_SPI_DMA
 
 #if defined(STM32F7) || defined(STM32H7)
     #define USE_SPI_HAL
@@ -723,7 +720,7 @@ DMA_HandleTypeDef DMA_Handle;
 
 static inline void UiLcdHy28_SpiDmaStop()
 {
-    while (DMA1_Stream4->CR & DMA_SxCR_EN) { asm(""); }
+    while (hspiDisplay.hdmatx->Instance->CR & DMA_SxCR_EN) { asm(""); }
 }
 
 
@@ -1131,6 +1128,9 @@ static void UiLcdHy28_BulkWrite(uint16_t* pixel, uint32_t len)
         {
             pixel[i] = __REV16(pixel[i]); // reverse byte order;
         }
+#if defined(STM32F7) || defined(STM32H7)
+        DMA_BUFFER_CLEAN(pixel, len * sizeof(uint16_t));
+#endif
         UiLcdHy28_SpiDmaStart((uint8_t*)pixel,len*2);
     }
 #endif
@@ -1143,6 +1143,10 @@ static void UiLcdHy28_FinishWaitBulkWrite()
     {
 #ifdef USE_SPI_DMA
         UiLcdHy28_SpiDmaStop();
+#if defined(STM32F7) || defined(STM32H7)
+        DMA_BUFFER_INVALIDATE(pixelbuffer[0], sizeof(pixelbuffer[0]));
+        DMA_BUFFER_INVALIDATE(pixelbuffer[1], sizeof(pixelbuffer[1]));
+#endif
 #endif
         UiLcdHy28_LcdSpiFinishTransfer();
     }
