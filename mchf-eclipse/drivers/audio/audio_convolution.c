@@ -760,11 +760,7 @@ void AudioDriver_RxProcessorConvolution(AudioSample_t * const src, AudioSample_t
                     if((dsp_active & DSP_NOTCH_ENABLE) && (dmod_mode != DEMOD_CW) && !(dmod_mode == DEMOD_SAM && (FilterPathInfo[ts.filter_path].sample_rate_dec) == RX_DECIMATION_RATE_24KHZ))       // No notch in CW
                     {
                         {
-//#ifdef OBSOLETE_NR
-#ifdef USE_LMS_AUTONOTCH
-                        	AudioDriver_NotchFilter(blockSizeDecim, adb.a_buffer[0]);     // Do notch filter
-#endif
-                        }
+//                        }
                     }
 
                 }
@@ -921,7 +917,7 @@ void AudioDriver_RxProcessorConvolution(AudioSample_t * const src, AudioSample_t
 
     // interpolation
 
-// TODO: at this point we have 128 real audio samples filtered and AGC´ed in the variable 	 (for mono modes)
+// TODO: at this point we have 128 real audio samples filtered and AGCï¿½ed in the variable 	 (for mono modes)
     // for stereo modes (not yet implemented), the other channel is in cob.q_buffer_convolution
 
     // now we have to make blocks of 32 samples out of that for further processing

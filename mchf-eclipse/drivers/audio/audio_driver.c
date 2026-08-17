@@ -1070,73 +1070,6 @@ void AudioDriver_SetProcessingChain(uint8_t dmod_mode, bool reset_dsp_nr)
 
 
 
-#if USE_OBSOLETE_NOISEBLANKER
-//*----------------------------------------------------------------------------
-//* Function Name       : audio_rx_noise_blanker [KA7OEI]
-//* Object              : noise blanker
-//* Object              :
-//* Input Parameters    : I/Q 16 bit audio data, size of buffer
-//* Output Parameters   :
-//* Functions called    :
-//*----------------------------------------------------------------------------
-#define AUDIO_RX_NB_DELAY_BUFFER_ITEMS (16)
-#define AUDIO_RX_NB_DELAY_BUFFER_SIZE (AUDIO_RX_NB_DELAY_BUFFER_ITEMS*2)
-
-static void AudioDriver_NoiseBlanker(AudioSample_t * const src, int16_t blockSize)
-{
-    static int16_t	delay_buf[AUDIO_RX_NB_DELAY_BUFFER_SIZE];
-    static uchar	delbuf_inptr = 0, delbuf_outptr = 2;
-    ulong	i;
-    float	sig;
-    float  nb_short_setting;
-    //	static float avg_sig;
-    static	uchar	nb_delay = 0;
-    static float	nb_agc = 0;
-
-    if((ts.nb_setting > 0) &&  (ts.dsp.active & DSP_NB_ENABLE)
-            //            && (ts.dmod_mode != DEMOD_AM && ts.dmod_mode != DEMOD_FM)
-            && (ts.dmod_mode != DEMOD_FM))
-        //        && (filters_p->sample_rate_dec != RX_DECIMATION_RATE_24KHZ ))
-
-        // bail out if noise blanker disabled, in AM/FM mode, or set to 10 kHz
-    {
-        nb_short_setting = ts.nb_setting;		// convert and rescale NB1 setting for higher resolution in adjustment
-        nb_short_setting /= 2;
-
-        for(i = 0; i < blockSize; i++)	 		// Noise blanker function
-        {
-            sig = fabs(src[i].l);		// get signal amplitude.  We need only look at one of the two audio channels since they will be the same.
-            sig /= ads.codec_gain_calc;	// Scale for codec A/D gain adjustment
-            //		avg_sig = (avg_sig * NB_AVG_WEIGHT) + ((float)(*src) * NB_SIG_WEIGHT);	// IIR-filtered short-term average signal level (e.g. low-pass audio)
-            delay_buf[delbuf_inptr++] = src[i].l;	    // copy first byte into delay buffer
-            delay_buf[delbuf_inptr++] = src[i].r;	// copy second byte into delay buffer
-
-            nb_agc = (ads.nb_agc_filt * nb_agc) + (ads.nb_sig_filt * sig);		// IIR-filtered "AGC" of current overall signal level
-
-            if(((sig) > (nb_agc * (((MAX_NB_SETTING/2) + 1.75) - nb_short_setting))) && (nb_delay == 0))	 	// did a pulse exceed the threshold?
-            {
-                nb_delay = AUDIO_RX_NB_DELAY_BUFFER_ITEMS;		// yes - set the blanking duration counter
-            }
-
-            if(!nb_delay)	 		// blank counter not active
-            {
-                src[i].l = delay_buf[delbuf_outptr++];		// pass through delayed audio, unchanged
-                src[i].r = delay_buf[delbuf_outptr++];
-            }
-            else	 	// It is within the blanking pulse period
-            {
-                src[i].l = 0; // (int16_t)avg_sig;		// set the audio buffer to "mute" during the blanking period
-                src[i].r = 0; //(int16_t)avg_sig;
-                nb_delay--;						// count down the number of samples that we are to blank
-            }
-
-            // RINGBUFFER
-            delbuf_outptr %= AUDIO_RX_NB_DELAY_BUFFER_SIZE;
-            delbuf_inptr %= AUDIO_RX_NB_DELAY_BUFFER_SIZE;
-        }
-    }
-}
-#endif
 
 
 
@@ -2471,10 +2404,7 @@ static void AudioDriver_RxProcessor(IqSample_t * const srcCodec, AudioSample_t *
     // if the audio filters are being reconfigured, we don't process audio at all
     if (ads.af_disabled == 0 )
     {
-        #ifdef USE_OBSOLETE_NOISEBLANKER
-            AudioDriver_NoiseBlanker(src, blockSize);     // do noise blanker function
-        #endif
-
+        
         for(uint32_t i = 0; i < blockSize; i++)
         {
             int32_t level = abs(I2S_correctHalfWord(src[i].l))>>IQ_BIT_SHIFT;

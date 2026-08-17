@@ -426,7 +426,6 @@ typedef enum {
     CLONEOUT_DONE
 
 } ft817_clone_out_st;
-// #define DEBUG_FT817
 typedef enum {
     CLONEIN_INIT = 0,
     CLONEIN_BLOCK_RECV,
@@ -451,12 +450,6 @@ struct FT817
     ft817_cat_st state;
     ft817_clone_out_st cloneout_state;
     ft817_clone_in_st clonein_state;
-// #define DEBUG_FT817
-#ifdef DEBUG_FT817
-#define FT817_MAX_CMD 100
-    uint8_t reqs[FT817_MAX_CMD*5];
-    uint32_t cmd_cntr;
-#endif
 };
 
 #include "ui_driver.h"
@@ -1020,14 +1013,6 @@ static void CatDriver_HandleCommands()
 
     while (CatDriver_InterfaceBufferGetData(ft817.req,5))
     {
-#ifdef DEBUG_FT817
-        int debug_idx;
-        for (debug_idx = 0; debug_idx < 5 && ft817.cmd_cntr < FT817_MAX_CMD; debug_idx++ )
-        {
-            ft817.reqs[ft817.cmd_cntr*5+debug_idx] = ft817.req[debug_idx];
-        }
-        ft817.cmd_cntr++;
-#endif
 
         switch((Ft817_CatCmd_t)ft817.req[4])
         {
