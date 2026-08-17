@@ -12,6 +12,7 @@ addons:
     packages:
       libc6-i386
       cppcheck
+      python3
 
 cache:
   directories:
@@ -57,6 +58,7 @@ script:
     - cd ..
     - bash scripts/static_analysis.sh
     - bash scripts/size_regression.sh
+    - bash scripts/analyze_wcet.sh
 before_deploy:
     - sudo apt-get install -y doxygen graphviz
     - make docs > /dev/null && tar -czf docs.tar.gz -C .. docs

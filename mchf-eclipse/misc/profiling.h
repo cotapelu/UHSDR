@@ -7,7 +7,7 @@
 **---------------------------------------------------------------------------------**
 **                                                                                 **
 **  File name:                                                                     **
-**  Description: Simple Timing Profiler                                                                   **
+**  Description: Simple Timing Profiler + WCET Analysis                           **
 **  Last Modified:                                                                 **
 **  Licence:        GNU GPLv3                                                      **
 ************************************************************************************/
@@ -28,6 +28,11 @@ typedef enum {
     ProfileTP9,
     ProfileFreeDV,
     FreeDVTXUnderrun,
+    ProfileAudioISR_WCET,      /* WCET: Audio DMA ISR */
+    ProfilePendSV_WCET,        /* WCET: PendSV Handler */
+    ProfileMainLoop_WCET,      /* WCET: Main Loop iteration */
+    ProfileSpectrum_WCET,      /* WCET: Spectrum/Waterfall update */
+    ProfileMenu_WCET,          /* WCET: Menu rendering */
     EventProfileMax
 } ProfiledEventNames;
 
@@ -36,6 +41,7 @@ typedef struct {
     uint32_t start;
     uint32_t stop;
     uint64_t duration; // to get average divide duration by count
+    uint32_t wcet;      /* Worst-case execution time (max single duration) */
 } ProfilingTimedEvent;
 
 typedef struct {
@@ -53,6 +59,12 @@ inline void profileEvent(const ProfiledEventNames pe) {
 #endif
 }
 
+/* WCET Analysis support */
+#define WCET_BEGIN(pe) profileTimedEventStart(pe)
+#define WCET_END(pe)   profileTimedEventStop(pe)
+
+void profileEventsTracePrint();
+void WCET_Report(void);
 
 /***
  * How to use:
@@ -73,9 +85,6 @@ inline void profileEvent(const ProfiledEventNames pe) {
  * only the innermost events are more or less accurate unless you time the profile functions and
  * remove the overhead later.
  */
-
-void profileEventsTracePrint();
-
 
 // INLINE IMPLEMENTATIONS
 
@@ -129,9 +138,14 @@ static inline void profileTimedEventStop(const ProfiledEventNames pe)
 #ifdef PROFILE_EVENTS
     uint32_t stop = profileCycleCount_get();
     if (pe<EventProfileMax) {
+        uint32_t duration = stop - eventProfile.event[pe].start;
         eventProfile.event[pe].stop = stop;
         eventProfile.event[pe].count++;
-        eventProfile.event[pe].duration += (eventProfile.event[pe].stop-eventProfile.event[pe].start);
+        eventProfile.event[pe].duration += duration;
+        /* Update WCET if this run is longer */
+        if (duration > eventProfile.event[pe].wcet) {
+            eventProfile.event[pe].wcet = duration;
+        }
     }
 #endif
 
@@ -144,6 +158,7 @@ static inline void profileTimedEventReset(const ProfiledEventNames pe)
         eventProfile.event[pe].stop = 0;
         eventProfile.event[pe].count = 0;
         eventProfile.event[pe].duration = 0;
+        eventProfile.event[pe].wcet = 0;
     }
 #endif
 }
@@ -157,6 +172,53 @@ static inline  ProfilingTimedEvent* profileTimedEventGet(const ProfiledEventName
     }
 #endif
     return pe_ptr;
+}
+
+static inline void WCET_Report(void)
+{
+#ifdef PROFILE_EVENTS
+    extern EventProfile_t eventProfile;
+    uint32_t cpu_hz = SystemCoreClock;
+    
+    printf("\n=== WCET Analysis Report ===\n");
+    printf("CPU Frequency: %u Hz\n", cpu_hz);
+    printf("%-30s %8s %8s %8s %8s\n", "Event", "Count", "Avg(us)", "WCET(us)", "Budget(us)");
+    printf("--------------------------------------------------------------------------------\n");
+    
+    for (int i = 0; i < EventProfileMax; i++) {
+        ProfilingTimedEvent* ev = &eventProfile.event[i];
+        if (ev->count > 0) {
+            uint32_t avg_us = (ev->duration / ev->count) / (cpu_hz / 1000000);
+            uint32_t wcet_us = ev->wcet / (cpu_hz / 1000000);
+            uint32_t budget_us = 0;
+            
+            /* Define budgets for critical tasks */
+            switch (i) {
+                case ProfileAudioISR_WCET:    budget_us = 100; break;  /* 100us budget */
+                case ProfilePendSV_WCET:      budget_us = 500; break;  /* 500us budget */
+                case ProfileMainLoop_WCET:    budget_us = 10000; break; /* 10ms budget */
+                case ProfileSpectrum_WCET:    budget_us = 8000; break;  /* 8ms budget */
+                case ProfileMenu_WCET:        budget_us = 5000; break;  /* 5ms budget */
+                default:                      budget_us = 0; break;
+            }
+            
+            printf("%-30s %8u %8u %8u %8u", 
+                   (const char*[]){
+                       "Audio ISR", "TP1", "TP2", "TP3", "TP4", "TP5",
+                       "TP6", "TP7", "TP8", "TP9", "FreeDV", "TX Underrun",
+                       "Audio ISR WCET", "PendSV WCET", "Main Loop WCET",
+                       "Spectrum WCET", "Menu WCET"
+                   }[i],
+                   ev->count, avg_us, wcet_us, budget_us);
+            
+            if (budget_us > 0 && wcet_us > budget_us) {
+                printf(" <-- OVER BUDGET!");
+            }
+            printf("\n");
+        }
+    }
+    printf("================================================================================\n");
+#endif
 }
 
 
