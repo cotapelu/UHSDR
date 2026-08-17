@@ -36,6 +36,7 @@ drivers/ui/radio_management.c \
 drivers/ui/ui_configuration.c \
 drivers/ui/ui_driver.c \
 drivers/ui/ui_driver_utils.c \
+drivers/ui/ui_driver_touch.c \
 drivers/freedv/c2wideband.c \
 drivers/freedv/codebook.c \
 drivers/freedv/codebookd.c \

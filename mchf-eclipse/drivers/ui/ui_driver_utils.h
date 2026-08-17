@@ -26,4 +26,9 @@ void incr_wrap_uint16(volatile uint16_t* ptr, uint16_t min, uint16_t max);
 void decr_wrap_uint8(volatile uint8_t* ptr, uint8_t min, uint8_t max);
 void decr_wrap_uint16(volatile uint16_t* ptr, uint16_t min, uint16_t max);
 
+bool UiDriver_IsButtonPressed(uint32_t button_num);
+void UiDriver_WaitForButtonPressed(uint32_t button_num);
+void UiDriver_WaitForBandMAndBandPorPWR(void);
+bool UiDriver_Process_WFscope_RatioChange(void);
+
 #endif

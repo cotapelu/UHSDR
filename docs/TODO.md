@@ -329,4 +329,4 @@ infrastructure      # CI, tests, docs
 ### Phase 7: Hardening & Technical Debt (ongoing)
 - [x] **T7.1** Fully remove USB Host dead code paths from `files.mak` and source
 - [x] **T7.2** Reduce scattered `#ifdef` below 20 (removed 87 dead/debug instances)
-- [ ] **T7.3** Complete `ui_driver.c` split into focused modules
+- [x] **T7.3** Complete `ui_driver.c` split into focused modules
