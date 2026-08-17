@@ -324,4 +324,4 @@ infrastructure      # CI, tests, docs
 - [x] **T6.1** Verify all 9 firmware builds compile cleanly
 - [x] **T6.2** Add bootloader safety (CRC, anti-rollback, boot counter)
 - [x] **T6.3** Add power management (sleep mode, low-power idle)
-- [ ] **T6.4** Update platform documentation with new features
+- [x] **T6.4** Update platform documentation with new features
