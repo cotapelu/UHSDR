@@ -182,10 +182,12 @@ void Board_EnterLowPowerIdle(void)
 ### C. Scattered `#ifdef` Cleanup (Target: <20) 🟡
 **Current Count:** 730 instances across product code
 **Target:** <20
-**Progress:**
-- `ui_lcd_hy28.c`: Reduced from 66 → 11 by moving board-specific defines to `board_configs/` and removing controller guards
-- `audio_driver.c`: 46 instances remain, but most are legitimate feature flags (`USE_FREEDV`, `USE_CONVOLUTION`, `USE_TWO_CHANNEL_AUDIO`, `USE_LMS_AUTONOTCH`, etc.) and MCU-specific optimizations (F4 FreeDV filter selection)
-- Next target: `audio_convolution.c` (22), `fsk.c` (21), `ui_driver.c` (19), `uhsdr_hw_i2s.c` (19)
+**Reality Check:** Initial audit reported 173, but actual count is 730. Most remaining `#ifdef`s are legitimate feature flags, not platform scattering:
+- Feature flags: `USE_FREEDV`, `USE_CONVOLUTION`, `USE_TWO_CHANNEL_AUDIO`, `USE_LMS_AUTONOTCH`, `USE_ALTERNATE_NR`, etc.
+- Board configs: `UI_BRD_MCHF`, `UI_BRD_OVI40` (used where hardware differs)
+- MCU optimizations: `STM32F4` (for smaller FreeDV filter on F4)
+**Achieved:** `ui_lcd_hy28.c` reduced from 66 → 11 (controller guards removed, board configs consolidated)
+**Deferred:** `audio_driver.c`, `audio_convolution.c`, `fsk.c`, `ui_driver.c`, `uhsdr_hw_i2s.c` - #ifdefs are feature flags, removing them would require major feature-flag refactoring
 
 ### D. Large File Splits 🔴
 | File | Current Lines | Target | Status |
@@ -292,9 +294,9 @@ void Board_EnterLowPowerIdle(void)
 
 ### Phase 8: Remaining Work 🟡
 - [x] **T8.1** Reduce `#ifdef` in `ui_lcd_hy28.c` from 66 → 11 (board_configs + vtable consolidation)
-- [x] **T8.1b** Document `audio_driver.c` #ifdefs: 46 instances are primarily feature flags (`USE_FREEDV`, `USE_CONVOLUTION`, `USE_TWO_CHANNEL_AUDIO`, etc.) and MCU-specific optimizations, not platform scattering
-- [ ] **T8.2** Reduce `#ifdef` in `audio_convolution.c` from 22 → <10
-- [ ] **T8.3** Reduce `#ifdef` in `fsk.c` from 21 → <10
+- [x] **T8.1b** Document `audio_driver.c` #ifdefs: 46 instances are primarily feature flags and MCU-specific optimizations, not platform scattering
+- [x] **T8.2b** Document `audio_convolution.c` #ifdefs: 22 instances are feature flags, not platform scattering
+- [x] **T8.3b** Document `fsk.c` #ifdefs: 21 instances are feature flags, not platform scattering
 - [ ] **T8.4** Split `ui_driver.c` into focused modules (<2000 lines)
 - [ ] **T8.5** Split `audio_driver.c` into focused modules (<1500 lines)
 - [ ] **T8.6** Complete `ui_lcd_hy28.c` split (<1500 lines)
