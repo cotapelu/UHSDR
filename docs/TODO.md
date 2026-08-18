@@ -338,3 +338,8 @@ infrastructure      # CI, tests, docs
   - Add missing bootloader deps: `uhsdr_board.c`, `uhsdr_fault.c`, `ui_lcd_layouts.c`
   - Add `bootloader_stubs.c` for UI functions referenced by layout tables
   - Increase bootloader linker `rom` size to 64KB (F4/F7) and 256KB (H7)
+- [x] **T8.2** Fix remaining bootloader build failures for F7/ovi40 and H7/ovi40
+  - Fix `CONFIGFLAGS` propagation in root `Makefile` `all-bootloader` target (F7/H7 builds use wrong board config)
+  - Fix cache maintenance macro type mismatch in `ui_lcd_hy28.c` for F7/H7
+  - Fix H7 bootloader `_Error_Handler` type mismatch warning
+  - Verify all 3 valid bootloader builds succeed from root `make`

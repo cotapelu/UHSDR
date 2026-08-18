@@ -180,12 +180,12 @@ all-firmware:
 # Build ALL bootloader combinations (3 valid configs)
 all-bootloader:
 	@echo "Building ALL bootloader combinations..."
-	@$(MAKE) BUILDFOR=F4 BOARD=mchf bootloader && cp mchf-eclipse/bl-mchf.bin bl-mchf_f4-mchf.bin && cp mchf-eclipse/bl-mchf.dfu bl-mchf_f4-mchf.dfu
-	@$(MAKE) -C $(BUILD_DIR) -f Makefile $(SUBMAKE_FLAGS) clean-bootloader
-	@$(MAKE) BUILDFOR=F7 BOARD=ovi40 bootloader && cp mchf-eclipse/bl-mchf.bin bl-mchf_f7-ovi40.bin && cp mchf-eclipse/bl-mchf.dfu bl-mchf_f7-ovi40.dfu
-	@$(MAKE) -C $(BUILD_DIR) -f Makefile $(SUBMAKE_FLAGS) clean-bootloader
-	@$(MAKE) BUILDFOR=H7 BOARD=ovi40 bootloader && cp mchf-eclipse/bl-mchf.bin bl-mchf_h7-ovi40.bin && cp mchf-eclipse/bl-mchf.dfu bl-mchf_h7-ovi40.dfu
-	@$(MAKE) -C $(BUILD_DIR) -f Makefile $(SUBMAKE_FLAGS) clean-bootloader
+	@$(MAKE) -C $(BUILD_DIR) -f Makefile BUILDFOR=F4 CONFIGFLAGS="-DUI_BRD_MCHF -DRF_BRD_MCHF" bootloader && cp mchf-eclipse/bl-mchf.bin bl-mchf_f4-mchf.bin && cp mchf-eclipse/bl-mchf.dfu bl-mchf_f4-mchf.dfu
+	@$(MAKE) -C $(BUILD_DIR) -f Makefile clean-bootloader
+	@$(MAKE) -C $(BUILD_DIR) -f Makefile BUILDFOR=F7 CONFIGFLAGS="-DUI_BRD_OVI40 -DRF_BRD_OVI40" bootloader && cp mchf-eclipse/bl-mchf.bin bl-mchf_f7-ovi40.bin && cp mchf-eclipse/bl-mchf.dfu bl-mchf_f7-ovi40.dfu
+	@$(MAKE) -C $(BUILD_DIR) -f Makefile clean-bootloader
+	@$(MAKE) -C $(BUILD_DIR) -f Makefile BUILDFOR=H7 CONFIGFLAGS="-DUI_BRD_OVI40 -DRF_BRD_OVI40" bootloader && cp mchf-eclipse/bl-mchf.bin bl-mchf_h7-ovi40.bin && cp mchf-eclipse/bl-mchf.dfu bl-mchf_h7-ovi40.dfu
+	@$(MAKE) -C $(BUILD_DIR) -f Makefile clean-bootloader
 	@echo "ALL bootloader builds completed!"
 	@ls -la bl-mchf_*.bin 2>/dev/null || true
 

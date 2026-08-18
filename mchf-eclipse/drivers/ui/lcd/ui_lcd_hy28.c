@@ -720,7 +720,7 @@ DMA_HandleTypeDef DMA_Handle;
 
 static inline void UiLcdHy28_SpiDmaStop()
 {
-    while (hspiDisplay.hdmatx->Instance->CR & DMA_SxCR_EN) { asm(""); }
+    while (((DMA_Stream_TypeDef *)hspiDisplay.hdmatx->Instance)->CR & DMA_SxCR_EN) { asm(""); }
 }
 
 
@@ -1137,6 +1137,13 @@ static void UiLcdHy28_BulkWrite(uint16_t* pixel, uint32_t len)
 
 }
 
+#define PIXELBUFFERSIZE 512
+#define PIXELBUFFERCOUNT 2
+
+static __UHSDR_DMAMEM uint16_t   pixelbuffer[PIXELBUFFERCOUNT][PIXELBUFFERSIZE];
+static uint16_t pixelcount = 0;
+static uint16_t pixelbufidx = 0;
+
 static void UiLcdHy28_FinishWaitBulkWrite()
 {
     if(UiLcdHy28_SpiDisplayUsed())         // SPI enabled?
@@ -1171,13 +1178,6 @@ static void UiLcdHy28_CloseBulkWrite()
 	}
 #endif
 }
-
-#define PIXELBUFFERSIZE 512
-#define PIXELBUFFERCOUNT 2
-
-static __UHSDR_DMAMEM uint16_t   pixelbuffer[PIXELBUFFERCOUNT][PIXELBUFFERSIZE];
-static uint16_t pixelcount = 0;
-static uint16_t pixelbufidx = 0;
 
 static inline void UiLcdHy28_BulkPixel_BufferInit()
 {

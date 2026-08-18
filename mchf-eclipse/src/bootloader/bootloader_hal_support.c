@@ -46,7 +46,9 @@ void Error_Handler(void)
  * @brief  H7 variant of Error_Handler (with underscore)
  * @retval None
  */
-void _Error_Handler(void)
+void _Error_Handler(char *file, int line)
 {
+    (void)file;
+    (void)line;
     Error_Handler();
 }
