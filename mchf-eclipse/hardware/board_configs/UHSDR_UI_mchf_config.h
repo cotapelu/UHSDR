@@ -27,6 +27,14 @@
 // with the correct cache strategy set
 #define __UHSDR_DMAMEM
 
+// Display configuration for mcHF board
+#define USE_DISPLAY_PAR        // FSMC parallel interface available
+#define USE_SPI_DISPLAY        // SPI display supported (HY28A/B)
+#define USE_SPI_DMA            // SPI DMA available
+#define USE_GFX_ILI932x        // ILI9320/ILI9325/ILI9328 controllers
+#define USE_GFX_SSD1289        // SSD1289 controller (HY32D)
+#define USE_8BIT_FONT          // 8-bit font variant available
+
 #ifndef TRX_NAME
     #define TRX_NAME "mcHF QRP"
 #endif // TRX_NAME

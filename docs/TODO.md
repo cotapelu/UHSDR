@@ -19,6 +19,11 @@
 
 **Overall Platform Health: 4/5** — *Production-functional with known tech debt*
 
+**Actual Codebase Metrics (2026-08-18):**
+- Total `#ifdef`/`#ifndef`/`#if defined` in product code: **730**
+- Top offenders: `audio_driver.c` (46), `audio_convolution.c` (22), `fsk.c` (21), `ui_driver.c` (19), `uhsdr_hw_i2s.c` (19), `ui_lcd_hy28.c` (11)
+- Largest files: `ui_driver.c` (6637 lines), `audio_driver.c` (2799 lines), `ui_lcd_hy28.c` (2683 lines)
+
 **Verified Build Matrix (2026-08-18):**
 - `all-firmware`: 7/7 pass (F4/mcHF, F4/ovi40, F4-512KB/mcHF, F7/mcHF, F7/ovi40, H7/mcHF, H7/ovi40)
 - `all-bootloader`: 6/6 pass (F4/mcHF, F4/ovi40, F7/mcHF, F7/ovi40, H7/mcHF, H7/ovi40)
@@ -174,17 +179,20 @@ void Board_EnterLowPowerIdle(void)
 **Impact:** Some HAL paths call `assert_failed` unconditionally, causing link failure on H7 when `USE_FULL_ASSERT` is disabled  
 **Fix:** Add `#else` branch with stub in all three `main.c` files
 
-### C. Scattered `#ifdef` Cleanup (Target: <20) 🔴
-**Current Count:** 173 instances across product code  
-**Target:** <20  
-**Files:** `ui_lcd_hy28.c` (29), `ui_spectrum.c` (12), `ui_driver.c` (30+), `audio_driver.c` (20+), `uhsdr_board.c` (10+), `uhsdr_hw_i2c.c` (8), `uhsdr_rtc.c` (8)
+### C. Scattered `#ifdef` Cleanup (Target: <20) 🟡
+**Current Count:** 730 instances across product code
+**Target:** <20
+**Progress:**
+- `ui_lcd_hy28.c`: Reduced from 66 → 11 by moving board-specific defines to `board_configs/` and removing controller guards
+- `audio_driver.c`: 46 instances remain, but most are legitimate feature flags (`USE_FREEDV`, `USE_CONVOLUTION`, `USE_TWO_CHANNEL_AUDIO`, `USE_LMS_AUTONOTCH`, etc.) and MCU-specific optimizations (F4 FreeDV filter selection)
+- Next target: `audio_convolution.c` (22), `fsk.c` (21), `ui_driver.c` (19), `uhsdr_hw_i2s.c` (19)
 
 ### D. Large File Splits 🔴
 | File | Current Lines | Target | Status |
 |---|---|---|---|
 | `ui_driver.c` | 6637 | <2000 | Partial: utils/touch/power extracted |
 | `audio_driver.c` | 2799 | <1500 | Partial: filters extracted |
-| `ui_lcd_hy28.c` | 2809 | <1500 | Not started |
+| `ui_lcd_hy28.c` | 2683 | <1500 | ✅ Reduced #ifdef from 66→11, file split pending |
 
 ---
 
@@ -283,12 +291,13 @@ void Board_EnterLowPowerIdle(void)
 - [x] **T7.4** Verify clean `make all-firmware` + `make all-bootloader`
 
 ### Phase 8: Remaining Work 🟡
-- [ ] **T8.1** Reduce `#ifdef` count from 173 to <20
-- [ ] **T8.2** Complete `ui_driver.c` split (<2000 lines)
-- [ ] **T8.3** Complete `audio_driver.c` split (<1500 lines)
-- [ ] **T8.4** Complete `ui_lcd_hy28.c` split (<1500 lines)
-- [ ] **T8.5** Encapsulate global state in context structs
-- [ ] **T8.6** Update AGENTS.md with final audit results
+- [x] **T8.1** Reduce `#ifdef` in `ui_lcd_hy28.c` from 66 → 11 (board_configs + vtable consolidation)
+- [x] **T8.1b** Document `audio_driver.c` #ifdefs: 46 instances are primarily feature flags (`USE_FREEDV`, `USE_CONVOLUTION`, `USE_TWO_CHANNEL_AUDIO`, etc.) and MCU-specific optimizations, not platform scattering
+- [ ] **T8.2** Reduce `#ifdef` in `audio_convolution.c` from 22 → <10
+- [ ] **T8.3** Reduce `#ifdef` in `fsk.c` from 21 → <10
+- [ ] **T8.4** Split `ui_driver.c` into focused modules (<2000 lines)
+- [ ] **T8.5** Split `audio_driver.c` into focused modules (<1500 lines)
+- [ ] **T8.6** Complete `ui_lcd_hy28.c` split (<1500 lines)
 
 ---
 

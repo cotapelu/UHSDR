@@ -69,6 +69,11 @@ inline static void GPIO_ReadInputDataBit(GPIO_TypeDef *PORT, uint32_t PINS) { (P
 #define DMA_BUFFER_INVALIDATE(addr, len)
 #endif
 
+/* F7/H7 use HAL SPI driver */
+#if defined(STM32F7) || defined(STM32H7)
+#define USE_SPI_HAL
+#endif
+
 /* SPI prescalers for LCD/touchscreen (per-MCU optimum) */
 #if defined(STM32F4)
 #define SPI_PRESCALE_LCD_DEFAULT (SPI_BAUDRATEPRESCALER_4)
