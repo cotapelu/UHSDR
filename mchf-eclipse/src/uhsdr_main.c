@@ -54,7 +54,11 @@ static IWDG_HandleTypeDef hiwdg;
 
 static void Board_WatchdogInit(void)
 {
+#if defined(STM32H7)
+    hiwdg.Instance = IWDG1;
+#else
     hiwdg.Instance = IWDG;
+#endif
     hiwdg.Init.Prescaler = IWDG_PRESCALER_64;
     hiwdg.Init.Reload = 4095;
 #if defined(CORTEX_M7)

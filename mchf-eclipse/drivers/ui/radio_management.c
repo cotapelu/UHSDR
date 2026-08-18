@@ -297,6 +297,17 @@ const pa_info_t mchf_pa =
 };
 #endif  // RF_BRD_MCHF
 
+#ifdef RF_BRD_OVI40
+const pa_info_t mchf_pa =
+{
+        .name  = "OVI40 PA",
+        .reference_power = 5000.0,
+        .max_freq = 32000000,
+        .min_freq =  1800000,
+        .max_am_power = 2000,
+        .max_power = 10000,
+};
+#endif  // RF_BRD_OVI40
 
 #ifdef RF_BRD_LAPWING
 const pa_info_t mchf_pa =

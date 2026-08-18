@@ -15,6 +15,19 @@
 #include "uhsdr_board.h"
 #include "uhsdr_fault.h"
 
+#if defined(STM32H7)
+/* H7 HAL headers define Error_Handler as a macro to _Error_Handler, but some
+   product code and LTO builds still require a real Error_Handler symbol. */
+#undef Error_Handler
+void Error_Handler(void)
+{
+    /* User can add his own implementation to report the HAL error return state */
+    while (1)
+    {
+    }
+}
+#endif
+
 /* These are volatile to try and prevent the compiler/linker optimising them
    away as the variables never actually get used.  If the debugger won't show the
    values of the variables, make them global by moving their declaration outside

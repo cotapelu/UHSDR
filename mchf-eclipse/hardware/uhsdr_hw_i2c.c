@@ -50,7 +50,6 @@ uint16_t UhsdrHw_I2C_ReadBlock(I2C_HandleTypeDef* hi2c, uchar I2CAddr,uint16_t a
 
     return  i2cRet != HAL_OK?0xFF00:0;
 }
-#ifdef STM32F4
 /**
  * @brief init I2C
  * @param speed in Hertz !!!
@@ -97,7 +96,6 @@ void UhsdrHw_I2C_ChangeSpeed(I2C_HandleTypeDef* hi2c)
 #endif
     HAL_I2C_Init(hi2c);
 }
-#endif
 
 
 

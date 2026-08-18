@@ -31,10 +31,8 @@ uint16_t UhsdrHw_I2C_ReadBlock(I2C_HandleTypeDef* i2c, uchar I2CAddr,uint16_t ad
 
 uint16_t UhsdrHw_I2C_DeviceReady(I2C_HandleTypeDef* hi2c, uchar I2CAddr);
 
-#ifdef STM32F4
 // Special init and wrapper functions for I2C Bus 1
 void UhsdrHw_I2C_ChangeSpeed(I2C_HandleTypeDef* hi2c);
-#endif
 
 // Flags do not really need a timeout according to my testing.
 #define MCHF_I2C_FLAG_TIMEOUT                ((uint32_t)1)
