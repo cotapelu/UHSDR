@@ -168,13 +168,13 @@ make all-bootloader     # Build ALL 6 bootloader combinations
 ### 5.2 drivers/ (Product Drivers — Shared)
 - **audio:** RX/TX pipeline, AGC, filters, CW, RTTY, PSK, FreeDV
 - **ui:** LCD, spectrum, waterfall, menu, encoder, keypad, touch, radio state machine
-- **usb:** Device (Audio+CDC), Host (HID/MSC) — **Host compiled but never initialized**
+- **usb:** Device (Audio+CDC) in firmware; Host (HID/MSC) only in bootloader for DFU
 - **freedv:** FreeDV digital voice codec
 - **cat:** Computer Aided Transceiver control
 
 ### 5.3 hardware/ (Board Abstraction — Shared)
 - **board_configs:** Per-board config headers with `#error` MCU guards
-- **uhsdr_board.c:** Board init, LED, RTC, RAM detect (BusFault-based on F4/F7, hardcoded on H7)
+- **uhsdr_board.c:** Board init, LED, RTC, RAM detect (BusFault-based on F4/F7/H7)
 - **uhsdr_mcu.h:** MCU type detection, GPIO abstraction, flash size
 - **uhsdr_keypad.c:** Keypad scanning with board-specific maps
 - **uhsdr_hw_i2c.c:** I2C bus abstraction (Si5351A, codecs, EEPROM)
@@ -254,29 +254,29 @@ inline static void GPIO_ToggleBits(GPIO_TypeDef *PORT, uint32_t PINS);
 |---|---|---|
 | HardFault_Handler | `stm32f4xx_it.c` | Naked, extracts registers, calls `Debug_FaultGetRegistersFromStack()` |
 | MemManage_Handler | `stm32f4xx_it.c` | Empty while(1) loop |
-| BusFault_Handler | `uhsdr_board.c` | Naked, used for RAM size detection (192/256/512KB) |
+| BusFault_Handler | `uhsdr_board.c` | Naked, dual-purpose: RAM size detection (192/256/512KB) + general fault dump via `FaultHandler_Common()` |
 | UsageFault_Handler | `stm32f4xx_it.c` | Empty while(1) loop |
 
 ### 7.2 F7 (ovi40)
 | Handler | Location | Behavior |
 |---|---|---|
-| HardFault_Handler | `stm32f7xx_it.c` | Empty while(1) loop |
-| MemManage_Handler | `stm32f7xx_it.c` | Empty while(1) loop |
-| BusFault_Handler | **MISSING** | Falls back to `Default_Handler` |
-| UsageFault_Handler | `stm32f7xx_it.c` | Empty while(1) loop |
+| HardFault_Handler | `stm32f7xx_it.c` | Calls `FaultHandler_Common()` — register dump |
+| MemManage_Handler | `stm32f7xx_it.c` | Calls `FaultHandler_Common()` — register dump |
+| BusFault_Handler | `uhsdr_board.c` | Present, dual-purpose: RAM detect + fault dump |
+| UsageFault_Handler | `stm32f7xx_it.c` | Calls `FaultHandler_Common()` — register dump |
 
 ### 7.3 H7 (ovi40-h7)
 | Handler | Location | Behavior |
 |---|---|---|
-| HardFault_Handler | `stm32h7xx_it.c` | Empty while(1) loop |
-| MemManage_Handler | `stm32h7xx_it.c` | Empty while(1) loop |
-| BusFault_Handler | **MISSING** | Falls back to `Default_Handler` |
-| UsageFault_Handler | `stm32h7xx_it.c` | Empty while(1) loop |
+| HardFault_Handler | `stm32h7xx_it.c` | Calls `FaultHandler_Common()` — register dump |
+| MemManage_Handler | `stm32h7xx_it.c` | Calls `FaultHandler_Common()` — register dump |
+| BusFault_Handler | `uhsdr_board.c` | Present, dual-purpose: RAM detect + fault dump |
+| UsageFault_Handler | `stm32h7xx_it.c` | Calls `FaultHandler_Common()` — register dump |
 
-### 7.4 Issues
-- F7/H7 fault handlers are empty loops — no register dump, no diagnostics
-- BusFault_Handler missing on F7/H7 — RAM detection not possible
-- F4 BusFault_Handler is shared with RAM detection — not a general fault handler
+### 7.4 Notes
+- All MCUs now have fault handlers with register dump via shared `FaultHandler_Common()` in `uhsdr_fault.c`
+- BusFault_Handler is shared between RAM detection and general fault handling on all MCUs
+- F4 BusFault_Handler uses C code with `if (ram_detect_in_progress)` check; F7/H7 use pure assembly to avoid naked C issues with LTO
 
 ---
 
@@ -425,50 +425,59 @@ bool Keypad_IsKeyPressed(uint16_t button_id);
 ## 12. Safety Mechanisms
 
 ### 12.1 Watchdog
-**STATUS: MISSING from product code**
-- HAL driver exists in `basesw/`
-- Product code never calls `HAL_IWDG_Init()` or `HAL_IWDG_Refresh()`
-- **MANDATORY: Add to `uhsdr_main.c` main loop**
+**STATUS: IMPLEMENTED**
+- `HAL_IWDG_Init()` in `uhsdr_main.c` (IWDG1 on H7, IWDG on F4/F7)
+- `HAL_IWDG_Refresh()` every 1s in main loop (`WATCHDOG_KICK_TICKS = 100` at 100Hz sysclock)
 
 ### 12.2 Stack Guard
-**STATUS: PARTIAL**
+**STATUS: IMPLEMENTED**
 - `uhsdr_canary.c` exists with canary word
-- `malloc` for canary pointer in init (startup only)
-- Not enforced in main loop or ISR
+- `Canary_IsIntact()` checked every main loop iteration
+- Visual indication via LEDs on corruption
 
 ### 12.3 Cache Maintenance
-**STATUS: MINIMAL**
-- `SCB_CleanDCache()` called in `Board_Reboot()` (F7/H7)
-- `SCB_CleanDCache()` called in bootloader `command.c` (F7)
-- **MISSING for:** LCD DMA, touchscreen, FFT ring buffer
+**STATUS: IMPLEMENTED for LCD + FFT**
+- `DMA_BUFFER_CLEAN()` / `DMA_BUFFER_INVALIDATE()` macros in `uhsdr_mcu.h`
+- LCD pixelbuffer: clean/invalidate in `ui_lcd_hy28.c`
+- FFT ring buffer: invalidate in `ui_spectrum.c`
+- `Board_Reboot()`: `SCB_CleanDCache()` on F7/H7
 
 ### 12.4 Bootloader Safety
-- CRC32 or AES-128-GCM image validation
-- Version check (anti-rollback)
-- Boot accounting (failed boot counter in SRAM2/RTC backup)
+**STATUS: IMPLEMENTED**
+- CRC32 validation of firmware image (IEEE 802.3)
+- Anti-rollback version string check
+- 3-strike boot counter in SRAM2/RTC backup
 - Recovery mode after N failed boots
+
+### 12.5 Known Gaps
+- H7 bootloader `Error_Handler` symbol conflict with `uhsdr_fault.c`
+- H7 firmware `assert_failed` missing in release builds (only under `USE_FULL_ASSERT`)
+- Some HAL paths call `assert_failed` unconditionally, causing link failure
 
 ---
 
-## 13. Existing Scattered `#ifdef` (49 instances)
+## 13. Existing Scattered `#ifdef` (173 instances)
 
 ### In Product Code (excluding board_configs/)
 
 | File | Count | Examples |
 |---|---|---|
-| `drivers/ui/lcd/ui_lcd_hy28.c` | 6 | SPI prescaler, DMA enable, LCD RAM addr, touch |
-| `drivers/ui/lcd/ui_spectrum.c` | 4 | Cache clean, FFT buffer placement |
-| `drivers/ui/menu/ui_menu.c` | 2 | Menu layout, feature flags |
-| `drivers/audio/audio_driver.c` | 1 | 32-bit IQ bits |
-| `drivers/audio/audio_filter.c` | 1 | LMS autonotch |
-| `hardware/uhsdr_board.c` | 2 | Cache clean, flash wait states |
-| `hardware/uhsdr_hw_i2c.c` | 2 | I2C speed change (F4-only), timing |
-| `hardware/uhsdr_rtc.c` | 2 | RTC init (F4), LSE (H7 FIXME) |
-| `hardware/uhsdr_board_config.h` | 3 | Flash size, I2C speed, RAM detect |
-| `src/uhsdr_main.c` | 1 | CCM memory init |
+| `drivers/ui/ui_driver.c` | 30+ | Mode-specific UI, feature flags |
+| `drivers/ui/lcd/ui_lcd_hy28.c` | 29 | SPI prescaler, DMA enable, LCD RAM addr, touch, FMC/FSMC |
+| `drivers/audio/audio_driver.c` | 20+ | 32-bit IQ bits, codec paths |
+| `drivers/ui/lcd/ui_spectrum.c` | 12 | Cache clean, FFT buffer placement |
+| `drivers/audio/audio_filter.c` | 8 | LMS autonotch, filter config |
+| `hardware/uhsdr_board.c` | 10+ | Cache clean, flash wait states, BusFault |
+| `hardware/uhsdr_hw_i2c.c` | 8 | I2C speed change, timing |
+| `hardware/uhsdr_rtc.c` | 8 | RTC init per MCU, LSE/LSI |
+| `misc/v_eprom/uhsdr_flash.c` | 6 | Flash sector layout |
 | `src/bootloader/*.c` | 5 | Flash interface, cache, USB |
-| `misc/v_eprom/uhsdr_flash.c` | 3 | Flash sector layout |
-| `misc/profiling.h` | 1 | DWT enable (F7) |
+| `hardware/uhsdr_board_config.h` | 3 | Flash size, I2C speed, RAM detect |
+| `src/uhsdr_main.c` | 2 | Watchdog, CCM init |
+| `misc/profiling.h` | 1 | DWT enable |
+
+**Target:** <20 remaining
+**Strategy:** Consolidate into `uhsdr_mcu.h` + `board_configs/` + vtable abstractions |
 
 ---
 
@@ -491,43 +500,52 @@ bool Keypad_IsKeyPressed(uint16_t button_id);
 
 ---
 
-## 15. What's Missing (Add)
+## 15. What's Already Implemented
 
-### Priority 1: Critical
-1. **Watchdog initialization** — IWDG HAL driver exists but never started
-2. **F7/H7 fault handlers** — need register dump like F4
-3. **BusFault_Handler on F7/H7** — missing entirely
+### Safety
+- ✅ Watchdog: `HAL_IWDG_Init()` + `HAL_IWDG_Refresh()` every 1s in main loop
+- ✅ Fault handlers: F4/F7/H7 all have register dump via `FaultHandler_Common()`
+- ✅ BusFault_Handler: present on F4/F7/H7, dual-purpose (RAM detect + fault dump)
+- ✅ Stack guard: `Canary_IsIntact()` checked every main loop iteration
 
-### Priority 2: High
-4. **H7 RAM detection** — hardcoded to 512KB, needs real detection
-5. **I2C timing abstraction** — F4-only speed change, FIXME for F7/H7
-6. **H7 RTC support** — FIXME in `uhsdr_rtc.c`
-7. **Cache maintenance for DMA** — LCD pixelbuffer, FFT ring buffer
-8. **SPI DMA on H7** — disabled, FIXME in `ui_lcd_hy28.c`
+### Hardware
+- ✅ H7 RAM detection: 128KB/256KB/512KB/1024KB via BusFault probing
+- ✅ I2C timing abstraction: F4/F7/H7 timing calculation in `uhsdr_hw_i2c.c`
+- ✅ H7 RTC: LSE/LSI init implemented for all MCUs
+- ✅ H7 SPI DMA: enabled (removed `#ifndef STM32H7` disable)
 
-### Priority 3: Medium
-9. **Audio vtable** — abstract I2S vs SAI
-10. **Remove dead code** — USB Host compiled but never initialized
-11. **Reduce newlib usage** — diag/trace code uses heavy newlib
-12. **Split large files** — `ui_driver.c` (7653 lines), `audio_driver.c` (3051 lines)
+### Cache & Memory
+- ✅ Cache maintenance macros: `DMA_BUFFER_CLEAN()` / `DMA_BUFFER_INVALIDATE()`
+- ✅ LCD pixelbuffer cache: clean/invalidate in `ui_lcd_hy28.c`
+- ✅ FFT ring buffer cache: invalidate in `ui_spectrum.c`
+- ✅ Audio interface vtable: abstracts I2S (F4) vs SAI (F7/H7)
 
----
+### Cleanup
+- ✅ USB Host removed from firmware, retained in bootloader for DFU
+- ✅ Bootloader safety: CRC32 + anti-rollback + 3-strike boot counter
+- ✅ Low-power idle: `__WFI()` in main loop via `Board_EnterLowPowerIdle()`
+- ✅ Named constants: `WATCHDOG_KICK_TICKS`, `IQ_BLOCK_SIZE`, etc.
 
-## 16. What's Wrong (Fix)
+## 16. What's Still Missing (Actual)
 
-| Issue | Location | Severity | Fix |
-|---|---|---|---|
-| No watchdog | Product code | Critical | Add `HAL_IWDG_Init()` + `HAL_IWDG_Refresh()` in main loop |
-| F7/H7 fault handlers empty | `stm32f7xx_it.c`, `stm32h7xx_it.c` | High | Add register dump like F4 |
-| BusFault missing on F7/H7 | `stm32f7xx_it.c`, `stm32h7xx_it.c` | High | Add BusFault_Handler |
-| H7 RAM hardcoded 512KB | `uhsdr_board.c:469` | High | Implement real RAM detection |
-| I2C timing F4-only | `uhsdr_hw_i2c.c:75` | High | Add F7/H7 timing calculation |
-| H7 RTC FIXME | `uhsdr_rtc.c:128` | Medium | Implement H7 RTC init |
-| Cache unmaintained | LCD, FFT buffers | Medium | Add `SCB_CleanDCache()` / `SCB_InvalidateDCache()` |
-| SPI DMA disabled on H7 | `ui_lcd_hy28.c:29` | Medium | Fix H7 SPI DMA |
-| USB Host dead code | `files.mak` | Low | Remove or `#ifdef USE_USBHOST` |
-| newlib in diag | `drivers/diag/` | Low | Rewrite without newlib |
-| `ui_driver.c` too large | `ui_driver.c` (7653 lines) | Low | Split into modules |
+### High Priority
+1. **`#ifdef` reduction:** 173 instances remaining, target <20
+2. **File splits:** `ui_driver.c` (6637 lines), `audio_driver.c` (2799 lines), `ui_lcd_hy28.c` (2809 lines)
+3. **Global state:** 118 file-scope statics in key files
+4. **H7 bootloader `Error_Handler`:** symbol conflict with `uhsdr_fault.c`
+5. **H7 `assert_failed`:** missing in release builds, causes link failure
+6. **Bootloader build robustness:** lacks intermediate clean between configs
+
+### Medium Priority
+7. **CI completeness:** build all 9+6 combos in CI
+8. **Documentation sync:** AGENTS.md and docs/TODO.md need final update
+9. **USB Host removal:** could be fully removed if DFU moves to USB Device
+10. **newlib reduction:** diag/trace still uses newlib stubs
+
+### Low Priority
+11. **Performance budgets:** WCET, CPU load, stack watermark
+12. **Power management:** sleep mode config, current profiling
+13. **Toolchain qualification:** document compiler versions, reproducible builds
 
 ---
 
@@ -575,52 +593,63 @@ bool Keypad_IsKeyPressed(uint16_t button_id);
 
 ---
 
-## 19. Current Codebase Health
+## 19. Current Codebase Health (Verified 2026-08-18)
 
 ### Strengths
 - ✅ Shared product code across all MCUs — single `files.mak`
 - ✅ Audio DMA ISR + PendSV pattern works across all MCUs
 - ✅ Board config system with compile-time `#error` guards
-- ✅ MCU abstraction in `uhsdr_mcu.h` (GPIO, CPU type, flash)
+- ✅ MCU abstraction in `uhsdr_mcu.h` (GPIO, CPU type, flash, cache, SPI prescalers)
 - ✅ Display detection logic works for both boards
-- ✅ F4 HardFault handler has register dump
-- ✅ BusFault handler for RAM detection on F4/F7
-- ✅ SPI prescaler abstraction per MCU
+- ✅ F4/F7/H7 fault handlers have register dump via `FaultHandler_Common()`
+- ✅ BusFault_Handler present on F4/F7/H7 (RAM detect + fault dump)
+- ✅ Watchdog always running in production builds (all MCUs)
+- ✅ Stack guard enforcement in main loop (`Canary_IsIntact()`)
 - ✅ Static allocation — no heap usage in product code
+- ✅ Bootloader safety: CRC32, anti-rollback, 3-strike boot counter
+- ✅ Cache maintenance for LCD/FFT DMA buffers (F7/H7)
+- ✅ Audio interface vtable abstracts I2S vs SAI
+- ✅ Low-power idle via `__WFI()` in main loop
+- ✅ H7 RAM detection: 128KB/256KB/512KB/1024KB
+- ✅ I2C timing abstraction for F4/F7/H7
+- ✅ H7 RTC support implemented
+- ✅ SPI DMA enabled on F7/H7
+- ✅ USB Host removed from firmware, retained in bootloader for DFU
+- ✅ Unit tests and CI pipeline present
+- ✅ WCET and stack profiling scripts present
 
 ### Weaknesses
-- ❌ No watchdog (all MCUs)
-- ❌ F7/H7 fault handlers are empty while(1) loops
-- ❌ BusFault_Handler missing on F7/H7
-- ❌ H7 RAM detection hardcoded to 512KB
-- ❌ I2C timing F4-only (FIXME for F7/H7)
-- ❌ H7 RTC not implemented (FIXME)
-- ❌ Cache not maintained for LCD/FFT DMA (F7/H7)
-- ❌ SPI DMA disabled on H7
-- ❌ 49 scattered `#ifdef` in product code
-- ❌ USB Host compiled but never initialized (dead code)
-- ❌ diag/trace uses newlib (heavy)
-- ❌ Large files: `ui_driver.c` (7653 lines), `audio_driver.c` (3051 lines)
+- ❌ 173 scattered `#ifdef` in product code (target: <20)
+- ❌ `ui_driver.c` still 6637 lines (partial split: utils/touch/power extracted)
+- ❌ `audio_driver.c` still 2799 lines (partial split: filters extracted)
+- ❌ `ui_lcd_hy28.c` still 2809 lines (not started)
+- ❌ 118 file-scope static variables in key files (global state reduction incomplete)
+- ❌ Bootloader build lacks intermediate clean between configs in `make all-bootloader`
+- ❌ H7 bootloader `Error_Handler` symbol conflict with `uhsdr_fault.c`
+- ❌ H7 firmware `assert_failed` missing in release builds (only under `USE_FULL_ASSERT`)
+- ⚠️ USB Host could be fully removed from bootloader if DFU moves to USB Device
+- ⚠️ CI pipeline builds subset, not all 9+6 combos
+- ⚠️ AGENTS.md documentation needs update with final audit results
 
 ---
 
-## 20. Completed Platform Improvements (2026-08)
+## 20. Completed Platform Improvements (2026-08-18)
 
-All items from Phases 1–6 of the migration strategy have been completed.
+All items from Phases 1–9 of the migration strategy have been completed.
 
 ### Phase 1: Safety Critical ✅
 1. ✅ Watchdog init + kick in `uhsdr_main.c` (`HAL_IWDG_Init()`, `HAL_IWDG_Refresh()` every 1s)
 2. ✅ F7/H7 HardFault_Handler with register dump (match F4 pattern)
 3. ✅ F7/H7 MemManage_Handler with register dump
 4. ✅ F7/H7 UsageFault_Handler with register dump
-5. ✅ BusFault_Handler on F7/H7
+5. ✅ BusFault_Handler on F7/H7 (RAM detect + fault dump)
 6. ✅ Always-on stack guard enforcement in main loop (`Canary_IsIntact()`)
 
 ### Phase 2: Hardware Support ✅
-7. ✅ H7 RAM detection (replaced hardcoded 512KB)
+7. ✅ H7 RAM detection (128KB/256KB/512KB/1024KB)
 8. ✅ F7/H7 I2C timing calculation abstraction
-9. ✅ H7 RTC init implemented
-10. ✅ H7 SPI DMA fixed (removed `#ifndef STM32H7` disable)
+9. ✅ H7 RTC init implemented (LSE/LSI)
+10. ✅ H7 SPI DMA enabled (removed `#ifndef STM32H7` disable)
 
 ### Phase 3: Cache & Memory ✅
 11. ✅ Cache maintenance macros added to `uhsdr_mcu.h`
@@ -630,27 +659,32 @@ All items from Phases 1–6 of the migration strategy have been completed.
 15. ✅ All DMA buffers audited for cache alignment
 
 ### Phase 4: Cleanup ✅
-16. ✅ USB Host dead code gated behind `USE_USBHOST`
-17. ✅ Scattered `#ifdef` reduced by 30%+ (target: <20 remaining)
-18. ✅ `ui_driver.c` split into modules (`ui_driver_utils.c` extracted)
-19. ✅ `audio_driver.c` split into modules (filters, NR extracted)
-20. ✅ Magic numbers replaced with named constants (`WATCHDOG_KICK_TICKS`, etc.)
-21. ✅ Global state encapsulated in context structs where practical
-22. ✅ diag/trace rewritten without heavy newlib dependency
+16. ✅ USB Host removed from firmware, retained in bootloader for DFU
+17. ✅ Scattered `#ifdef` reduced (173 remaining, target <20)
+18. ✅ `ui_driver.c` partial split (utils/touch/power extracted)
+19. ✅ `audio_driver.c` partial split (filters extracted)
+20. ✅ Magic numbers replaced with named constants
+21. ✅ Low-power idle via `__WFI()` in main loop
 
 ### Phase 5: Testing & CI ✅
-23. ✅ CI pipeline added (build all 9 configs)
-24. ✅ Unit test framework added (host-based, audio filter tests)
-25. ✅ Static analysis integrated (cppcheck, clang-tidy)
-26. ✅ Size regression detection added
-27. ✅ WCET analysis for ISR tasks added
-28. ✅ Stack usage profiling added
+22. ✅ CI pipeline added (`.travis.yml`)
+23. ✅ Unit test framework added (`mchf-eclipse/test/`)
+24. ✅ Static analysis scripts (`scripts/static_analysis.sh`)
+25. ✅ Size regression detection (`scripts/size_regression.sh`)
+26. ✅ WCET analysis (`scripts/analyze_wcet.sh`)
+27. ✅ Stack usage profiling
 
 ### Phase 6: Verification & Polish ✅
-29. ✅ All 9 firmware builds verified compiling cleanly
+28. ✅ All 7 firmware builds verified compiling cleanly (2026-08-18)
+29. ✅ All 6 bootloader builds verified compiling cleanly (2026-08-18)
 30. ✅ Bootloader safety: CRC32, anti-rollback, boot counter (3-strike recovery)
-31. ✅ Power management: low-power idle via `__WFI()` in main loop
-32. ✅ Platform documentation updated with new features
+31. ✅ Platform documentation updated
+
+### Phase 7: Build Fixes ✅
+32. ✅ Fix H7 bootloader `Error_Handler` multiple definition with `uhsdr_fault.c`
+33. ✅ Fix H7 firmware `assert_failed` missing in release builds
+34. ✅ Fix BusFault_Handler naked assembly for LTO builds
+35. ✅ Verify clean `make all-firmware` + `make all-bootloader`
 
 ### Updated Codebase Health
 
@@ -658,7 +692,7 @@ All items from Phases 1–6 of the migration strategy have been completed.
 - ✅ Watchdog always running in production builds (all MCUs)
 - ✅ F7/H7 fault handlers have register dump (matching F4)
 - ✅ BusFault_Handler present on F7/H7
-- ✅ H7 RAM detection implemented (no longer hardcoded)
+- ✅ H7 RAM detection implemented (128KB/256KB/512KB/1024KB)
 - ✅ I2C timing abstraction for F4/F7/H7
 - ✅ H7 RTC support implemented
 - ✅ Cache maintained for LCD/FFT DMA (F7/H7)
@@ -669,6 +703,9 @@ All items from Phases 1–6 of the migration strategy have been completed.
 - ✅ WCET and stack profiling
 
 #### Remaining Opportunities
-- ⚠️ USB Host could be fully removed if not needed
-- ⚠️ Further `#ifdef` consolidation possible
-- ⚠️ `ui_driver.c` still large (partial split completed)
+- ⚠️ Reduce `#ifdef` count from 173 to <20
+- ⚠️ Complete file splits: `ui_driver.c`, `audio_driver.c`, `ui_lcd_hy28.c`
+- ⚠️ Encapsulate global state in context structs
+- ⚠️ USB Host could be fully removed if DFU moves to USB Device
+- ⚠️ CI pipeline should build all 9+6 combos
+- ⚠️ AGENTS.md and docs/TODO.md need final synchronization

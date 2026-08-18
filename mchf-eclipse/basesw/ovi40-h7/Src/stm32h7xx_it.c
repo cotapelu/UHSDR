@@ -75,6 +75,8 @@ void HardFault_Handler(void)
   FaultHandler_Common();
 }
 
+extern void BusFault_Handler(void);
+
 /**
 * @brief This function handles Memory management fault.
 */

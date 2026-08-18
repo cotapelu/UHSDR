@@ -267,7 +267,18 @@ void assert_failed(uint8_t* file, uint32_t line)
 
 }
 
-#endif
+#else
+
+/* Platform guarantee: assert_failed must always exist because some HAL paths
+   call it unconditionally even when assert_param is compiled out. */
+void assert_failed(uint8_t* file, uint32_t line)
+{
+    (void)file;
+    (void)line;
+    for(;;);
+}
+
+#endif /* USE_FULL_ASSERT */
 
 /**
   * @}

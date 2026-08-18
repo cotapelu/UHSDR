@@ -392,6 +392,9 @@ static volatile bool ram_detect_in_progress;
 #define TEST_ADDR_256 (0x20000000 + 0x0002FFFC)
 #define TEST_ADDR_512 (0x20000000 + 0x0005FFFC)
 #define TEST_ADDR_H7_1M (0x24000000 + 0x00100000 - 4)
+#define TEST_ADDR_H7_512K (0x24000000 + 0x00080000 - 4)
+#define TEST_ADDR_H7_256K (0x24000000 + 0x00040000 - 4)
+#define TEST_ADDR_H7_128K (0x24000000 + 0x00020000 - 4)
 
 // function below mostly based on http://stackoverflow.com/questions/23411824/determining-arm-cortex-m3-ram-size-at-run-time
 
@@ -399,14 +402,15 @@ __attribute__ ((naked)) void BusFault_Handler_RamDetect(void);
 
 __attribute__ ((naked)) void BusFault_Handler(void)
 {
-    if (ram_detect_in_progress)
-    {
-        BusFault_Handler_RamDetect();
-    }
-    else
-    {
-        FaultHandler_Common();
-    }
+    __asm volatile(
+        "mov r3, %0\n"
+        "ldrb r3, [r3]\n"
+        "cmp r3, #0\n"
+        "bne 1f\n"
+        "b FaultHandler_Common\n"
+        "1: b BusFault_Handler_RamDetect\n"
+        : : "l" (&ram_detect_in_progress) : "r3"
+    );
 }
 
 __attribute__ ((naked)) void BusFault_Handler_RamDetect(void) {
@@ -487,8 +491,12 @@ uint32_t Board_RamSizeGet() {
     SCB->SHCSR |= SCB_SHCSR_BUSFAULTENA_Msk;
     if (is_ram_at((volatile uint32_t*)TEST_ADDR_H7_1M)){
         retval=1024;
-    } else if (is_ram_at((volatile uint32_t*)TEST_ADDR_512)){
+    } else if (is_ram_at((volatile uint32_t*)TEST_ADDR_H7_512K)){
         retval=512;
+    } else if (is_ram_at((volatile uint32_t*)TEST_ADDR_H7_256K)){
+        retval=256;
+    } else if (is_ram_at((volatile uint32_t*)TEST_ADDR_H7_128K)){
+        retval=128;
     }
     SCB->SHCSR &= ~SCB_SHCSR_BUSFAULTENA_Msk;
 #else

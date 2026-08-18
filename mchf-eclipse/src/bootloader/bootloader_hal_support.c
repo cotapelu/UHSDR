@@ -32,23 +32,26 @@ void assert_failed(uint8_t *file, uint32_t line)
  * @brief  This function is executed in case of error occurrence.
  * @retval None
  */
+#if !defined(STM32H7) && !defined(STM32H743xx)
 void Error_Handler(void)
 {
     /* User can add his own implementation to report the HAL error return state */
-    
-    /* Infinite loop */
     while (1)
     {
     }
 }
+#endif
 
-/**
- * @brief  H7 variant of Error_Handler (with underscore)
- * @retval None
- */
 void _Error_Handler(char *file, int line)
 {
     (void)file;
     (void)line;
+#if !defined(STM32H7) && !defined(STM32H743xx)
     Error_Handler();
+#else
+    /* On H7, uhsdr_fault.c already provides Error_Handler */
+    while (1)
+    {
+    }
+#endif
 }
