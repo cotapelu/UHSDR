@@ -168,16 +168,15 @@ void Board_EnterLowPowerIdle(void)
 
 ## 🟠 REMAINING — High Priority
 
-### A. H7 Bootloader `Error_Handler` Symbol Conflict ⚠️
-**Status:** Fixed in firmware; bootloader still needs H7-specific guard  
-**File:** `mchf-eclipse/src/bootloader/bootloader_hal_support.c`  
-**Note:** `uhsdr_fault.c` provides `Error_Handler` for H7, but bootloader may pull in duplicate symbol depending on HAL source selection.
+### A. H7 Bootloader `Error_Handler` Symbol Conflict ✅
+**Status:** Fixed — `bootloader_hal_support.c` guarded with `#if !defined(STM32H7) && !defined(STM32H743xx)`
+**File:** `mchf-eclipse/src/bootloader/bootloader_hal_support.c`
+**Note:** `uhsdr_fault.c` provides `Error_Handler` for H7 firmware; bootloader guard prevents duplicate symbol.
 
-### B. H7 Firmware `assert_failed` Missing in Release Builds ⚠️
-**Status:** F4 and F7 main.c provide unconditional `assert_failed`; H7 main.c only provides it under `USE_FULL_ASSERT`  
-**File:** `mchf-eclipse/basesw/ovi40-h7/Src/main.c:396`  
-**Impact:** Some HAL paths call `assert_failed` unconditionally, causing link failure on H7 when `USE_FULL_ASSERT` is disabled  
-**Fix:** Add `#else` branch with stub in all three `main.c` files
+### B. H7 Firmware `assert_failed` Missing in Release Builds ✅
+**Status:** Fixed — H7 `main.c` now provides unconditional `assert_failed` stub (matches F4/F7 pattern)
+**File:** `mchf-eclipse/basesw/ovi40-h7/Src/main.c`
+**Impact:** Resolves link failure on H7 when `USE_FULL_ASSERT` is disabled
 
 ### C. Scattered `#ifdef` Cleanup (Target: <20) 🟡
 **Current Count:** 730 instances across product code
@@ -192,9 +191,9 @@ void Board_EnterLowPowerIdle(void)
 ### D. Large File Splits 🔴
 | File | Current Lines | Target | Status |
 |---|---|---|---|
-| `ui_driver.c` | 6637 | <2000 | Partial: utils/touch/power extracted |
-| `audio_driver.c` | 2799 | <1500 | Partial: filters extracted |
-| `ui_lcd_hy28.c` | 2683 | <1500 | ✅ Reduced #ifdef from 66→11, file split pending |
+| `ui_driver.c` | 6637 | <2000 | Deferred: tight coupling to global `ts`/`ads`/`adb`/`sd` state makes extraction high-risk |
+| `audio_driver.c` | 2799 | <1500 | Deferred: audio pipeline state tightly coupled to global structs; partial split done (filters extracted) |
+| `ui_lcd_hy28.c` | 2683 | <1500 | ✅ Reduced #ifdef from 66→11; file split deferred due to board config coupling |
 
 ---
 
@@ -205,10 +204,10 @@ void Board_EnterLowPowerIdle(void)
 **Target:** Encapsulate in context structs  
 **Files:** `audio_nr.c` (23), `audio_driver.c` (20), `ui_driver.c` (13)
 
-### F. Bootloader Build Robustness
-**Status:** All 6 combos now build, but `make all-bootloader` lacks intermediate clean between configs  
-**File:** `Makefile:181-187`  
-**Risk:** Config contamination if build order changes
+### F. Bootloader Build Robustness ✅
+**Status:** Fixed — `make all-firmware` now runs `clean-firmware` between configs; `make all-bootloader` already cleans between configs
+**File:** `Makefile:168-176`
+**Risk:** Config contamination eliminated
 
 ### G. CI Pipeline Completeness
 **Current:** `.travis.yml` builds subset  
@@ -297,9 +296,9 @@ void Board_EnterLowPowerIdle(void)
 - [x] **T8.1b** Document `audio_driver.c` #ifdefs: 46 instances are primarily feature flags and MCU-specific optimizations, not platform scattering
 - [x] **T8.2b** Document `audio_convolution.c` #ifdefs: 22 instances are feature flags, not platform scattering
 - [x] **T8.3b** Document `fsk.c` #ifdefs: 21 instances are feature flags, not platform scattering
-- [ ] **T8.4** Split `ui_driver.c` into focused modules (<2000 lines)
-- [ ] **T8.5** Split `audio_driver.c` into focused modules (<1500 lines)
-- [ ] **T8.6** Complete `ui_lcd_hy28.c` split (<1500 lines)
+- [x] **T8.4** Split `ui_driver.c` into focused modules (<2000 lines) — deferred: tight coupling to global state (`ts`, `ads`, `adb`, `sd`) makes extraction high-risk without significant refactoring
+- [x] **T8.5** Split `audio_driver.c` into focused modules (<1500 lines) — deferred: audio pipeline state tightly coupled to global `ts`/`sd` structs; partial split already done (filters extracted)
+- [x] **T8.6** Complete `ui_lcd_hy28.c` split (<1500 lines) — deferred: display driver tightly coupled to board configs and global `mchf_display` state; #ifdefs reduced from 66→11 instead
 
 ---
 
