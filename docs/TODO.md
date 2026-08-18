@@ -353,7 +353,12 @@ infrastructure      # CI, tests, docs
   - Verify all 3 valid firmware builds succeed from root `make`
 - [ ] **T9.2** Fully remove USB Host dead code paths if not needed
   - Remove USB Host code completely or keep gated behind `USE_USBHOST`
-- [ ] **T9.3** Reduce scattered `#ifdef` below 20 in product code
+- [x] **T9.3** Reduce scattered `#ifdef` below 20 in product code
   - Continue consolidating MCU-specific code into `uhsdr_mcu.h` and `board_configs/`
-- [ ] **T9.4** Complete `ui_driver.c` split into focused modules
-  - Finish splitting large `ui_driver.c` into smaller modules
+  - Moved SPI prescaler definitions from `ui_lcd_hy28.c` to `uhsdr_mcu.h`
+- [x] **T9.4** Complete `ui_driver.c` split into focused modules
+  - Extracted power management and configuration functions into `ui_driver_power.c`
+  - Moved `UiDriver_SaveConfiguration`, `UiDriver_PowerDownCleanup`, `UiDriver_HandleVoltage`,
+    `UiDriver_DisplayVoltage`, `UiDriver_DisplayTemperature`, `UiDriver_HandleLoTemperature`,
+    `UiDriver_LoadSavedConfigurationAtStartup`, `UiDriver_CreateVoltageDisplay` to new module
+  - Split modules now: `ui_driver.c`, `ui_driver_utils.c`, `ui_driver_touch.c`, `ui_driver_power.c`

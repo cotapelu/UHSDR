@@ -33,6 +33,7 @@
 #include "ui.h"
 // LCD
 #include "ui_lcd_hy28.h"
+#include "ui_driver_power.h"
 #include "ui_spectrum.h"
 
 #include "freedv_uhsdr.h"
@@ -68,7 +69,6 @@
 
 #define SPLIT_ACTIVE_COLOUR         		Yellow      // colour of "SPLIT" indicator when active
 #define SPLIT_INACTIVE_COLOUR           	Grey        // colour of "SPLIT" indicator when NOT active
-#define COL_PWR_IND                 		White
 
 
 
@@ -113,31 +113,14 @@ static void     UiDriver_DisplayMemoryLabel();
 
 static void 	UiDriver_DisplayModulationType();
 static void 	UiDriver_DisplayPowerLevel();
-static void     UiDriver_DisplayTemperature(int temp);
-static void     UiDriver_DisplayVoltage();
 
 static void 	UiDriver_HandleSMeter();
 static void 	UiDriver_HandleTXMeters();
-static bool     UiDriver_HandleVoltage();
-
-#if 0
-static void 	UiDriverUpdateLoMeter(uchar val,uchar active);
-#endif
-static void     UiDriver_CreateVoltageDisplay();
-
-static void 	UiDriver_HandleLoTemperature();
-
-
-static bool	    UiDriver_LoadSavedConfigurationAtStartup();
-
-static void     UiDriver_PowerDownCleanup(bool saveConfiguration);
 
 static void UiDriver_HandlePowerLevelChange(const BandInfo* band, uint8_t power_level);
 static void UiDriver_HandleBandButtons(uint16_t button);
 
 static void UiDriver_KeyTestScreen();
-
-static bool UiDriver_SaveConfiguration();
 
 static void UiDriver_DisplayRttySpeed(bool encoder_active);
 static void UiDriver_DisplayRttyShift(bool encoder_active);
@@ -4719,248 +4702,17 @@ static void UiDriver_HandleTXMeters()
 }
 
 
-static void UiDriver_CreateVoltageDisplay() {
-	// Create voltage
-	UiLcdHy28_PrintTextCentered (ts.Layout->PWR_IND.x,ts.Layout->PWR_IND.y,ts.Layout->LEFTBOXES_IND.w,   "--.- V",  COL_PWR_IND,Black,0);
-}
-
-static bool UiDriver_SaveConfiguration()
-{
-	bool savedConfiguration = true;
-
-	const uint16_t scope_middle_y = sd.Slayout->full.h/2+sd.Slayout->full.y;
-
-	const char* txp;
-	uint16_t txc;
-
-	switch (ts.configstore_in_use)
-	{
-	case CONFIGSTORE_IN_USE_FLASH:
-		txp = "Saving settings to Flash Memory";
-		break;
-	case CONFIGSTORE_IN_USE_I2C:
-		txp = "Saving settings to I2C EEPROM";
-		break;
-	default:
-		txp = "Detected problems: Not saving";
-		savedConfiguration = false;
-	}
-	UiLcdHy28_PrintTextCentered(sd.Slayout->full.x, scope_middle_y-6, sd.Slayout->full.w,txp,Blue,Black,0);
-
-	if (savedConfiguration)
-	{
-		// save settings
-		if (UiConfiguration_SaveEepromValues() == 0)
-		{
-			txp = "Saving settings finished";
-			txc = Green;
-		}
-		else
-		{
-			txp = "Saving settings failed";
-			txc = Red;
-			savedConfiguration = false;
-		}
-		UiLcdHy28_PrintTextCentered(sd.Slayout->full.x, scope_middle_y+6, sd.Slayout->full.w,txp,txc,Black,0);
-	}
-	return savedConfiguration;
-}
-
-
-/*
- * @brief displays the visual information that power down is being executed and saves EEPROM if requested
- */
-static void UiDriver_PowerDownCleanup(bool saveConfiguration)
-{
-	const char* txp;
-	// Power off all - high to disable main regulator
-
-	ts.powering_down = 1;   // indicate that we should be powering down
-
-	UiSpectrum_Clear();   // clear display under spectrum scope
-
-	// hardware based mute
-	Codec_MuteDAC(true);  // mute audio when powering down
-
-	txp = " ";
-
-	UiLcdHy28_PrintTextCentered(60,148,240,txp,Blue2,Black,0);
-	UiLcdHy28_PrintTextCentered(60,156,240,"Powering off...",Blue2,Black,0);
-	UiLcdHy28_PrintTextCentered(60,168,240,txp,Blue2,Black,0);
-
-	if (saveConfiguration)
-	{
-		UiDriver_SaveConfiguration();
-	}
-	else
-	{
-		UiLcdHy28_PrintTextCentered(60,176,260,"...without saving settings...",Blue,Black,0);
-	}
-
-
-	if(saveConfiguration)
-	{
-		UiConfiguration_SaveEepromValues();     // save EEPROM values
-	}
-
-	HAL_Delay(3000);
-}
-
-
-
-/*
- * @brief Display external voltage
- */
-static void UiDriver_DisplayVoltage()
-{
-	uint32_t low_power_threshold = ((ts.low_power_config & LOW_POWER_THRESHOLD_MASK) + LOW_POWER_THRESHOLD_OFFSET) * 10;
-	// did we detect a voltage change?
-
-	uint32_t col = COL_PWR_IND;  // Assume normal voltage, so Set normal color
-
-	if (pwmt.voltage < low_power_threshold + 50)
-	{
-		col = Red;
-	}
-	else if (pwmt.voltage < low_power_threshold + 100)
-	{
-		col = Orange;
-	}
-	else if (pwmt.voltage < low_power_threshold + 150)
-	{
-		col = Yellow;
-	}
-
-	static uint8_t voltage_blink = 0;
-	// in case of low power shutdown coming, we let the voltage blink with 1hz
-	if (pwmt.undervoltage_detected == true && voltage_blink < 1 )
-	{
-		col = Black;
-	}
-	voltage_blink++;
-	if (voltage_blink == 2)
-	{
-		voltage_blink = 0;
-	}
-
-	char digits[6];
-	snprintf(digits,6,"%2ld.%02ld",pwmt.voltage/100,pwmt.voltage%100);
-	UiLcdHy28_PrintText(ts.Layout->PWR_IND.x,ts.Layout->PWR_IND.y,digits,col,Black,0);
-}
 
 /**
  * @brief Measures Voltage and controls undervoltage detection
  * @returns true if display update is required, false if not
  */
-static bool UiDriver_HandleVoltage()
-{
-	bool retval = false;
-	// if this is set to true, we should update the display because something relevant for the user happened.
-
-	// Collect samples
-	if(pwmt.p_curr < POWER_SAMPLES_CNT)
-	{
-		// Add to accumulator
-		pwmt.pwr_aver = pwmt.pwr_aver + HAL_ADC_GetValue(&hadc1);
-		pwmt.p_curr++;
-	}
-	else
-	{
-
-		// Get average
-		uint32_t val_p  = ((pwmt.pwr_aver/POWER_SAMPLES_CNT) * (ts.voltmeter_calibrate + 900))/2500;
-
-		// Reset accumulator
-		pwmt.p_curr     = 0;
-		pwmt.pwr_aver   = 0;
-
-
-		retval = pwmt.voltage != val_p;
-
-		pwmt.voltage = val_p;
-
-
-		uint32_t low_power_threshold = ((ts.low_power_config & LOW_POWER_THRESHOLD_MASK) + LOW_POWER_THRESHOLD_OFFSET) * 10;
-		bool low_power_shutdown_enabled = (ts.low_power_config & LOW_POWER_ENABLE_MASK) == LOW_POWER_ENABLE;
-
-		if (low_power_shutdown_enabled && (val_p < low_power_threshold ))
-		{
-			// okay, voltage is too low, we should indicate
-			pwmt.undervoltage_detected = true;
-			retval = true;
-
-			if (ts.txrx_mode == TRX_MODE_RX)
-			{
-				if (ts.sysclock > ts.low_power_shutdown_time )         // only allow power-off in RX mode
-				{
-					UiDriver_PowerDownCleanup(true);
-				}
-			}
-			else
-			{
-				ts.low_power_shutdown_time = ts.sysclock + LOW_POWER_SHUTDOWN_DELAY_TIME;
-				// in tx mode, we extend the waiting time during the transmit, so that we don't switch off
-				// right after a transmit but let the battery some time to "regenerate"
-			}
-		}
-		else
-		{
-			if (pwmt.undervoltage_detected == true)
-			{
-				retval = true;
-				pwmt.undervoltage_detected = false;
-				Board_GreenLed(LED_STATE_ON);
-			}
-			ts.low_power_shutdown_time = ts.sysclock + LOW_POWER_SHUTDOWN_DELAY_TIME;
-		}
-	}
-
-	return retval;
-}
-
-#if 0
-/*
- * @brief Displays temp compensation value in a bar
+/**
+ * \brief draws the the TCXO temperature display, has to be called once
+ *
+ * @param create set to true in order to draw the static parts of the UI too.
+ * @param enabled set to true in order to enable actual display of temperature
  */
-static void UiDriverUpdateLoMeter(uchar val,uchar active)
-{
-	static int last_active = 99;
-	static uint32_t last_active_val = 99;
-	uchar 	i,v_s = 3;
-	int		clr = White;
-
-	if (last_active != active)
-	{
-		last_active = active;
-		last_active_val = val;
-		// Full redraw
-		for(i = 1; i < 26; i++)
-		{
-			if (active)
-			{
-				clr = val==i?Blue:White;
-			}
-			else
-			{
-				clr = Grey;
-			}
-			UiLcdHy28_DrawStraightLineTriple(((POS_TEMP_IND_X + 1) + i*4),((POS_TEMP_IND_Y + 21) - v_s),v_s,LCD_DIR_VERTICAL,clr);
-		}
-	}
-	else if (active && (last_active_val != val))
-	{
-		// Partial redraw
-		if (val>1 && val < 26) {
-			UiLcdHy28_DrawStraightLineTriple(((POS_TEMP_IND_X + 1) + val*4),((POS_TEMP_IND_Y + 21) - v_s),v_s,LCD_DIR_VERTICAL,Blue);
-		}
-		if (last_active_val>1 && last_active_val < 26) {
-			UiLcdHy28_DrawStraightLineTriple(((POS_TEMP_IND_X + 1) + last_active_val*4),((POS_TEMP_IND_Y + 21) - v_s),v_s,LCD_DIR_VERTICAL,White);
-		}
-		last_active_val = val;
-	}
-}
-#endif
-
 /**
  * \brief draws the the TCXO temperature display, has to be called once
  *
@@ -5010,53 +4762,6 @@ void UiDriver_CreateTemperatureDisplay()
  * @brief display measured temperature and current state of TCXO
  * @param temp in tenth of degrees Celsius (10 == 1 degree C)
  */
-static void UiDriver_DisplayTemperature(int temp)
-{
-	static int last_disp_temp = -100;
-	uint32_t clr =  RadioManagement_TcxoGetMode() ==TCXO_ON ? Blue:Red;
-
-	UiLcdHy28_PrintText(ts.Layout->TEMP_IND.x + TEMP_DATA,(ts.Layout->TEMP_IND.y + 1),"*",clr,Black,0);
-
-	if (temp != last_disp_temp)
-	{
-		char out[10];
-		char* txt_ptr;
-		if((temp < 0) || (temp > 1000))  // is the temperature out of range?
-		{
-			txt_ptr = "RANGE!";
-		}
-		else {
-			last_disp_temp = temp;
-
-			int32_t ttemp = last_disp_temp;
-			if(RadioManagement_TcxoIsFahrenheit())
-			{
-				ttemp = ((ttemp *9)/5) + 320;			// multiply by 1.8 and add 32 degrees
-			}
-			snprintf(out,10,"%3ld.%1ld",ttemp/10,(ttemp)%10);
-			txt_ptr = out;
-		}
-		UiLcdHy28_PrintText(ts.Layout->TEMP_IND.x + TEMP_DATA + SMALL_FONT_WIDTH*1,(ts.Layout->TEMP_IND.y + 1),txt_ptr,Grey,Black,0);
-	}
-}
-
-//*----------------------------------------------------------------------------
-//* Function Name       : UiDriverHandleLoTemperature
-//* Object              : display LO temperature and compensate drift
-//* Input Parameters    :
-//* Output Parameters   :
-//* Functions called    :
-//*----------------------------------------------------------------------------
-static void UiDriver_HandleLoTemperature()
-{
-	if (SoftTcxo_HandleLoTemperatureDrift())
-	{
-		UiDriver_DisplayTemperature(lo.temp/1000); // precision is 0.1 represent by lowest digit
-	}
-}
-
-
-
 //*----------------------------------------------------------------------------
 //* Function Name       : UiDriverEditMode
 //* Object              :
@@ -5168,14 +4873,6 @@ static void UiDriver_HandleLoTemperature()
 	kbs.last_char = 0;
 }*/
 
-typedef enum
-{
-	CONFIG_DEFAULTS_KEEP = 0,
-	CONFIG_DEFAULTS_LOAD_FREQ,
-	CONFIG_DEFAULTS_LOAD_ALL
-} CONFIG_DEFAULTS;
-
-
 void UiDriver_WaitForBandMAndBandPorPWR()
 {
     while((((UiDriver_IsButtonPressed(BUTTON_BNDM_PRESSED)) && (UiDriver_IsButtonPressed(BUTTON_BNDP_PRESSED))) == false) && UiDriver_IsButtonPressed(BUTTON_PWR_PRESSED) == false)
@@ -5190,113 +4887,6 @@ void UiDriver_WaitForBandMAndBandPorPWR()
  * @brief Handles the loading of the configuration at startup (including the load of defaults if requested)
  * @returns false if it is a normal startup, true if defaults have been loaded
  */
-static bool UiDriver_LoadSavedConfigurationAtStartup()
-{
-
-	bool retval = false;
-	CONFIG_DEFAULTS load_mode = CONFIG_DEFAULTS_KEEP;
-
-	if (UiDriver_IsButtonPressed(BUTTON_F1_PRESSED) && UiDriver_IsButtonPressed(BUTTON_F3_PRESSED) && UiDriver_IsButtonPressed(BUTTON_F5_PRESSED))
-	{
-		load_mode = CONFIG_DEFAULTS_LOAD_ALL;
-	}
-	else if (UiDriver_IsButtonPressed(BUTTON_F2_PRESSED) && UiDriver_IsButtonPressed(BUTTON_F4_PRESSED))
-	{
-		load_mode = CONFIG_DEFAULTS_LOAD_FREQ;
-	}
-
-	if(load_mode != CONFIG_DEFAULTS_KEEP)
-	{
-		// let us make sure, the user knows what he/she is doing
-		// in case of change of mindes, do normal configuration load
-
-		uint32_t clr_fg = White, clr_bg = Black;
-		const char* top_line = "";
-
-		switch (load_mode)
-		{
-		case CONFIG_DEFAULTS_LOAD_ALL:
-			clr_bg = Red;
-			clr_fg = White;
-			top_line = "ALL DEFAULTS";
-			break;
-		case CONFIG_DEFAULTS_LOAD_FREQ:
-			clr_bg = Yellow;
-			clr_fg = Black;
-			top_line = "FREQ/MODE DEFAULTS";
-			break;
-		default:
-			break;
-		}
-
-
-		UiLcdHy28_LcdClear(clr_bg);							// clear the screen
-		// now do all of the warnings, blah, blah...
-		UiLcdHy28_PrintTextCentered(2,05, 316, top_line,clr_fg,clr_bg,1);
-		UiLcdHy28_PrintTextCentered(2,35, 316, "-> LOAD REQUEST <-",clr_fg,clr_bg,1);
-
-		UiLcdHy28_PrintTextCentered(2,70, 316,
-				"If you don't want to do this\n"
-				"press POWER button to start normally.",clr_fg,clr_bg,0);
-
-		UiLcdHy28_PrintTextCentered(2,120, 316,
-				"If you want to load default settings\n"
-				"press and hold BAND+ AND BAND-.\n"
-				"Settings will be saved at POWEROFF",clr_fg,clr_bg,0);
-
-		// On screen delay									// delay a bit...
-		HAL_Delay(5000);
-
-		// add this for emphasis
-		UiLcdHy28_PrintTextCentered(2,195, 316,
-				"Press BAND+ and BAND-\n"
-				"to confirm loading",clr_fg,clr_bg,0);
-
-		UiDriver_WaitForBandMAndBandPorPWR();
-
-		const char* txp;
-
-		if(UiDriver_IsButtonPressed(BUTTON_PWR_PRESSED))
-		{
-			clr_bg = Black;							// clear the screen
-			clr_fg = White;
-			txp = "...performing normal start...";
-
-			load_mode = CONFIG_DEFAULTS_KEEP;
-			retval = false;
-		}
-		else
-		{
-			txp = "...loading defaults in progress...";
-			// call function to load values - default instead of EEPROM
-			retval = true;
-			ts.menu_var_changed = true;
-		}
-		UiLcdHy28_LcdClear(clr_bg);                         // clear the screen
-		UiLcdHy28_PrintTextCentered(2,108,316,txp,clr_fg,clr_bg,0);
-		HAL_Delay(5000);
-	}
-
-	bool load_freq_mode_defaults = false;
-	bool load_eeprom_defaults = false;
-	switch (load_mode)
-	{
-	case CONFIG_DEFAULTS_LOAD_ALL:
-		load_eeprom_defaults = true;                           // yes, set flag to indicate that defaults will be loaded instead of those from EEPROM
-		break;
-	case CONFIG_DEFAULTS_LOAD_FREQ:
-		load_freq_mode_defaults = true;
-		break;
-	default:
-		break;
-	}
-
-	UiConfiguration_LoadEepromValues(load_freq_mode_defaults, load_eeprom_defaults);
-
-
-	return retval;
-}
-
 //*----------------------------------------------------------------------------
 //* Function Name       : UiCheckForPressedKey
 //* Object              : Used for testing keys on the front panel

@@ -624,25 +624,6 @@ void UiLcdHy28_BacklightEnable(bool on)
     }
 }
 
-#ifdef STM32F4
-    #define SPI_PRESCALE_LCD_DEFAULT (SPI_BAUDRATEPRESCALER_4)
-    #define SPI_PRESCALE_LCD_HIGH    (SPI_BAUDRATEPRESCALER_2)
-	#define SPI_PRESCALE_TS_DEFAULT  (SPI_BAUDRATEPRESCALER_64)
-#endif
-
-#ifdef STM32F7
-    #define SPI_PRESCALE_LCD_DEFAULT (SPI_BAUDRATEPRESCALER_8)
-    #define SPI_PRESCALE_LCD_HIGH    (SPI_BAUDRATEPRESCALER_4)
-	#define SPI_PRESCALE_TS_DEFAULT  (SPI_BAUDRATEPRESCALER_128)
-#endif
-
-#ifdef STM32H7
-    #define SPI_PRESCALE_LCD_DEFAULT (SPI_BAUDRATEPRESCALER_8)
-    #define SPI_PRESCALE_LCD_HIGH    (SPI_BAUDRATEPRESCALER_4)
-    #define SPI_PRESCALE_TS_DEFAULT  (SPI_BAUDRATEPRESCALER_32)
-    // 16 may be a little bit high for some displays but works with the 480x320 display
-#endif
-
 static uint32_t lcd_spi_prescaler = SPI_PRESCALE_LCD_DEFAULT;
 
 // static SPI_HandleTypeDef SPI_Handle;
