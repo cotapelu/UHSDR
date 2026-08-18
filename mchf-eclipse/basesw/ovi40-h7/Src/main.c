@@ -401,6 +401,15 @@ void assert_failed(uint8_t* file, uint32_t line)
     for(;;); // We stuck here as long as we do not have any debug interface...
   /* USER CODE END 6 */
 }
+#else
+/* Platform guarantee: assert_failed must always exist because some HAL paths
+   call it unconditionally even when assert_param is compiled out. */
+void assert_failed(uint8_t* file, uint32_t line)
+{
+    (void)file;
+    (void)line;
+    for(;;);
+}
 #endif /* USE_FULL_ASSERT */
 
 /**
