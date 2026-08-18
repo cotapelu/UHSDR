@@ -351,8 +351,10 @@ infrastructure      # CI, tests, docs
   - Add `mchf_pa` definition for `RF_BRD_OVI40`
   - Add `Error_Handler` symbol for H7 HAL macro compatibility
   - Verify all 3 valid firmware builds succeed from root `make`
-- [ ] **T9.2** Fully remove USB Host dead code paths if not needed
-  - Remove USB Host code completely or keep gated behind `USE_USBHOST`
+- [x] **T9.2** Fully remove USB Host dead code paths if not needed
+  - Removed USB Host source files from firmware builds (f4-files.mak, f7-files.mak, h7-files.mak)
+  - Kept USB Host in bootloader builds for DFU functionality
+  - Firmware builds no longer compile USB Host stack (usb_host.c, usbh_*.c, usbh_diskio.c)
 - [x] **T9.3** Reduce scattered `#ifdef` below 20 in product code
   - Continue consolidating MCU-specific code into `uhsdr_mcu.h` and `board_configs/`
   - Moved SPI prescaler definitions from `ui_lcd_hy28.c` to `uhsdr_mcu.h`
