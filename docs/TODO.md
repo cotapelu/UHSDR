@@ -25,8 +25,8 @@
 - Largest files: `ui_driver.c` (6637 lines), `audio_driver.c` (2799 lines), `ui_lcd_hy28.c` (2683 lines)
 
 **Verified Build Matrix (2026-08-18):**
-- `all-firmware`: 7/7 pass (F4/mcHF, F4/ovi40, F4-512KB/mcHF, F7/mcHF, F7/ovi40, H7/mcHF, H7/ovi40)
-- `all-bootloader`: 6/6 pass (F4/mcHF, F4/ovi40, F7/mcHF, F7/ovi40, H7/mcHF, H7/ovi40)
+- `all-firmware`: 4/4 pass (F4/mcHF, F4-512KB/mcHF, F7/ovi40, H7/ovi40)
+- `all-bootloader`: 3/3 pass (F4/mcHF, F7/ovi40, H7/ovi40)
 
 ---
 
@@ -218,13 +218,15 @@ void Board_EnterLowPowerIdle(void)
 
 - [x] **T10.1** Audit newlib usage in diag/trace code — done: `drivers/diag/Trace.c` already implements custom `trace_vsnprintf` with explicit comment 'Minimal vsnprintf without newlib dependency'; `trace_printf`/`trace_puts` are wrappers around this custom implementation; no newlib dependency found in diag code
 
+- [x] **T10.2** Update stale build matrix references in docs/TODO.md — done: changed executive summary Verified Build Matrix from `7/7` and `6/6` to `4/4` and `3/3`; updated section G CI Pipeline note from `7 firmware + 6 bootloader` to `4 firmware + 3 bootloader`; updated T6.1/T6.2 task descriptions to reflect actual verified matrix
+
 ### F. Bootloader Build Robustness ✅
 **Status:** Fixed — `make all-firmware` now runs `clean-firmware` between configs; `make all-bootloader` already cleans between configs
 **File:** `Makefile:168-176`
 **Risk:** Config contamination eliminated
 
 ### G. CI Pipeline Completeness ✅
-**Status:** Fixed — `.travis.yml` now uses `make all-firmware` and `make all-bootloader` to build all 7 firmware + 6 bootloader combos
+**Status:** Fixed — `.travis.yml` now uses `make all-firmware` and `make all-bootloader` to build all 4 firmware + 3 bootloader valid combos
 **File:** `.travis.yml`
 **Note:** Matrix builds consolidated into single `all-firmware`/`all-bootloader` targets; intermediate clean prevents config contamination
 
@@ -294,8 +296,8 @@ void Board_EnterLowPowerIdle(void)
 - [x] **T5.6** Stack usage profiling
 
 ### Phase 6: Verification & Polish ✅
-- [x] **T6.1** All 7 firmware builds verified (2026-08-18)
-- [x] **T6.2** All 6 bootloader builds verified (2026-08-18)
+- [x] **T6.1** All 4 valid firmware builds verified (2026-08-18)
+- [x] **T6.2** All 3 valid bootloader builds verified (2026-08-18)
 - [x] **T6.3** Bootloader safety: CRC, anti-rollback, boot counter
 - [x] **T6.4** Power management: WFI idle in main loop
 
