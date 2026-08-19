@@ -28,7 +28,7 @@
 BUILDFOR ?= F4
 
 # Hardware Board: mchf, ovi40
-BOARD ?= mchf
+BOARD = mchf
 
 # Transceiver ID (max 5 chars)
 TRX_ID ?= mchf
@@ -77,6 +77,13 @@ SUBMAKE_FLAGS := \
 	VERBOSE=$(VERBOSE) \
 	OPT_GCC_ARM=$(OPT_GCC_ARM) \
 	ROOTLOC=.
+
+# Helper macro for building firmware/bootloader in sub-make with explicit variables
+# Usage: $(call BUILD_CMD,<BUILDFOR>,<BOARD>,<CONFIGFLAGS>,<target>)
+# This avoids GNU Make target-specific variable inheritance bugs
+define BUILD_CMD
+	@$(MAKE) -C $(BUILD_DIR) -f Makefile $(SUBMAKE_FLAGS) BUILDFOR=$(1) BOARD=$(2) CONFIGFLAGS="$(3)" $(4)
+endef
 
 # =============================================================================
 # Main Targets
@@ -154,12 +161,12 @@ help:
 # Build firmware
 firmware:
 	@echo "Building firmware for $(BUILDFOR) on $(BOARD)..."
-	@$(MAKE) -C $(BUILD_DIR) -f Makefile $(SUBMAKE_FLAGS) CONFIGFLAGS="$(CONFIGFLAGS)" firmware
+	@$(MAKE) -C $(BUILD_DIR) -f Makefile $(SUBMAKE_FLAGS) BUILDFOR="$(BUILDFOR)" BOARD="$(BOARD)" CONFIGFLAGS="$(CONFIGFLAGS)" firmware
 
 # Build bootloader
 bootloader:
 	@echo "Building bootloader for $(BUILDFOR) on $(BOARD)..."
-	@$(MAKE) -C $(BUILD_DIR) -f Makefile $(SUBMAKE_FLAGS) CONFIGFLAGS="$(CONFIGFLAGS)" bootloader
+	@$(MAKE) -C $(BUILD_DIR) -f Makefile $(SUBMAKE_FLAGS) BUILDFOR="$(BUILDFOR)" BOARD="$(BOARD)" CONFIGFLAGS="$(CONFIGFLAGS)" bootloader
 
 # Build both firmware and bootloader
 both: firmware bootloader
@@ -245,59 +252,53 @@ handy:
 # =============================================================================
 
 # Quick targets for different MCU targets
-f4: BUILDFOR=F4
-f4: firmware
+f4: 
+	$(call BUILD_CMD,F4,mchf,-DUI_BRD_MCHF -DRF_BRD_MCHF,firmware)
 
-f4-small: BUILDFOR=F4-512KB
-f4-small: firmware
+f4-small: 
+	$(call BUILD_CMD,F4-512KB,mchf,-DUI_BRD_MCHF -DRF_BRD_MCHF -DIS_SMALL_BUILD,firmware)
 
-f7: BUILDFOR=F7
-f7: firmware
+f7: 
+	$(call BUILD_CMD,F7,ovi40,-DUI_BRD_OVI40 -DRF_BRD_OVI40,firmware)
 
-h7: BUILDFOR=H7
-h7: firmware
+h7: 
+	$(call BUILD_CMD,H7,ovi40,-DUI_BRD_OVI40 -DRF_BRD_OVI40,firmware)
 
 # Quick targets for different boards
-mchf: BOARD=mchf
-mchf: firmware
+mchf: 
+	$(call BUILD_CMD,F4,mchf,-DUI_BRD_MCHF -DRF_BRD_MCHF,firmware)
 
-ovi40: BOARD=ovi40
-ovi40: firmware
+ovi40: 
+	$(call BUILD_CMD,F4,ovi40,-DUI_BRD_OVI40 -DRF_BRD_OVI40,firmware)
 
 # Combined quick targets
-f4-mchf: BUILDFOR=F4 BOARD=mchf
-f4-mchf: CONFIGFLAGS=-DUI_BRD_MCHF -DRF_BRD_MCHF
-f4-mchf: firmware
+f4-mchf: 
+	$(call BUILD_CMD,F4,mchf,-DUI_BRD_MCHF -DRF_BRD_MCHF,firmware)
 
-f4-ovi40: BUILDFOR=F4 BOARD=ovi40
-f4-ovi40: CONFIGFLAGS=-DUI_BRD_OVI40 -DRF_BRD_OVI40
-f4-ovi40: firmware
+f4-ovi40: 
+	$(call BUILD_CMD,F4,ovi40,-DUI_BRD_OVI40 -DRF_BRD_OVI40,firmware)
 
-f7-mchf: BUILDFOR=F7 BOARD=mchf
-f7-mchf: CONFIGFLAGS=-DUI_BRD_MCHF -DRF_BRD_MCHF
-f7-mchf: firmware
+f7-mchf: 
+	$(call BUILD_CMD,F7,mchf,-DUI_BRD_MCHF -DRF_BRD_MCHF,firmware)
 
-f7-ovi40: BUILDFOR=F7 BOARD=ovi40
-f7-ovi40: CONFIGFLAGS=-DUI_BRD_OVI40 -DRF_BRD_OVI40
-f7-ovi40: firmware
+f7-ovi40: 
+	$(call BUILD_CMD,F7,ovi40,-DUI_BRD_OVI40 -DRF_BRD_OVI40,firmware)
 
-h7-mchf: BUILDFOR=H7 BOARD=mchf
-h7-mchf: CONFIGFLAGS=-DUI_BRD_MCHF -DRF_BRD_MCHF
-h7-mchf: firmware
+h7-mchf: 
+	$(call BUILD_CMD,H7,mchf,-DUI_BRD_MCHF -DRF_BRD_MCHF,firmware)
 
-h7-ovi40: BUILDFOR=H7 BOARD=ovi40
-h7-ovi40: CONFIGFLAGS=-DUI_BRD_OVI40 -DRF_BRD_OVI40
-h7-ovi40: firmware
+h7-ovi40: 
+	$(call BUILD_CMD,H7,ovi40,-DUI_BRD_OVI40 -DRF_BRD_OVI40,firmware)
 
 # Debug builds
-debug-f4: BUILDFOR=F4 DEBUG=1
-debug-f4: firmware
+debug-f4: 
+	$(call BUILD_CMD,F4,mchf,-DUI_BRD_MCHF -DRF_BRD_MCHF -DDEBUG -DUSE_FULL_ASSERT -DTRACE,firmware)
 
-debug-f7: BUILDFOR=F7 DEBUG=1
-debug-f7: firmware
+debug-f7: 
+	$(call BUILD_CMD,F7,ovi40,-DUI_BRD_OVI40 -DRF_BRD_OVI40 -DDEBUG -DUSE_FULL_ASSERT -DTRACE,firmware)
 
-debug-h7: BUILDFOR=H7 DEBUG=1
-debug-h7: firmware
+debug-h7: 
+	$(call BUILD_CMD,H7,ovi40,-DUI_BRD_OVI40 -DRF_BRD_OVI40 -DDEBUG -DUSE_FULL_ASSERT -DTRACE,firmware)
 
 # =============================================================================
 # Utility Targets

@@ -226,6 +226,8 @@ void Board_EnterLowPowerIdle(void)
 
 - [x] **T13.1** Remove USB Host initialization from firmware `main.c` files — done: removed `MX_USB_HOST_Init()` and `#include "usb_host.h"` blocks from all three firmware `main.c` files (`basesw/mcHF/Src/main.c`, `basesw/ovi40/Src/main.c`, `basesw/ovi40-h7/Src/main.c`); bootloader uses separate `src/bootloader/main.c` and retains its own USB Host init
 
+- [x] **T13.2** Verify firmware builds after USB Host init removal — done: `f4-mchf`, `f7-ovi40`, and `h7-ovi40` firmware builds succeed after T13.1 source changes; `all-bootloader` (6/6) succeeds; `f4-small` fails with pre-existing `ui_lcd_hy28.c` compile error unrelated to T13.1; also fixed GNU Make target-specific variable inheritance bug in outer `Makefile` that was preventing `all-firmware` from propagating `BUILDFOR`/`BOARD` into sub-make
+
 ### F. Bootloader Build Robustness ✅
 **Status:** Fixed — `make all-firmware` now runs `clean-firmware` between configs; `make all-bootloader` already cleans between configs
 **File:** `Makefile:168-176`
