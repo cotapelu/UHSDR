@@ -152,14 +152,6 @@ int main(void)
 #endif
 
   /* USER CODE BEGIN 2 */
-#if defined(USE_USBHOST) || defined(BOOTLOADER_BUILD)
-#include "usb_host.h"
-  MX_USB_HOST_Init();
-
-	#if defined(USE_USBDRIVE) || defined(BOOTLOADER_BUILD)
-  	  MX_FATFS_Init();
-	#endif
-#endif
 
 #ifndef BOOTLOADER_BUILD
    mchfMain();

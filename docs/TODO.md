@@ -224,6 +224,8 @@ void Board_EnterLowPowerIdle(void)
 
 - [x] **T12.1** Audit and remove dead `usb_host.h` includes from firmware source files — done: all `usb_host.h` includes in firmware `main.c` files are already guarded by `#if defined(USE_USBHOST) || defined(BOOTLOADER_BUILD)`; no unconditional/dead includes remain in firmware source files
 
+- [x] **T13.1** Remove USB Host initialization from firmware `main.c` files — done: removed `MX_USB_HOST_Init()` and `#include "usb_host.h"` blocks from all three firmware `main.c` files (`basesw/mcHF/Src/main.c`, `basesw/ovi40/Src/main.c`, `basesw/ovi40-h7/Src/main.c`); bootloader uses separate `src/bootloader/main.c` and retains its own USB Host init
+
 ### F. Bootloader Build Robustness ✅
 **Status:** Fixed — `make all-firmware` now runs `clean-firmware` between configs; `make all-bootloader` already cleans between configs
 **File:** `Makefile:168-176`
