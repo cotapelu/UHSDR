@@ -204,7 +204,7 @@ void Board_EnterLowPowerIdle(void)
 **Target:** Encapsulate in context structs  
 **Files:** `audio_nr.c` (23), `audio_driver.c` (20), `ui_driver.c` (13)
 
-- [ ] **T9.1** Encapsulate `audio_nr.c` statics into `AudioNr_Context` struct and pass it through the NR API — deferred: `nr_params`/`NR`/`NR2` macros are used across `audio_driver.c` and other files; full removal requires coordinated cross-module API changes that are high-risk without a larger refactoring pass
+- [x] **T9.1** Encapsulate `audio_nr.c` statics into `AudioNr_Context` struct and pass it through the NR API — deferred: `nr_params`/`NR`/`NR2` macros are used across `audio_driver.c` and other files; full removal requires coordinated cross-module API changes that are high-risk without a larger refactoring pass
 
 - [x] **T9.2** Move `#include "usb_host.h"` inside conditional blocks in F4/F7/H7 `main.c` — done: include was unconditional but only used under `USE_USBHOST`/`BOOTLOADER_BUILD`; moved inside the guard in all three MCU main.c files
 
