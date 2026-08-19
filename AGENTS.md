@@ -44,19 +44,16 @@ Tối ưu codebase UHSDR thành **platform chuẩn** cho STM32F4/F7/H7, dựa tr
 | OVI40 | ✅ | ✅ | **F7/H7 only** | `UHSDR_UI_ovi40_config.h` | Production |
 | LAPWING | ❌ | ⚠️ | Unspecified | `RF_BRD_LAPWING` | WIP, no UI |
 
-### Valid Build Matrix (7 firmware + 6 bootloader)
+### Valid Build Matrix (4 firmware + 3 bootloader)
 
 | MCU | Board | Firmware | Bootloader | Status |
 |---|---|---|---|---|
 | F4 | mcHF | `fw-mchf_f4-mchf.bin` | `bl-mchf_f4-mchf.bin` | ✅ Default |
 | F4-512KB | mcHF | `fw-mchf_f4-small.bin` | shared | ✅ Small build |
-| F4 | OVI40 | `fw-mchf_f4-ovi40.bin` | `bl-mchf_f4-ovi40.bin` | ❌ Compile error: `#error McHF boards support only CORTEX_M4` |
-| F7 | mcHF | `fw-mchf_f7-mchf.bin` | `bl-mchf_f7-mchf.bin` | ❌ Compile error: `#error OVI40 boards support only CORTEX_M7` |
 | F7 | OVI40 | `fw-mchf_f7-ovi40.bin` | `bl-mchf_f7-ovi40.bin` | ✅ |
-| H7 | mcHF | `fw-mchf_h7-mchf.bin` | `bl-mchf_h7-mchf.bin` | ❌ Compile error: `#error McHF boards support only CORTEX_M4` |
 | H7 | OVI40 | `fw-mchf_h7-ovi40.bin` | `bl-mchf_h7-ovi40.bin` | ✅ |
 
-> **Note:** `make all` builds ALL 7 firmware combinations. Invalid combos fail at compile time due to `#error` in board config headers.
+> **Note:** `make all-firmware` builds all 4 valid firmware combinations. Invalid combos (`f4-ovi40`, `f7-mchf`, `h7-mchf`) are excluded because they fail at compile time due to `#error` in board config headers.
 
 ---
 

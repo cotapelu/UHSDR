@@ -214,6 +214,8 @@ void Board_EnterLowPowerIdle(void)
 
 - [x] **T9.5** Document valid build matrix in docs/TODO.md — done: updated section 12.1 to reflect actual verified matrix: 4 firmware combos (`f4-mchf`, `f4-small`, `f7-ovi40`, `h7-ovi40`) and 3 bootloader combos (`f4-mchf`, `f7-ovi40`, `h7-ovi40`), with notes on invalid combos that hit board config `#error` guards
 
+- [x] **T9.6** Update AGENTS.md build matrix to reflect actual valid combinations — done: changed section 2 from `7 firmware + 6 bootloader` to `4 firmware + 3 bootloader` valid combos; updated section 12.1 table to show only verified builds; updated section 19/20 to remove stale references to 7/6 matrices
+
 ### F. Bootloader Build Robustness ✅
 **Status:** Fixed — `make all-firmware` now runs `clean-firmware` between configs; `make all-bootloader` already cleans between configs
 **File:** `Makefile:168-176`
