@@ -216,6 +216,8 @@ void Board_EnterLowPowerIdle(void)
 
 - [x] **T9.6** Update AGENTS.md build matrix to reflect actual valid combinations — done: changed section 2 from `7 firmware + 6 bootloader` to `4 firmware + 3 bootloader` valid combos; updated section 12.1 table to show only verified builds; updated section 19/20 to remove stale references to 7/6 matrices
 
+- [ ] **T10.1** Audit newlib usage in diag/trace code — done: `drivers/diag/Trace.c` already implements custom `trace_vsnprintf` with explicit comment 'Minimal vsnprintf without newlib dependency'; `trace_printf`/`trace_puts` are wrappers around this custom implementation; no newlib dependency found in diag code
+
 ### F. Bootloader Build Robustness ✅
 **Status:** Fixed — `make all-firmware` now runs `clean-firmware` between configs; `make all-bootloader` already cleans between configs
 **File:** `Makefile:168-176`
