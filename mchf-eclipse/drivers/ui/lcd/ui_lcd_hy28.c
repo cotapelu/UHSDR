@@ -101,7 +101,9 @@ extern sFONT GL_Font8x12;
 extern sFONT GL_Font8x12_bold;
 extern sFONT GL_Font12x12;
 extern sFONT GL_Font16x24;
+#ifdef USE_8bit_FONT
 extern sFONT GL_Font16x24_8b_Square;
+#endif
 
 static sFONT *fontList[] =
 {
@@ -110,7 +112,9 @@ static sFONT *fontList[] =
         &GL_Font12x12,
         &GL_Font8x12,
         &GL_Font8x8,
+#ifdef USE_8bit_FONT
 		&GL_Font16x24_8b_Square,
+#endif
 };
 
 #else
@@ -1485,6 +1489,7 @@ static void UiLcdHy28_BulkWriteColor(uint16_t Color, uint32_t len)
 }
 
 
+#ifdef USE_8bit_FONT
 static void UiLcdHy28_DrawChar_8bit(ushort x, ushort y, char symb,ushort Color, ushort bkColor,const sFONT *cf)
 {
 
@@ -1574,8 +1579,15 @@ static void UiLcdHy28_DrawChar_8bit(ushort x, ushort y, char symb,ushort Color, 
     UiLcdHy28_CloseBulkWrite();
 
 }
+#else
+static void UiLcdHy28_DrawChar_8bit(ushort x, ushort y, char symb,ushort Color, ushort bkColor,const sFONT *cf)
+{
+    // 8-bit fonts not available in small build, fallback to 1-bit renderer
+    UiLcdHy28_DrawChar_1bit(x, y, symb, Color, bkColor, cf);
+}
+#endif
 
-static void UiLcdHy28_DrawChar_1bit(ushort x, ushort y, char symb,ushort Color, ushort bkColor,const sFONT *cf)
+void UiLcdHy28_DrawChar_1bit(ushort x, ushort y, char symb,ushort Color, ushort bkColor,const sFONT *cf)
 {
     uint8_t   *ch = (uint8_t *)cf->table;
 

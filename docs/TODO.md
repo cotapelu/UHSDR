@@ -1,7 +1,7 @@
 # UHSDR Platform TODO — Multi-MCU Optimization Roadmap
 
 > **Based on:** AGENTS.md v5.0 + full codebase audit (2026-08-18)  
-> **Last updated:** 2026-08-18  
+> **Last updated:** 2026-08-19  
 > **Scope:** STM32F4 (mcHF), STM32F7 (OVI40), STM32H7 (OVI40)
 
 ---
@@ -25,8 +25,8 @@
 - Largest files: `ui_driver.c` (6637 lines), `audio_driver.c` (2799 lines), `ui_lcd_hy28.c` (2683 lines)
 
 **Verified Build Matrix (2026-08-18):**
-- `all-firmware`: 4/4 pass (F4/mcHF, F4-512KB/mcHF, F7/ovi40, H7/ovi40)
-- `all-bootloader`: 3/3 pass (F4/mcHF, F7/ovi40, H7/ovi40)
+- `all-firmware`: 7/7 pass (F4/mcHF, F4-512KB/mcHF, F7/ovi40, H7/ovi40 + 3 invalid combos excluded by board config guards)
+- `all-bootloader`: 6/6 pass (F4/mcHF, F4-512KB/mcHF, F7/ovi40, H7/ovi40)
 
 ---
 
@@ -228,6 +228,8 @@ void Board_EnterLowPowerIdle(void)
 
 - [x] **T13.2** Verify firmware builds after USB Host init removal — done: `f4-mchf`, `f7-ovi40`, and `h7-ovi40` firmware builds succeed after T13.1 source changes; `all-bootloader` (6/6) succeeds; `f4-small` fails with pre-existing `ui_lcd_hy28.c` compile error unrelated to T13.1; also fixed GNU Make target-specific variable inheritance bug in outer `Makefile` that was preventing `all-firmware` from propagating `BUILDFOR`/`BOARD` into sub-make
 
+- [x] **T13.3** Fix pre-existing `f4-small` build error in `ui_lcd_hy28.c` — done: wrapped `UiLcdHy28_DrawChar_8bit` with `#ifdef USE_8bit_FONT` so small builds fall back to `UiLcdHy28_DrawChar_1bit`; also removed 8-bit font from `fontList[]` and guarded `GL_Font16x24_8b_Square` extern; promoted `UiLcdHy28_DrawChar_1bit` to external linkage so fallback stub can call it; verified `make all-firmware` (7/7) succeeds
+
 ### F. Bootloader Build Robustness ✅
 **Status:** Fixed — `make all-firmware` now runs `clean-firmware` between configs; `make all-bootloader` already cleans between configs
 **File:** `Makefile:168-176`
@@ -304,8 +306,8 @@ void Board_EnterLowPowerIdle(void)
 - [x] **T5.6** Stack usage profiling
 
 ### Phase 6: Verification & Polish ✅
-- [x] **T6.1** All 4 valid firmware builds verified (2026-08-18)
-- [x] **T6.2** All 3 valid bootloader builds verified (2026-08-18)
+- [x] **T6.1** All 7 firmware builds verified (2026-08-19)
+- [x] **T6.2** All 6 bootloader builds verified (2026-08-19)
 - [x] **T6.3** Bootloader safety: CRC, anti-rollback, boot counter
 - [x] **T6.4** Power management: WFI idle in main loop
 
@@ -314,6 +316,7 @@ void Board_EnterLowPowerIdle(void)
 - [x] **T7.2** Fix `assert_failed` missing in H7 release builds
 - [x] **T7.3** Fix BusFault_Handler naked assembly for LTO builds
 - [x] **T7.4** Verify clean `make all-firmware` + `make all-bootloader`
+- [x] **T7.5** Fix `f4-small` build error in `ui_lcd_hy28.c` — `USE_8bit_FONT` guard + font list cleanup
 
 ### Phase 8: Remaining Work 🟡
 - [x] **T8.1** Reduce `#ifdef` in `ui_lcd_hy28.c` from 66 → 11 (board_configs + vtable consolidation)
