@@ -212,6 +212,8 @@ void Board_EnterLowPowerIdle(void)
 
 - [x] **T9.4** Clean up transient build artifacts left in working tree — done: removed `.su` stack-usage files and LTO `.ltrans*` temp files that were generated during build but not tracked by git or cleaned by `make clean`
 
+- [x] **T9.5** Document valid build matrix in docs/TODO.md — done: updated section 12.1 to reflect actual verified matrix: 4 firmware combos (`f4-mchf`, `f4-small`, `f7-ovi40`, `h7-ovi40`) and 3 bootloader combos (`f4-mchf`, `f7-ovi40`, `h7-ovi40`), with notes on invalid combos that hit board config `#error` guards
+
 ### F. Bootloader Build Robustness ✅
 **Status:** Fixed — `make all-firmware` now runs `clean-firmware` between configs; `make all-bootloader` already cleans between configs
 **File:** `Makefile:168-176`
