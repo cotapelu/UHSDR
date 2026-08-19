@@ -208,6 +208,8 @@ void Board_EnterLowPowerIdle(void)
 
 - [x] **T9.2** Move `#include "usb_host.h"` inside conditional blocks in F4/F7/H7 `main.c` — done: include was unconditional but only used under `USE_USBHOST`/`BOOTLOADER_BUILD`; moved inside the guard in all three MCU main.c files
 
+- [x] **T9.3** Fix `all-firmware` target to use only valid board/MCU combinations and clean before first build — done: removed invalid `f4-ovi40`, `f7-mchf`, `h7-mchf` combos that hit board config `#error` guards; added initial `clean-firmware` before first build; added explicit `CONFIGFLAGS` to quick targets to prevent BOARD/MCU mismatch
+
 ### F. Bootloader Build Robustness ✅
 **Status:** Fixed — `make all-firmware` now runs `clean-firmware` between configs; `make all-bootloader` already cleans between configs
 **File:** `Makefile:168-176`

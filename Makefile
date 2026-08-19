@@ -167,19 +167,14 @@ both: firmware bootloader
 # Build ALL firmware combinations (5 configs)
 all-firmware:
 	@echo "Building ALL firmware combinations..."
-	@$(MAKE) f4-mchf && cp mchf-eclipse/fw-mchf.bin fw-mchf_f4-mchf.bin && cp mchf-eclipse/fw-mchf.dfu fw-mchf_f4-mchf.dfu
 	@$(MAKE) -C $(BUILD_DIR) -f Makefile clean-firmware
-	@$(MAKE) f4-ovi40 && cp mchf-eclipse/fw-mchf.bin fw-mchf_f4-ovi40.bin && cp mchf-eclipse/fw-mchf.dfu fw-mchf_f4-ovi40.dfu
+	@$(MAKE) f4-mchf && cp mchf-eclipse/fw-mchf.bin fw-mchf_f4-mchf.bin && cp mchf-eclipse/fw-mchf.dfu fw-mchf_f4-mchf.dfu
 	@$(MAKE) -C $(BUILD_DIR) -f Makefile clean-firmware
 	@$(MAKE) f4-small && cp mchf-eclipse/fw-mchf.bin fw-mchf_f4-small.bin && cp mchf-eclipse/fw-mchf.dfu fw-mchf_f4-small.dfu
 	@$(MAKE) -C $(BUILD_DIR) -f Makefile clean-firmware
 	@$(MAKE) f7-ovi40 && cp mchf-eclipse/fw-mchf.bin fw-mchf_f7-ovi40.bin && cp mchf-eclipse/fw-mchf.dfu fw-mchf_f7-ovi40.dfu
 	@$(MAKE) -C $(BUILD_DIR) -f Makefile clean-firmware
 	@$(MAKE) h7-ovi40 && cp mchf-eclipse/fw-mchf.bin fw-mchf_h7-ovi40.bin && cp mchf-eclipse/fw-mchf.dfu fw-mchf_h7-ovi40.dfu
-	@$(MAKE) -C $(BUILD_DIR) -f Makefile clean-firmware
-	@$(MAKE) f7-mchf && cp mchf-eclipse/fw-mchf.bin fw-mchf_f7-mchf.bin && cp mchf-eclipse/fw-mchf.dfu fw-mchf_f7-mchf.dfu
-	@$(MAKE) -C $(BUILD_DIR) -f Makefile clean-firmware
-	@$(MAKE) h7-mchf && cp mchf-eclipse/fw-mchf.bin fw-mchf_h7-mchf.bin && cp mchf-eclipse/fw-mchf.dfu fw-mchf_h7-mchf.dfu
 	@echo "ALL firmware builds completed!"
 	@ls -la fw-mchf_*.bin 2>/dev/null || true
 
@@ -271,21 +266,27 @@ ovi40: firmware
 
 # Combined quick targets
 f4-mchf: BUILDFOR=F4 BOARD=mchf
+f4-mchf: CONFIGFLAGS=-DUI_BRD_MCHF -DRF_BRD_MCHF
 f4-mchf: firmware
 
 f4-ovi40: BUILDFOR=F4 BOARD=ovi40
+f4-ovi40: CONFIGFLAGS=-DUI_BRD_OVI40 -DRF_BRD_OVI40
 f4-ovi40: firmware
 
 f7-mchf: BUILDFOR=F7 BOARD=mchf
+f7-mchf: CONFIGFLAGS=-DUI_BRD_MCHF -DRF_BRD_MCHF
 f7-mchf: firmware
 
 f7-ovi40: BUILDFOR=F7 BOARD=ovi40
+f7-ovi40: CONFIGFLAGS=-DUI_BRD_OVI40 -DRF_BRD_OVI40
 f7-ovi40: firmware
 
 h7-mchf: BUILDFOR=H7 BOARD=mchf
+h7-mchf: CONFIGFLAGS=-DUI_BRD_MCHF -DRF_BRD_MCHF
 h7-mchf: firmware
 
 h7-ovi40: BUILDFOR=H7 BOARD=ovi40
+h7-ovi40: CONFIGFLAGS=-DUI_BRD_OVI40 -DRF_BRD_OVI40
 h7-ovi40: firmware
 
 # Debug builds
