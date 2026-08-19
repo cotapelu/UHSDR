@@ -209,10 +209,10 @@ void Board_EnterLowPowerIdle(void)
 **File:** `Makefile:168-176`
 **Risk:** Config contamination eliminated
 
-### G. CI Pipeline Completeness
-**Current:** `.travis.yml` builds subset  
-**Needed:** Build all 9 firmware + 6 bootloader combos in CI  
+### G. CI Pipeline Completeness ✅
+**Status:** Fixed — `.travis.yml` now uses `make all-firmware` and `make all-bootloader` to build all 7 firmware + 6 bootloader combos
 **File:** `.travis.yml`
+**Note:** Matrix builds consolidated into single `all-firmware`/`all-bootloader` targets; intermediate clean prevents config contamination
 
 ### H. Documentation Updates
 **AGENTS.md:** Update audit results, current line counts, remaining issues  

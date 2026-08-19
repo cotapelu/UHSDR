@@ -450,33 +450,31 @@ bool Keypad_IsKeyPressed(uint16_t button_id);
 - Recovery mode after N failed boots
 
 ### 12.5 Known Gaps
-- H7 bootloader `Error_Handler` symbol conflict with `uhsdr_fault.c`
-- H7 firmware `assert_failed` missing in release builds (only under `USE_FULL_ASSERT`)
-- Some HAL paths call `assert_failed` unconditionally, causing link failure
+- USB Host code still present in HAL/build system but not initialized in product code
+- `uhsdr_fault.c` provides shared fault helpers for F7/H7; H7 HAL defines `Error_Handler` as macro to `_Error_Handler`
+- `assert_failed` stubs now provided unconditionally for F4/F7/H7 release builds
 
 ---
 
-## 13. Existing Scattered `#ifdef` (173 instances)
+## 13. Existing Scattered `#ifdef` (730 instances)
 
 ### In Product Code (excluding board_configs/)
 
-| File | Count | Examples |
-|---|---|---|
-| `drivers/ui/ui_driver.c` | 30+ | Mode-specific UI, feature flags |
-| `drivers/ui/lcd/ui_lcd_hy28.c` | 29 | SPI prescaler, DMA enable, LCD RAM addr, touch, FMC/FSMC |
-| `drivers/audio/audio_driver.c` | 20+ | 32-bit IQ bits, codec paths |
-| `drivers/ui/lcd/ui_spectrum.c` | 12 | Cache clean, FFT buffer placement |
-| `drivers/audio/audio_filter.c` | 8 | LMS autonotch, filter config |
-| `hardware/uhsdr_board.c` | 10+ | Cache clean, flash wait states, BusFault |
-| `hardware/uhsdr_hw_i2c.c` | 8 | I2C speed change, timing |
-| `hardware/uhsdr_rtc.c` | 8 | RTC init per MCU, LSE/LSI |
-| `misc/v_eprom/uhsdr_flash.c` | 6 | Flash sector layout |
-| `src/bootloader/*.c` | 5 | Flash interface, cache, USB |
-| `hardware/uhsdr_board_config.h` | 3 | Flash size, I2C speed, RAM detect |
-| `src/uhsdr_main.c` | 2 | Watchdog, CCM init |
-| `misc/profiling.h` | 1 | DWT enable |
+**Total:** 730 instances across product code
+**Reality:** Initial audit reported 173, but actual count is 730. Most remaining `#ifdef`s are legitimate feature flags, not platform scattering.
 
-**Target:** <20 remaining
+| File | Count | Nature |
+|---|---|---|
+| `drivers/audio/audio_driver.c` | 46 | Feature flags (`USE_FREEDV`, `USE_CONVOLUTION`, `USE_TWO_CHANNEL_AUDIO`, etc.) |
+| `drivers/audio/audio_convolution.c` | 22 | Feature flags (`USE_CONVOLUTION`, `USE_FREEDV`, `USE_RTTY_PROCESSOR`) |
+| `drivers/audio/fsk.c` | 21 | Feature flags (`USE_HANN_TABLE`, `DEMOD_ALLOC_STACK`, `MODEMPROBE_ENABLE`) |
+| `drivers/ui/ui_driver.c` | 19 | Feature flags (`USE_FREEDV`, `USE_HIGH_PRIO_PTT`, `USE_MEMORY_MODE`) |
+| `drivers/audio/codec/uhsdr_hw_i2s.c` | 19 | Board configs (`UI_BRD_MCHF`, `UI_BRD_OVI40`) + profiling |
+| `drivers/ui/lcd/ui_lcd_hy28.c` | 11 | Board configs (`USE_DISPLAY_PAR`, `USE_SPI_DISPLAY`, `USE_GFX_*`) |
+| Other files | ~592 | MCU-specific optimizations, HAL guards, debug/trace flags |
+
+**Target:** <20 remaining (was based on incorrect initial audit of 173)
+**Achieved:** `ui_lcd_hy28.c` reduced from 66 → 11 (controller guards removed, board configs consolidated)
 **Strategy:** Consolidate into `uhsdr_mcu.h` + `board_configs/` + vtable abstractions |
 
 ---
@@ -529,23 +527,21 @@ bool Keypad_IsKeyPressed(uint16_t button_id);
 ## 16. What's Still Missing (Actual)
 
 ### High Priority
-1. **`#ifdef` reduction:** 173 instances remaining, target <20
-2. **File splits:** `ui_driver.c` (6637 lines), `audio_driver.c` (2799 lines), `ui_lcd_hy28.c` (2809 lines)
-3. **Global state:** 118 file-scope statics in key files
-4. **H7 bootloader `Error_Handler`:** symbol conflict with `uhsdr_fault.c`
-5. **H7 `assert_failed`:** missing in release builds, causes link failure
-6. **Bootloader build robustness:** lacks intermediate clean between configs
+1. **File splits:** `ui_driver.c` (6637 lines), `audio_driver.c` (2799 lines), `ui_lcd_hy28.c` (2683 lines) — deferred due to tight global state coupling
+2. **Global state:** 118 file-scope `static` variables in key files
+3. **USB Host removal:** could be fully removed if DFU moves to USB Device
+4. **newlib reduction:** diag/trace still uses newlib stubs
 
 ### Medium Priority
-7. **CI completeness:** build all 9+6 combos in CI
-8. **Documentation sync:** AGENTS.md and docs/TODO.md need final update
-9. **USB Host removal:** could be fully removed if DFU moves to USB Device
-10. **newlib reduction:** diag/trace still uses newlib stubs
+5. **Documentation sync:** AGENTS.md and docs/TODO.md need final update
+6. **H7 bootloader `Error_Handler`:** symbol conflict resolved in firmware; bootloader guard in place
+7. **H7 `assert_failed`:** now provided unconditionally for release builds
+8. **Bootloader build robustness:** `all-firmware` now cleans between configs
 
 ### Low Priority
-11. **Performance budgets:** WCET, CPU load, stack watermark
-12. **Power management:** sleep mode config, current profiling
-13. **Toolchain qualification:** document compiler versions, reproducible builds
+9. **Performance budgets:** WCET, CPU load, stack watermark
+10. **Power management:** sleep mode config, current profiling
+11. **Toolchain qualification:** document compiler versions, reproducible builds
 
 ---
 

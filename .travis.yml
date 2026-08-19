@@ -27,35 +27,9 @@ install:
     - BUILDLOC=mchf-eclipse/build
     - export MAKEFLAGS=-j2 
 script:
-    - mkdir -p mchf-eclipse/build/bl-f4
-    - mkdir -p mchf-eclipse/build/fw-f4
-    - mkdir -p mchf-eclipse/build/bl-f7
-    - mkdir -p mchf-eclipse/build/bl-h7
-    - mkdir -p mchf-eclipse/build/fw-f7
-    - mkdir -p mchf-eclipse/build/fw-f4-ili9486-480
-    - mkdir -p mchf-eclipse/build/fw-f4-small
-    - mkdir -p mchf-eclipse/build/fw-h7
-    - mkdir -p mchf-eclipse/build/fw-f7-lapwing
-    - cd $BUILDLOC/fw-h7
-    - cd ../bl-h7
-    - make $MAKEFLAGS -f $ROOTLOC/Makefile OPT_GCC_ARM=$GCC_DIR ROOTLOC=$ROOTLOC BUILDFOR="H7" TRX_ID="i40h7" TRX_NAME="OVI40H7" CONFIGFLAGS="-DUI_BRD_OVI40" bootloader 
-    - cd ../fw-h7
-    - make $MAKEFLAGS -f $ROOTLOC/Makefile OPT_GCC_ARM=$GCC_DIR ROOTLOC=$ROOTLOC BUILDFOR="H7" TRX_ID="i40h7" TRX_NAME="OVI40H7" CONFIGFLAGS="-DUI_BRD_OVI40 -DRF_BRD_MCHF -DRF_BRD_OVI40" all 
-    - cd ../fw-f7-lapwing
-    - make $MAKEFLAGS -f $ROOTLOC/Makefile OPT_GCC_ARM=$GCC_DIR ROOTLOC=$ROOTLOC BUILDFOR="F7" TRX_ID="lapf7" TRX_NAME="LAPWING" CONFIGFLAGS="-DUI_BRD_OVI40 -DRF_BRD_LAPWING" all 
-    - cd ../fw-f4 
-    - make $MAKEFLAGS -f $ROOTLOC/Makefile OPT_GCC_ARM=$GCC_DIR ROOTLOC=$ROOTLOC CONFIGFLAGS="-DUI_BRD_MCHF -DRF_BRD_MCHF" all
-    - cd ../bl-f4
-    - make $MAKEFLAGS -f $ROOTLOC/Makefile OPT_GCC_ARM=$GCC_DIR ROOTLOC=$ROOTLOC CONFIGFLAGS="-DUI_BRD_MCHF" bootloader
-    - cd ../fw-f7
-    - make $MAKEFLAGS -f $ROOTLOC/Makefile OPT_GCC_ARM=$GCC_DIR ROOTLOC=$ROOTLOC BUILDFOR="F7" TRX_ID="ovi40" TRX_NAME="OVI40" CONFIGFLAGS="-DUI_BRD_OVI40 -DRF_BRD_MCHF -DRF_BRD_OVI40" all	
-    - cd ../bl-f7
-    - make $MAKEFLAGS -f $ROOTLOC/Makefile OPT_GCC_ARM=$GCC_DIR ROOTLOC=$ROOTLOC BUILDFOR="F7" TRX_ID="ovi40" TRX_NAME="OVI40" CONFIGFLAGS="-DUI_BRD_OVI40" bootloader
-    - cd ../fw-f4-ili9486-480
-    - make $MAKEFLAGS -f $ROOTLOC/Makefile OPT_GCC_ARM=$GCC_DIR ROOTLOC=$ROOTLOC CONFIGFLAGS="-DUI_BRD_MCHF -DRF_BRD_MCHF -DEXTERNAL_USE_GFX_CONFIG -DUSE_DISP_480_320 -DUSE_GFX_ILI9486" all 
-    - cd ../fw-f4-small
-    - make $MAKEFLAGS -f $ROOTLOC/Makefile OPT_GCC_ARM=$GCC_DIR CONFIGFLAGS="-DUI_BRD_MCHF -DRF_BRD_MCHF -DIS_SMALL_BUILD" ROOTLOC=$ROOTLOC all
-    - cd ..
+    - cd ../..
+    - make all-firmware
+    - make all-bootloader
     - bash scripts/static_analysis.sh
     - bash scripts/size_regression.sh
     - bash scripts/analyze_wcet.sh
