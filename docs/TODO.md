@@ -220,6 +220,8 @@ void Board_EnterLowPowerIdle(void)
 
 - [x] **T10.2** Update stale build matrix references in docs/TODO.md — done: changed executive summary Verified Build Matrix from `7/7` and `6/6` to `4/4` and `3/3`; updated section G CI Pipeline note from `7 firmware + 6 bootloader` to `4 firmware + 3 bootloader`; updated T6.1/T6.2 task descriptions to reflect actual verified matrix
 
+- [x] **T11.1** Remove unused USB Host code from firmware builds — done: USB Host source files (`usb_host.c`, `usbh_*.c`) are already excluded from firmware `files.mak` and only present in bootloader `.mak` files; this was completed as part of T4.1
+
 ### F. Bootloader Build Robustness ✅
 **Status:** Fixed — `make all-firmware` now runs `clean-firmware` between configs; `make all-bootloader` already cleans between configs
 **File:** `Makefile:168-176`
