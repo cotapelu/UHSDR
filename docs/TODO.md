@@ -222,6 +222,8 @@ void Board_EnterLowPowerIdle(void)
 
 - [x] **T11.1** Remove unused USB Host code from firmware builds — done: USB Host source files (`usb_host.c`, `usbh_*.c`) are already excluded from firmware `files.mak` and only present in bootloader `.mak` files; this was completed as part of T4.1
 
+- [ ] **T12.1** Audit and remove dead `usb_host.h` includes from firmware source files — done: all `usb_host.h` includes in firmware `main.c` files are already guarded by `#if defined(USE_USBHOST) || defined(BOOTLOADER_BUILD)`; no unconditional/dead includes remain in firmware source files
+
 ### F. Bootloader Build Robustness ✅
 **Status:** Fixed — `make all-firmware` now runs `clean-firmware` between configs; `make all-bootloader` already cleans between configs
 **File:** `Makefile:168-176`
