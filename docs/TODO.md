@@ -210,6 +210,8 @@ void Board_EnterLowPowerIdle(void)
 
 - [x] **T9.3** Fix `all-firmware` target to use only valid board/MCU combinations and clean before first build — done: removed invalid `f4-ovi40`, `f7-mchf`, `h7-mchf` combos that hit board config `#error` guards; added initial `clean-firmware` before first build; added explicit `CONFIGFLAGS` to quick targets to prevent BOARD/MCU mismatch
 
+- [x] **T9.4** Clean up transient build artifacts left in working tree — done: removed `.su` stack-usage files and LTO `.ltrans*` temp files that were generated during build but not tracked by git or cleaned by `make clean`
+
 ### F. Bootloader Build Robustness ✅
 **Status:** Fixed — `make all-firmware` now runs `clean-firmware` between configs; `make all-bootloader` already cleans between configs
 **File:** `Makefile:168-176`
