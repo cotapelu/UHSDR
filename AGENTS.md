@@ -16,7 +16,7 @@
 Tối ưu codebase UHSDR thành **platform chuẩn** cho STM32F4/F7/H7, dựa trên nền tảng hiện có.
 
 **Mục tiêu:**
-- 1 codebase, 7 firmware builds + 6 bootloader builds
+- 1 codebase, 4 firmware builds + 3 bootloader builds
 - Product code chia sẻ 100% giữa các MCU (`files.mak` chung)
 - MCU abstraction tập trung vào `uhsdr_mcu.h` + board config headers
 - Loại bỏ scattered `#ifdef` không cần thiết
@@ -147,8 +147,8 @@ Makefile (root)
 make                    # Build firmware + bootloader for default (F4, mcHF)
 make BUILDFOR=F7 BOARD=ovi40 firmware   # Build F7 firmware for OVI40
 make BUILDFOR=H7 BOARD=ovi40 both       # Build H7 firmware + bootloader
-make all-firmware       # Build ALL 7 firmware combinations
-make all-bootloader     # Build ALL 6 bootloader combinations
+make all-firmware       # Build ALL 4 valid firmware combinations
+make all-bootloader     # Build ALL 3 valid bootloader combinations
 ```
 
 ---
@@ -668,8 +668,8 @@ All items from Phases 1–9 of the migration strategy have been completed.
 27. ✅ Stack usage profiling
 
 ### Phase 6: Verification & Polish ✅
-28. ✅ All 7 firmware builds verified compiling cleanly (2026-08-18)
-29. ✅ All 6 bootloader builds verified compiling cleanly (2026-08-18)
+28. ✅ All 4 valid firmware builds verified compiling cleanly
+29. ✅ All 3 valid bootloader builds verified compiling cleanly
 30. ✅ Bootloader safety: CRC32, anti-rollback, boot counter (3-strike recovery)
 31. ✅ Platform documentation updated
 
