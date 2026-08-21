@@ -35,6 +35,7 @@
 // LCD
 #include "ui_lcd_hy28.h"
 #include "ui_display_list.h"
+#include "ui_encoder_display.h"
 #include "ui_driver_power.h"
 #include "ui_spectrum.h"
 
@@ -828,34 +829,6 @@ void UiDriver_DrawFButtonLabel(uint8_t button_num, const char* label, uint32_t l
 			label_color, Black, 0);
 }
 
-void UiDriver_EncoderDisplay(const uint8_t row, const uint8_t column, const char *label, bool encoder_active,
-		const char temp[5], uint32_t color)
-{
-
-	uint32_t label_color = encoder_active?Black:Grey1;
-
-	// max visibility of active element
-	uint32_t bg_color = encoder_active?Orange:Grey;
-	uint32_t brdr_color = encoder_active?Orange:Grey;
-
-	if(ts.Layout->ENCODER_MODE==MODE_HORIZONTAL)
-	{
-		UiLcdHy28_DrawEmptyRect(ts.Layout->ENCODER_IND.x + ENC_COL_W *2 * column + row *ENC_COL_W+column*Xspacing, ts.Layout->ENCODER_IND.y , ENC_ROW_H - 2, ENC_COL_W - 2, brdr_color);
-		UiLcdHy28_PrintTextCentered((ts.Layout->ENCODER_IND.x + 1 + ENC_COL_W * 2 * column + row *ENC_COL_W+column*Xspacing), (ts.Layout->ENCODER_IND.y + 1),ENC_COL_W - 3, label,
-				label_color, bg_color, 0);
-		UiLcdHy28_PrintTextRight((ts.Layout->ENCODER_IND.x + ENC_COL_W - 4 + ENC_COL_W * 2 * column+ row *ENC_COL_W+column*Xspacing), (ts.Layout->ENCODER_IND.y + 1 + ENC_ROW_2ND_OFF), temp,
-				color, Black, 0);
-	}
-	else
-	{
-		UiLcdHy28_DrawEmptyRect(ts.Layout->ENCODER_IND.x + ENC_COL_W * column, ts.Layout->ENCODER_IND.y + row * ENC_ROW_H, ENC_ROW_H - 2, ENC_COL_W - 2, brdr_color);
-		UiLcdHy28_PrintTextCentered((ts.Layout->ENCODER_IND.x + 1 + ENC_COL_W * column), (ts.Layout->ENCODER_IND.y + 1 + row * ENC_ROW_H),ENC_COL_W - 3, label,
-				label_color, bg_color, 0);
-		UiLcdHy28_PrintTextRight((ts.Layout->ENCODER_IND.x + ENC_COL_W - 4 + ENC_COL_W * column), (ts.Layout->ENCODER_IND.y + 1 + row * ENC_ROW_H + ENC_ROW_2ND_OFF), temp,
-				color, Black, 0);
-	}
-
-}
 
 static void UiDriver_UpdateMacroKeyerLabel(int8_t macro_idx)
 {

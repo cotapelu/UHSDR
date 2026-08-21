@@ -15,9 +15,11 @@
 
 #include "ui_driver.h"
 #include "ui_driver_power.h"
+#include "ui_driver_utils.h"
 #include "ui_lcd_hy28.h"
 #include "ui_spectrum.h"
 #include "audio_driver.h"
+#include "codec.h"
 #include "ui_configuration.h"
 #include "soft_tcxo.h"
 #include "adc.h"
