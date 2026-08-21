@@ -970,12 +970,7 @@ void AudioDriver_RxProcessorConvolution(AudioSample_t * const src, AudioSample_t
         //  0 - 16: via codec command
         // 17 - 20: soft gain after decoder
         //
-#ifdef UI_BRD_MCHF
-        if(ts.rx_gain[RX_AUDIO_SPKR].value > CODEC_SPEAKER_MAX_VOLUME)    // is volume control above highest hardware setting?
-        {
-            arm_scale_f32(adb.a_buffer[1], (float32_t)ts.rx_gain[RX_AUDIO_SPKR].active_value, adb.a_buffer[1], blockSize);    // yes, do software volume control adjust on "b" buffer
-        }
-#endif
+        AudioDriver_MchfVolumeWorkaround(adb.a_buffer[1], blockSize, ts.rx_gain[RX_AUDIO_SPKR].value, ts.rx_gain[RX_AUDIO_SPKR].active_value, CODEC_SPEAKER_MAX_VOLUME);
     }
 
 

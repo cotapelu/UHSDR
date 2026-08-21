@@ -57,7 +57,11 @@
 */
 #define GENERATE_HANN_TABLE_RUNTIME
 
-/* Turn off table generation if on cortex M4 to save memory */
+/*
+ * On smaller MCUs (Cortex-M4 / STM32F4), disable the precomputed Hann table
+ * to save flash/RAM. The table is generated at runtime instead. This is a
+ * memory optimization, not a functional difference.
+ */
 #ifdef CORTEX_M4
 #undef USE_HANN_TABLE
 #endif

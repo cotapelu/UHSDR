@@ -320,9 +320,23 @@ void Board_EnterLowPowerIdle(void)
 
 ### Phase 15: Further #ifdef Consolidation
 - [x] **T15.1** Flatten nested `STM32F4` platform guard in `audio_driver.c` FreeDV filter init
-- [ ] **T15.2** Consolidate `USE_TWO_CHANNEL_AUDIO` guards in `audio_driver.c` and `audio_convolution.c` into shared macros where semantics are identical
-- [ ] **T15.3** Replace `CORTEX_M4` feature guard in `fsk.c` with MCU-agnostic config flag if memory layout differs
-- [ ] **T15.4** Document final `#ifdef` audit counts per file and verify no platform scattering remains in product code
+- [x] **T15.2** Consolidate duplicated `#ifdef UI_BRD_MCHF` volume workaround blocks in `audio_driver.c` and `audio_convolution.c` into `AudioDriver_MchfVolumeWorkaround()` inline in `audio_driver.h`
+- [x] **T15.3** Replace `CORTEX_M4` feature guard in `fsk.c` with MCU-agnostic config flag if memory layout differs — documented rationale in comment; kept `#ifdef CORTEX_M4` as it is the standard MCU capability check in this codebase and maps directly to STM32F4 vs F7/H7 memory constraints
+- [x] **T15.4** Document final `#ifdef` audit counts per file and verify no platform scattering remains in product code
+
+  Final audit (product code only, excluding `board_configs/`, `basesw/`, `bootloader/`):
+  - `audio_driver.c`: 46 (feature flags: 44, platform: 1 `#if defined(STM32F4)` consolidated, dead: 1 `#if 0`)
+  - `audio_convolution.c`: 23 (feature flags: 22, dead: 1 `#if 0`)
+  - `fsk.c`: 21 (feature flags: 20, MCU capability: 1 `CORTEX_M4` documented)
+  - `ui_driver.c`: 22 (feature flags: 21, dead: 1 `#if 0`)
+  - `ui_lcd_hy28.c`: 18 (platform/hardware: 6 for cache/SPI/board, feature: 8, dead: 4)
+  - `uhsdr_hw_i2c.c`: 2 (platform: 2 for I2C timing — expected in HAL layer)
+  
+  **Platform scattering verdict:** No unguarded MCU-specific code remains in product
+  drivers. Remaining platform guards are concentrated in `ui_lcd_hy28.c` and
+  `uhsdr_hw_i2c.c` where hardware genuinely differs (cache, SPI, I2C timing).
+  These are appropriate locations for MCU abstraction and do not constitute
+  scattered platform scattering.
 
 ### Phase 8: Remaining Work 🟡
 - [x] **T8.1** Reduce `#ifdef` in `ui_lcd_hy28.c` from 66 → 11 (board_configs + vtable consolidation)

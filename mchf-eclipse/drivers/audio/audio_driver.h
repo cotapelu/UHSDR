@@ -643,6 +643,24 @@ extern lLMS leakyLMS;
 
 
 // Exports
+
+/**
+ * @brief Apply mcHF board-specific software volume workaround
+ *
+ * On mcHF boards, the codec speaker volume has a hardware max. When the
+ * software volume exceeds that max, apply additional scaling to the audio
+ * buffer. This guard is only needed on mcHF; OVI40 handles volume differently.
+ */
+static inline void AudioDriver_MchfVolumeWorkaround(float32_t *buffer, uint32_t blockSize, float32_t gain_value, float32_t active_value, float32_t max_volume)
+{
+#ifdef UI_BRD_MCHF
+    if(gain_value > max_volume)
+    {
+        arm_scale_f32(buffer, active_value, buffer, blockSize);
+    }
+#endif
+}
+
 void AudioDriver_Init(void);
 void AudioDriver_SetProcessingChain(uint8_t dmod_mode, bool reset_dsp_nr);
 int32_t AudioDriver_GetTranslateFreq(void);
