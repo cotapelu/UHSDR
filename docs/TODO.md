@@ -407,6 +407,24 @@ build-fix           # Linker errors, symbol conflicts, bootloader
 
 ---
 
+---
+
+## Phase 22: Platform Hardening — QoL & Producible Builds
+
+- [x] **T21.1** Fix F4/H7/H7 bootloader `undefined MX_FMC_Init` — guarded `MEM_Init()` in `UiLcdHy28_ParallelInit()` with `#ifndef BOOTLOADER_BUILD`
+- [x] **T22.1** Add `make doctor` target to root Makefile — checks ARM toolchain availability + critical `mchf-eclipse/` MCU dirs + board config headers + `files.mak` and `Makefile` existence; uses `set +e` so partial failures don't abort the script
+- [x] **T22.2** Add `make check` target to root Makefile — runs lightweight sanity checks: git tree dirtiness, `mchf-eclipse/Makefile` present, `mchf-eclipse/files.mak` present, all `*-files.mak` / `bootloader.mak` / `include.mak` fragments present; uses `set +e`
+- [x] **T22.3** Document reproducible build instructions — exact verified toolchain and flags recorded in `docs/reproducible_builds.md`; pinned to `arm-none-eabi-gcc 13.2.1 20231009` (verified 2026-08-21); `.gitignore` covers all build artifacts; `make doctor` and `make check` provide pre-flight verification; `make size-summary` provides regression baseline
+- [x] **T22.4** Add build size summary target — `make size-summary` prints text/data/bss/flash-total and build timestamp for `mchf-eclipse/fw-mchf.elf` (last-built firmware) and `mchf-eclipse/bl-mchf.elf` (last-built bootloader); note: ELF filename is shared across configs (last build wins)
+
+  **T22.1/T22.2 implementation notes:**
+  - `SHELL := /bin/bash` added to root Makefile to avoid dash strictness
+  - `doctor` and `check` use `set +e` at recipe start so a partial failure (e.g. missing optional file) does not abort the remaining checks
+  - Both targets check paths under `mchf-eclipse/` (BUILD_DIR), not repo root
+  - `check` warns on uncommitted product-tree changes; this is a useful gate for CI
+
+---
+
 ## 📚 References
 
 - [AGENTS.md](../AGENTS.md) — Platform architecture baseline

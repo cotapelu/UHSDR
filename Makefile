@@ -3,6 +3,7 @@
 # Root Makefile for building firmware and bootloader
 #
 # Supports multiple MCU targets: F4, F4-512KB, F7, H7
+SHELL := /bin/bash
 # Supports multiple hardware configurations: mchf, ovi40
 #
 # Usage:
@@ -90,6 +91,7 @@ endef
 # =============================================================================
 
 .PHONY: all help firmware bootloader clean clean-firmware clean-bootloader clean-libs \
+	doctor check size-summary \
 	docs docs-clean handbook handbook-test handbook-ui-menu handbook-ui-menu-clean \
 	gcc-version release handy version
 
@@ -355,8 +357,106 @@ ci-bootloaders:
 # =============================================================================
 # Phony declarations
 # =============================================================================
-.PHONY: f4 f4-small f7 h7 mchf ovi40 \
+# =============================================================================
+# Development / Reproducibility Checks (T22.x)
+# =============================================================================
+
+# doctor: pre-flight build environment check (T22.1)
+#   - verifies ARM toolchain on PATH
+#   - checks critical MCU dirs under mchf-eclipse/ exist
+#   - checks board configs exist for each board
+# Run from repo root. Exit 0 = all good; exit 1 = fix before building.
+doctor:
+	@set +e; FAIL=0; \
+	TOOL=$$(which arm-none-eabi-gcc 2>/dev/null); \
+	if [ -z "$$TOOL" ]; then \
+	  echo "  FAIL: arm-none-eabi-gcc not in PATH"; FAIL=1; \
+	else \
+	  echo "  OK  : gcc $$(arm-none-eabi-gcc --version | head -1)"; \
+	fi; \
+	for d in mchf-eclipse/hardware/board_configs \
+	          mchf-eclipse/basesw/mcHF/Src \
+	          mchf-eclipse/basesw/ovi40/Src \
+	          mchf-eclipse/basesw/ovi40-h7/Src; do \
+	  [ -d "$$d" ] && echo "  OK  : $$d" || { echo "  FAIL: $$d missing"; FAIL=1; }; \
+	done; \
+	for f in mchf-eclipse/hardware/board_configs/UHSDR_UI_mchf_config.h \
+	         mchf-eclipse/hardware/board_configs/UHSDR_UI_ovi40_config.h; do \
+	  [ -f "$$f" ] && echo "  OK  : $$f" || { echo "  FAIL: $$f missing"; FAIL=1; }; \
+	done; \
+	for f in mchf-eclipse/files.mak mchf-eclipse/Makefile; do \
+	  [ -f "$$f" ] && echo "  OK  : $$f" || { echo "  FAIL: $$f missing"; FAIL=1; }; \
+	done; \
+	printf "  %-14s " "diagnosis:"; \
+	[ "$$FAIL" -eq 0 ] \
+	  && echo "PASSED — environment is ready." \
+	  || echo "FAILED — fix issues above before building."; \
+	exit $$FAIL
+
+
+# check: lightweight repo sanity (no toolchain required)
+#   - no uncommitted changes in tracked product sources
+#   - BUILD_DIR and key .mak files exist
+check:
+	@echo "[check] UHSDR repository sanity"
+	@echo ""
+	@set +e; FAIL=0; \
+	if git diff --quiet -- mchf-eclipse/ docs/ Makefile .gitignore 2>/dev/null; then \
+	  echo "  OK  : no uncommitted changes in product tree"; \
+	else \
+	  echo "  WARN: tracked files have uncommitted changes"; \
+	  FAIL=1; \
+	fi; \
+	if [ ! -f mchf-eclipse/Makefile ]; then \
+	  echo "  FAIL: mchf-eclipse/Makefile missing"; FAIL=1; \
+	else \
+	  echo "  OK  : mchf-eclipse/Makefile present"; \
+	fi; \
+	if [ ! -f mchf-eclipse/files.mak ]; then \
+	  echo "  FAIL: mchf-eclipse/files.mak missing"; FAIL=1; \
+	else \
+	  echo "  OK  : mchf-eclipse/files.mak present"; \
+	fi; \
+	for d in mchf-eclipse/f4-files.mak mchf-eclipse/f7-files.mak mchf-eclipse/h7-files.mak mchf-eclipse/bootloader.mak mchf-eclipse/include.mak; do \
+	  if [ ! -f "$$d" ]; then \
+	    echo "  WARN: missing make fragment $$d"; FAIL=1; \
+	  fi; \
+	done; \
+	if [ "$$FAIL" -ne 0 ]; then \
+	  echo "[check] ISSUES FOUND — see WARN/FAIL above"; \
+	  exit 1; \
+	else \
+	  echo "[check] PASSED"; \
+	fi
+
+# size-summary: print text/data/bss for last-built firmware and bootloader ELFs
+# Artifacts are named fw-mchf.elf / bl-mchf.elf in mchf-eclipse/ (last build wins).
+# Requires a working toolchain and at least one prior firmware+bootloader build.
+size-summary:
+	@echo "=== UHSDR Firmware Size (mchf-eclipse/fw-mchf.elf) ==="
+	@echo ""
+	@if [ -f mchf-eclipse/fw-mchf.elf ]; then \
+	  read -r _txt _data _bss _dec _hex _rest < <(arm-none-eabi-size mchf-eclipse/fw-mchf.elf | tail -1); \
+	  echo "  mchf-eclipse/fw-mchf.elf  text=$$_txt  data=$$_data  bss=$$_bss  flash=$$((_txt + _data))  total=$$_dec"; \
+	  stat -c '  Built: %y' mchf-eclipse/fw-mchf.elf; \
+	else \
+	  echo "  MISSING — run 'make f4-mchf' (or any firmware target) first"; \
+	fi
+	@echo ""
+	@echo "=== UHSDR Bootloader Size (mchf-eclipse/bl-mchf.elf) ==="
+	@echo ""
+	@if [ -f mchf-eclipse/bl-mchf.elf ]; then \
+	  read -r _txt _data _bss _dec _hex _rest < <(arm-none-eabi-size mchf-eclipse/bl-mchf.elf | tail -1); \
+	  echo "  mchf-eclipse/bl-mchf.elf  text=$$_txt  data=$$_data  bss=$$_bss  flash=$$((_txt + _data))  total=$$_dec"; \
+	  stat -c '  Built: %y' mchf-eclipse/bl-mchf.elf; \
+	else \
+	  echo "  MISSING — run 'make bootloader' first"; \
+	fi
+
+
+.PHONY: all help firmware bootloader clean clean-firmware clean-bootloader clean-libs \
 	f4-mchf f4-ovi40 f7-mchf f7-ovi40 h7-mchf h7-ovi40 \
 	debug-f4 debug-f7 debug-h7 \
 	config list-targets check-toolchain \
-	ci-build-all ci-bootloaders both
+	ci-build-all ci-bootloaders both \
+	doctor check size-summary
