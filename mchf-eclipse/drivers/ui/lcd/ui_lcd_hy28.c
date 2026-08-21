@@ -1758,32 +1758,6 @@ uint16_t UiLcdHy28_TextHeight(uint8_t font)
     return cf->Height;
 }
 
-#if 0
-/**
- * @returns pixel width of a given char (only used pixel!)
- */
-uint16_t UiLcdHy28_CharWidth(const char c, uint8_t font)
-{
-
-
-    const sFONT   *cf = UiLcdHy28_Font(font);
-    uint16_t retval;
-
-    switch(cf->BitCount)
-    {
-    case 1:     //1 bit font (basic type)
-        retval = UiLcdHy28_CharWidth_1bit(c, cf);
-        break;
-    case 8: //8 bit grayscaled font
-        retval = UiLcdHy28_CharWidth_8bit(c, cf);
-        break;
-    }
-
-
-    return retval;
-}
-#endif
-
 /**
  * @returns pixelwidth of a text of given length
  */

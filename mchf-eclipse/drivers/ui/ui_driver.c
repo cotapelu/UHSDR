@@ -3052,15 +3052,6 @@ typedef struct
 void UiDriver_SetDemodMode(uint8_t new_mode)
 {
 	RadioManagement_SetDemodMode(new_mode);
-#if 0
-	static encoder_mode_store_t demod_modes[] =
-	{
-			{ ENC_ONE_MODE_AUDIO_GAIN, ENC_TWO_MODE_RF_GAIN, ENC_THREE_MODE_RIT }, // USB, LSB,(S)AM,FM,FreeDV
-			{ ENC_ONE_MODE_ST_GAIN, -1, ENC_THREE_MODE_CW_SPEED }, // CW
-			{ ENC_ONE_MODE_RTTY_SPEED, ENC_TWO_MODE_RTTY_SHIFT, -1 }, // RTTY
-	};
-#endif
-
 	DigiModes_TxBufferReset();
 	switch(ts.dmod_mode)
 	{

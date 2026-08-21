@@ -777,30 +777,6 @@ static void AudioDriver_SetRxIqCorrection()
 //
 // we also have to divide every coefficient by a0 !
 // y[n] = coeffs[B0]/a0 * x[n] + coeffs[B1]/a0 * x[n-1] + coeffs[B2]/a0 * x[n-2] - coeffs[A1]/a0 * y[n-1] - coeffs[A2]/a0 * y[n-2]
-//
-//
-#if 0
-/**
- * @brief Biquad Filter Init Helper function to calculate a notch filter aka narrow bandstop filter with variable bandwidth
- */
-static void AudioDriver_CalcNotch(float32_t coeffs[5], float32_t f0, float32_t BW, float32_t FS)
-{
-
-    float32_t w0 = 2 * PI * f0 / FS;
-    float32_t alpha = sinf(w0)*sinh( logf(2.0)/2.0 * BW * w0/sinf(w0) );
-
-    coeffs[B0] = 1;
-    coeffs[B1] = - 2 * cosf(w0);
-    coeffs[B2] = 1;
-    float32_t scaling = 1 + alpha;
-    coeffs[A1] = 2 * cosf(w0); // already negated!
-    coeffs[A2] = alpha - 1; // already negated!
-
-
-    AudioDriver_ScaleBiquadCoeffs(coeffs,scaling, scaling);
-}
-#endif
-
 static const float32_t biquad_passthrough[] = { 1, 0, 0, 0, 0 };
 
 
