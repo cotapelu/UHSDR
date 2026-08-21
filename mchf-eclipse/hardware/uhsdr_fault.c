@@ -29,9 +29,13 @@
 __attribute__((weak)) void Error_Handler(void)
 {
     /* User can add his own implementation to report the HAL error return state */
+    /* T25.3: intentional halt — this function never returns;
+       __builtin_unreachable() documents the unreachable path to the compiler
+       and prevents it from inlining cleanup callers’ epilogues into this path. */
     while (1)
     {
     }
+    __builtin_unreachable(); /* should never execute; informs optimizer and static analysis */
 }
 
 /* These are volatile to try and prevent the compiler/linker optimising them

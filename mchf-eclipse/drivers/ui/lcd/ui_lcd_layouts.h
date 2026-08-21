@@ -141,6 +141,12 @@ typedef struct {
 	const touchaction_list_descr_t* touchaction_list;
 } LcdLayout;
 
+/* T25.4: guard against silent layout struct field drift across translation units */
+_Static_assert(offsetof(LcdLayout, LEFTBOXES_IND) >= 0, "LcdLayout.LEFTBOXES_IND must exist");
+_Static_assert(offsetof(LcdLayout, ENCODER_IND) >= 0, "LcdLayout.ENCODER_IND must exist");
+_Static_assert(offsetof(LcdLayout, BOTTOM_BAR)  >= 0, "LcdLayout.BOTTOM_BAR must exist");
+_Static_assert(offsetof(LcdLayout, PWR_IND)     >= 0, "LcdLayout.PWR_IND must exist");
+
 enum MODE_{
 	MODE_VERTICAL=0,
 	MODE_HORIZONTAL

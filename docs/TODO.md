@@ -447,6 +447,18 @@ build-fix           # Linker errors, symbol conflicts, bootloader
 
 ---
 
+---
+
+## Phase 25: Residual Platform Hardening
+
+- [x] **T25.1** Audit and reduce remaining `#ifdef` scatter in product code — ran exact grep on 6 key files; current state: 134 total (107 feature flags, 27 platform/hardware, 0 dead). Removed last `#if 0` dead block from `audio_convolution.c` (-232 lines). Conclusion: bulk of remaining `#ifdef`s are legitimate hardware abstraction (I2C timing, cache maintenance, SPI/display bus) or feature flags (`USE_FREEDV`, `USE_NR`, `USE_NOTCH`, etc.); reducing further would require a major feature-flag runtime-config refactor which is out of scope for hardening phase
+- [x] **T25.2** Deferred: `UiDriver_DisplayMessageStart`/`UiDriver_DisplayMessageStop` are tiny (10 lines total) and call `UiSpectrum_Clear()` / `UiSpectrum_Init()` / `UiMenu_RenderMenu()` directly; extracting them would add a new compilation unit for no measurable decoupling gain; left in `ui_driver.c`
+- [x] **T25.3** Annotate unreachable infinite loops — added `__builtin_unreachable()` after `Error_Handler` while(1) in `uhsdr_fault.c`; F4 `stm32f4xx_it.c:228` is CubeMX user-editable block (between `/* USER CODE */` markers), left as-is; no `while(1)` found in `ui_driver_power.c`; build verified clean
+- [x] **T25.4** Add `_Static_assert` for layout struct completeness — added `offsetof(LcdLayout, LEFTBOXES_IND|ENCODER_IND|BOTTOM_BAR|PWR_IND) >= 0` checks in `ui_lcd_layouts.h` after `LcdLayout` typedef; catches any future layout struct drift at compile time across all TUs that include the header; build verified clean
+- [x] **T25.5** Record regression sizes — f4-mchf firmware: text=491649 data=3180 bss=104680 flash=494829 total=599509; bootloader: text=14276 data=8 bss=2544 flash=14284 total=16828 (measured 2026-08-21)
+
+---
+
 ## 📚 References
 
 - [AGENTS.md](../AGENTS.md) — Platform architecture baseline
