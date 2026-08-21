@@ -21,11 +21,12 @@
 #undef Error_Handler
 #endif
 
-/* Provide Error_Handler for all MCUs. The HAL headers define a weak symbol
-   for some targets, but with LTO and --gc-sections the linker may discard it
-   if no direct reference is seen. Defining it here guarantees a real symbol
-   exists for both firmware and bootloader builds. */
-void Error_Handler(void)
+/* Provide a weak Error_Handler fallback for all builds. The CubeMX-generated
+   main.c in basesw/ provides a strong definition for both firmware and
+   bootloader on F4/F7, so the linker uses that instead. With LTO and
+   --gc-sections this guarantees a real symbol always exists without causing
+   multiple-definition errors. */
+__attribute__((weak)) void Error_Handler(void)
 {
     /* User can add his own implementation to report the HAL error return state */
     while (1)
