@@ -1,27 +1,26 @@
-# UHSDR Platform Architecture — Codebase-Grounded Baseline v5.0
+# UHSDR Platform Architecture — STM32 Optimization Baseline v6.0
 
-**Version:** 5.0  
+**Version:** 6.0  
 **Language:** C11/C17 (GNU extensions)  
-**Build:** GNU Make + ARM GCC + `.mak` files  
-**Execution:** Bare-metal audio DMA ISR → PendSV deferred → cooperative main loop  
-**Memory Model:** Static allocation primary; no heap in product code; `malloc` unused  
+**Build:** GNU Make + ARM GCC + `.mak` fragments  
+**Execution:** Bare-metal cooperative — Audio DMA ISR → PendSV → main loop  
+**Memory Model:** Static allocation only; zero heap in product code  
 **Target MCUs:** STM32F4 (Cortex-M4), STM32F7 (Cortex-M7), STM32H7 (Cortex-M7)  
-**Target Boards:** mcHF UI (F4), OVI40 UI (F7/H7), LAPWING (RF only, WIP)  
+**Target Boards:** mcHF UI (F4), OVI40 UI (F7/H7)  
 **Safety Profile:** IEC 62304 Class B (practical)
 
 ---
 
 ## 1. Platform Vision
 
-Tối ưu codebase UHSDR thành **platform chuẩn** cho STM32F4/F7/H7, dựa trên nền tảng hiện có.
+Tối ưu UHSDR thành **platform chuẩn cho STM32 Cortex-M4/M7**:
 
-**Mục tiêu:**
-- 1 codebase, 4 firmware builds + 3 bootloader builds
-- Product code chia sẻ 100% giữa các MCU (`files.mak` chung)
-- MCU abstraction tập trung vào `uhsdr_mcu.h` + board config headers
-- Loại bỏ scattered `#ifdef` không cần thiết
-- Bổ sung: watchdog, hoàn thiện fault handlers, cache maintenance
-- Tận dụng `basesw/` structure hiện có
+- 1 codebase, shared product code 100% giữa các MCU
+- MCU abstraction tập trung vào `uhsdr_mcu.h` + `board_configs/`
+- HAL shim layer tách product code khỏi vendor HAL (STM32)
+- Zero `#ifdef` platform scatter trong product code
+- Zero direct vendor HAL includes trong `drivers/` và `hardware/`
+- Full safety: watchdog, fault handlers, stack guard, cache maintenance
 
 ---
 
@@ -29,12 +28,12 @@ Tối ưu codebase UHSDR thành **platform chuẩn** cho STM32F4/F7/H7, dựa tr
 
 ### MCU Matrix
 
-| MCU | Core | FPU | Flash | SRAM | CCM/SRAM1 | Cache | Build Flag |
+| MCU | Core | FPU | Flash | SRAM | CCM | Cache | Build |
 |---|---|---|---|---|---|---|---|
-| STM32F407xx | M4 | FPv4-SP | 1MB | 192KB | 64KB CCM | None | `BUILDFOR=F4` |
-| STM32F4-512KB | M4 | FPv4-SP | 512KB | 192KB | 64KB CCM | None | `BUILDFOR=F4-512KB` |
-| STM32F767xx | M7 | FPv5-D16 | 1MB+ | 320KB+ | 64KB CCM | I-cache | `BUILDFOR=F7` |
-| STM32H743xx | M7 | FPv5-D16 | 1MB+ | 512KB+ | 128KB SRAM1 | I+D-cache | `BUILDFOR=H7` |
+| STM32F407xx | M4 | FPv4-SP | 1MB | 192KB | 64KB | None | `BUILDFOR=F4` |
+| STM32F4-512KB | M4 | FPv4-SP | 512KB | 192KB | 64KB | None | `BUILDFOR=F4-512KB` |
+| STM32F767xx | M7 | FPv5-D16 | 1MB+ | 320KB+ | 64KB | I-cache | `BUILDFOR=F7` |
+| STM32H743xx | M7 | FPv5-D16 | 1MB+ | 512KB+ | — | I+D-cache | `BUILDFOR=H7` |
 
 ### Board Matrix
 
@@ -42,663 +41,414 @@ Tối ưu codebase UHSDR thành **platform chuẩn** cho STM32F4/F7/H7, dựa tr
 |---|---|---|---|---|---|
 | mcHF | ✅ | ✅ | **F4 only** | `UHSDR_UI_mchf_config.h` | Production |
 | OVI40 | ✅ | ✅ | **F7/H7 only** | `UHSDR_UI_ovi40_config.h` | Production |
-| LAPWING | ❌ | ⚠️ | Unspecified | `RF_BRD_LAPWING` | WIP, no UI |
 
-### Valid Build Matrix (4 firmware + 3 bootloader)
+### Valid Build Matrix
 
 | MCU | Board | Firmware | Bootloader | Status |
 |---|---|---|---|---|
 | F4 | mcHF | `fw-mchf_f4-mchf.bin` | `bl-mchf_f4-mchf.bin` | ✅ Default |
-| F4-512KB | mcHF | `fw-mchf_f4-small.bin` | shared | ✅ Small build |
+| F4-512KB | mcHF | `fw-mchf_f4-small.bin` | shared | ✅ Small |
 | F7 | OVI40 | `fw-mchf_f7-ovi40.bin` | `bl-mchf_f7-ovi40.bin` | ✅ |
 | H7 | OVI40 | `fw-mchf_h7-ovi40.bin` | `bl-mchf_h7-ovi40.bin` | ✅ |
 
-> **Note:** `make all-firmware` builds all 4 valid firmware combinations. Invalid combos (`f4-ovi40`, `f7-mchf`, `h7-mchf`) are excluded because they fail at compile time due to `#error` in board config headers.
+---
+
+## 3. Architecture Overview
+
+```
+mchf-eclipse/
+├── hal/                           ← HAL SHIM LAYER (NEW — single HAL abstraction)
+│   ├── include/                   ← Abstract API headers (no vendor includes)
+│   │   ├── hal_gpio.h
+│   │   ├── hal_spi.h
+│   │   ├── hal_i2s.h              ← audio interface abstraction
+│   │   ├── hal_i2c.h
+│   │   ├── hal_dma.h
+│   │   ├── hal_flash.h
+│   │   ├── hal_watchdog.h
+│   │   ├── hal_clock.h
+│   │   └── hal_uart.h
+│   └── src/                       ← STM32 backends (ONLY files with vendor HAL includes)
+│       ├── gpio/hal_gpio_stm32.c
+│       ├── spi/hal_spi_stm32.c
+│       ├── i2s/hal_i2s_stm32.c
+│       ├── i2c/hal_i2c_stm32.c
+│       └── ...
+│
+├── vendors/                       ← VENDOR HAL (untouched, git submodule)
+│   ├── stm32/                     ← STM32Cube HAL per MCU family
+│   │   ├── Drivers/               ← HAL drivers (HAL v1.x per family)
+│   │   ├── Middlewares/           ← USB, FatFs, etc.
+│   │   └── Src/                   ← startup, main.c, IRQ handlers
+│   │   ├── STM32F4xx/             ← basesw/mcHF/ (F4)
+│   │   ├── STM32F7xx/             ← basesw/ovi40/ (F7)
+│   │   └── STM32H7xx/             ← basesw/ovi40-h7/ (H7)
+│
+├── drivers/                       ← PRODUCT CODE (vendor-agnostic)
+│   ├── audio/                     ← Audio pipeline (calls hal_i2s.h)
+│   │   ├── audio_driver.c
+│   │   ├── audio_filter.c
+│   │   ├── audio_agc.c
+│   │   ├── audio_nr.c
+│   │   ├── audio_convolution.c
+│   │   ├── audio_management.c
+│   │   ├── cw/
+│   │   ├── freedv/
+│   │   ├── filters/
+│   │   └── softdds/
+│   ├── ui/                        ← UI (calls hal_spi.h, hal_gpio.h)
+│   │   ├── ui_driver.c
+│   │   ├── ui_driver_utils.c
+│   │   ├── ui_display_list.c
+│   │   ├── ui_encoder_display.c
+│   │   ├── lcd/                   ← Display (calls hal_spi.h)
+│   │   │   ├── ui_lcd_hy28.c
+│   │   │   └── ui_lcd_layouts.c
+│   │   ├── menu/
+│   │   ├── encoder/
+│   │   └── oscillator/
+│   ├── cat/                       ← CAT (calls hal_uart.h)
+│   ├── usb/                       ← USB Device (calls hal_usb.h)
+│   └── diag/                      ← Debug trace (calls hal_uart.h)
+│
+├── hardware/                      ← BOARD ABSTRACTION (shared)
+│   ├── uhsdr_mcu.h                ← MCU abstraction (GPIO, cache, clock, CPU type)
+│   ├── uhsdr_board.c              ← Board init, LED, RTC, RAM detect
+│   ├── uhsdr_fault.c              ← Shared fault handler (FaultHandler_Common)
+│   ├── uhsdr_keypad.c             ← Keypad scanning
+│   ├── uhsdr_hw_i2c.c             ← I2C bus (calls hal_i2c.h)
+│   └── board_configs/             ← Compile-time board config
+│       ├── UHSDR_UI_mchf_config.h
+│       └── UHSDR_UI_ovi40_config.h
+│
+├── misc/                          ← UTILITIES (shared)
+│   ├── config_storage.c
+│   ├── serial_eeprom.c
+│   ├── uhsdr_canary.c             ← Stack canary (static buffer, no heap)
+│   └── v_eprom/                   ← Flash driver
+│
+├── src/
+│   ├── uhsdr_main.c               ← Main loop, init order
+│   └── bootloader/                ← DFU via USB Host + FatFs
+│
+├── test/                          ← HOST-BASED TESTS
+│   ├── test.h                     ← Test framework
+│   ├── test.c                     ← Runner
+│   ├── test_audio_filters.c
+│   ├── audio_driver_filters_standalone.c
+│   └── test_canary.c
+│
+├── docs/
+│   ├── architecture.md            ← This file (canonical)
+│   ├── TODO.md                    ← Task tracking
+│   └── reproducible_builds.md     ← Build reproducibility guide
+│
+├── files.mak                      ← Shared product code
+├── include.mak                    ← Shared include paths
+├── stm32-files.mak                ← STM32 HAL sources per MCU
+├── Makefile                       ← Root build orchestrator
+└── .gitignore
+```
 
 ---
 
-## 3. Core Architecture
+## 4. Execution Model
 
-```text
-mchf-eclipse/
-├── basesw/
-│   ├── mcHF/     ← F4 HAL/startup/middleware (CubeMX)
-│   ├── ovi40/    ← F7 HAL/startup/middleware (CubeMX)
-│   └── ovi40-h7/ ← H7 HAL/startup/middleware (CubeMX)
-├── drivers/
-│   ├── audio/    ← Audio pipeline (shared, all MCUs)
-│   │   └── codec/ ← I2S (F4) / SAI (F7/H7) callbacks
-│   ├── ui/       ← LCD, spectrum, waterfall, menu, encoder, radio (shared)
-│   │   └── lcd/  ← Display controllers, touchscreen, spectrum
-│   ├── usb/      ← USB device + host (shared)
-│   ├── freedv/   ← FreeDV codec (shared)
-│   └── cat/      ← CAT control (shared)
-├── hardware/
-│   ├── board_configs/  ← mcHF/ovi40 config headers with #error guards
-│   ├── uhsdr_board.c   ← Board init, LED, RTC, RAM detect, BusFault handler
-│   ├── uhsdr_mcu.h     ← MCU abstraction (GPIO, CPU type, flash size)
-│   ├── uhsdr_keypad.c  ← Keypad scanning
-│   └── uhsdr_hw_i2c.c  ← I2C bus abstraction
-├── misc/
-│   ├── config_storage.c ← Flash/EEPROM config
-│   ├── serial_eeprom.c  ← EEPROM driver
-│   ├── uhsdr_canary.c   ← Stack canary
-│   └── v_eprom/         ← Flash driver
-├── src/
-│   ├── uhsdr_main.c     ← Main loop, state machine initialization
-│   └── bootloader/       ← DFU via USB Host + FatFs
-└── linker/               ← 9 linker scripts (firmware + bootloader × 3 MCUs)
+All MCUs follow identical execution model:
+
 ```
-
-### Execution Model (all MCUs)
-- **Audio DMA ISR** @ 1.5kHz — RX/TX processing, AGC, filters, NR, FreeDV encode/decode
-- **PendSV** — deferred high-priority tasks (FreeDV, NR, PTT), lowest priority
-- **Main loop** — UI, spectrum, menus, encoder, keyboard, meters
-- **No RTOS. No preemptive scheduler.**
-
-### Execution Flow
-```
-Audio DMA ISR (1.5kHz)
-    ├── HAL_DMA_IRQHandler() [basesw]
-    ├── AudioDriver_I2SCallback() [drivers/audio/audio_driver.c]
+Audio DMA ISR (1.5 kHz)
+    ├── HAL_DMA_IRQHandler()           [basesw]
+    ├── AudioDriver_I2SCallback()      [audio_driver.c]
+    ├── IQ decimation / interpolation
     ├── AGC, filters, CW, NR
-    ├── ts.sysclock++ (100Hz timebase)
-    └── PendSV trigger: SCB->ICSR |= SCB_ICSR_PENDSVSET_Msk
-         └── PendSV_Handler() [basesw/*/Src/stm32fxx_it.c]
-              └── UiDriver_TaskHandler_HighPrioTasks() [drivers/ui/ui_driver.c]
+    ├── ts.sysclock++                  (100 Hz timebase)
+    └── PendSV trigger
+         └── PendSV_Handler()          [basesw/Src/stm32fxx_it.c]
+              └── UiDriver_TaskHandler_HighPrioTasks()
                    ├── FreeDv_HandleFreeDv()
                    ├── AudioNr_HandleNoiseReduction()
                    └── RadioManagement_HandlePttOnOff()
 
 Main Loop (cooperative)
     ├── UiDriver_TaskHandler_MainTasks()
-    ├── Encoder/keys @ 100Hz
-    ├── Spectrum/waterfall @ 40-80ms
-    ├── Meters @ 25Hz
-    └── Menu/UI rendering
+    ├── Encoder/keys @ 100 Hz
+    ├── Spectrum/waterfall @ 40-80 ms
+    ├── Meters @ 25 Hz
+    ├── Menu/UI rendering
+    ├── Canary_IsIntact()             (stack guard)
+    └── HAL_IWDG_Refresh()            (watchdog kick)
+    └── __WFI()                        (low-power idle)
 ```
 
----
-
-## 4. Build System
-
-### Structure
-```
-Makefile (root)
-├── mchf-eclipse/Makefile (inner, includes .mak files)
-├── files.mak              ← Shared product code (ALL MCUs)
-├── include.mak            ← Shared include dirs
-├── f4-files.mak           ← F4 HAL sources
-├── f4-include.mak         ← F4 include dirs
-├── f4-bootloader.mak      ← F4 bootloader sources
-├── (same for F7, H7)
-└── bootloader.mak         ← Shared bootloader sources
-```
-
-### Key Points
-- **Product code is 100% shared** across MCUs (`files.mak` is identical)
-- **Only HAL/startup/middleware differs** per MCU (`f4-files.mak`, `f7-files.mak`, `h7-files.mak`)
-- **Board selection via `-DUI_BRD_MCHF` / `-DUI_BRD_OVI40`** in CONFIGFLAGS
-- **MCU selection via `-DCORTEX_M4` / `-DCORTEX_M7`** in machine flags
-- **Compile flags:** `-O2` for firmware, `-Os` for bootloader, `-flto`, `-Wall -Wextra`
-
-### Build Commands
-```bash
-make                    # Build firmware + bootloader for default (F4, mcHF)
-make BUILDFOR=F7 BOARD=ovi40 firmware   # Build F7 firmware for OVI40
-make BUILDFOR=H7 BOARD=ovi40 both       # Build H7 firmware + bootloader
-make all-firmware       # Build ALL 4 valid firmware combinations
-make all-bootloader     # Build ALL 3 valid bootloader combinations
-```
+**Contract:**
+- ISR: non-blocking, < 100 µs, no printf, no malloc
+- PendSV: deferred low-priority work
+- Main loop: cooperative, bounded timeout on all blocking calls
 
 ---
 
 ## 5. Layer Contracts
 
-### 5.1 basesw/ (Per-MCU HAL)
-- **mcHF:** STM32F4xx HAL, CMSIS, USB Host/Device, FatFs, I2S
-- **ovi40:** STM32F7xx HAL, CMSIS, USB Host/Device, FatFs, SAI, FMC
-- **ovi40-h7:** STM32H7xx HAL, CMSIS, USB Host/Device, FatFs, SAI, FMC, MDMA
+### 5.1 HAL Shim Layer (`hal/`)
+**Purpose:** Single point of vendor abstraction. Product code calls `hal_*` APIs; STM32 backends call HAL functions.
 
-**Owns:** startup, HAL drivers, CubeMX-generated `main.c`, `stm32fxx_it.c`, `stm32fxx_hal_msp.c`, fault handlers
+**Rules:**
+- Headers in `hal/include/` — zero vendor includes, zero STM32 types
+- Sources in `hal/src/*/` — ONLY these files include `stm32f4xx_hal.h` / `stm32f7xx_hal.h` / `stm32h7xx_hal.h`
+- Every interface has: config struct + vtable + factory function
+- Error handling: unified `hal_status_t` (`HAL_OK`, `HAL_ERR_*`)
 
-### 5.2 drivers/ (Product Drivers — Shared)
-- **audio:** RX/TX pipeline, AGC, filters, CW, RTTY, PSK, FreeDV
-- **ui:** LCD, spectrum, waterfall, menu, encoder, keypad, touch, radio state machine
-- **usb:** Device (Audio+CDC) in firmware; Host (HID/MSC) only in bootloader for DFU
-- **freedv:** FreeDV digital voice codec
-- **cat:** Computer Aided Transceiver control
+```
+drivers/audio/audio_driver.c
+    │  #include "hal_i2s.h"          ← abstract API
+    ▼
+hal/src/i2s/hal_i2s_stm32.c
+    │  #include "stm32f4xx_hal.h"    ← vendor HAL ONLY here
+    │  audio_iface_t *iface = hal_i2s_create(CPU_STM32F4)
+    │  iface->start_rx(iface, rx_cb, user_data)
+    ▼
+basesw/mcHF/Drivers/STM32F4xx_HAL_Driver/
+    HAL_I2S_Receive_DMA()
+```
 
-### 5.3 hardware/ (Board Abstraction — Shared)
-- **board_configs:** Per-board config headers with `#error` MCU guards
-- **uhsdr_board.c:** Board init, LED, RTC, RAM detect (BusFault-based on F4/F7/H7)
-- **uhsdr_mcu.h:** MCU type detection, GPIO abstraction, flash size
-- **uhsdr_keypad.c:** Keypad scanning with board-specific maps
-- **uhsdr_hw_i2c.c:** I2C bus abstraction (Si5351A, codecs, EEPROM)
+### 5.2 Vendor Layer (`basesw/`)
+**Purpose:** STM32Cube HAL + startup + linker scripts.
 
-### 5.4 misc/ (Utilities — Shared)
-- **config_storage.c:** Flash/EEPROM config with RAM cache
-- **serial_eeprom.c:** I2C EEPROM driver
-- **uhsdr_canary.c:** Stack canary
-- **uhsdr_math.c:** Math utilities
+**Rules:**
+- NEVER modify files in `basesw/` directly
+- Updates via git submodule pin (tagged release)
+- Owns: `main.c`, `stm32fxx_it.c`, `stm32fxx_hal_msp.c`, startup files
 
-### 5.5 src/ (Application Entry)
-- **uhsdr_main.c:** Main loop, state machine initialization
-- **bootloader/:** DFU via USB Host + FatFs
+### 5.3 Product Layer (`drivers/`, `hardware/`, `misc/`, `src/`)
+**Purpose:** Application logic — 100% shared across MCUs.
+
+**Rules:**
+- NEVER include `stm32f4xx_hal.h`, `stm32f7xx_hal.h`, `stm32h7xx_hal.h`
+- NEVER call `HAL_*`, `HAL_RCC_*`, `GPIOx->` directly
+- Use `hal_*` APIs or `uhsdr_mcu.h` abstractions
+- Board-specific code ONLY in `board_configs/`
+
+### 5.4 `uhsdr_mcu.h` Abstractions
+
+| Abstraction | Implementation |
+|---|---|
+| `CPU_GetType()` | Read CPU ID register, return `CPU_STM32F4/F7/H7` |
+| `GPIO_SetBits(port, pin)` | H7: BSRRL/BSRRH; F4/F7: BSRR |
+| `CPU_Cache_CleanDCache(addr, len)` | F4: no-op; F7/H7: `SCB_CleanDCache_by_Addr()` |
+| `CPU_Cache_InvalidateDCache(addr, len)` | F4: no-op; F7/H7: `SCB_InvalidateDCache_by_Addr()` |
+| `DMA_BUFFER_ALIGN` | 32 (F7 cache line); 1 (F4 no-cache); 32 (H7) |
+| `DMA_BUFFER_SECTION` | `.ccm` (F4); `.ram2` (F7); `.dma_mem` (H7) |
 
 ---
 
-## 6. Existing MCU Abstraction (Accurate)
+## 6. Memory Model
 
-### 6.1 uhsdr_mcu.h
-```c
-// mchf-eclipse/hardware/uhsdr_mcu.h
+### Sections
 
-typedef enum {
-    CPU_NONE = 0,
-    CPU_STM32F4 = 1,
-    CPU_STM32F7 = 2,
-    CPU_STM32H7 = 3,
-} mchf_cpu_t;
-
-inline static mchf_cpu_t MchfHW_Cpu(); // Returns current MCU type
-
-// GPIO abstraction (H7 uses BSRRL/BSRRH, F4/F7 use BSRR)
-inline static void GPIO_SetBits(GPIO_TypeDef *PORT, uint32_t PINS);
-inline static void GPIO_ResetBits(GPIO_TypeDef *PORT, uint32_t PINS);
-inline static void GPIO_ToggleBits(GPIO_TypeDef *PORT, uint32_t PINS);
-
-// Flash size abstraction
-#define STM32_GetFlashSize()    // F4/F7: read flash size register, H7: FLASH_SIZE/1024
-#define STM32_GetRevision()     // Read device revision
-#define STM32_UUID              // Unique device ID
-```
-
-### 6.2 Board Config Headers
-```c
-// mchf-eclipse/hardware/board_configs/UHSDR_UI_mchf_config.h (F4)
-#define __MCHF_SPECIALMEM __attribute__ ((section (".ccm")))  // 64KB CCM
-#define __UHSDR_DMAMEM    // no-op
-
-// mchf-eclipse/hardware/board_configs/UHSDR_UI_ovi40_config.h (F7/H7)
-#define __MCHF_SPECIALMEM    // no-op
-#if defined(STM32H7)
-    #define __UHSDR_DMAMEM __attribute__ ((section (".dmamem")))  // SRAM1
-#else
-    #define __UHSDR_DMAMEM    // no-op
-#endif
-
-#define USE_TWO_CHANNEL_AUDIO  // OVI40 only
-#define USE_HMC1023            // OVI40 only
-```
-
-### 6.3 Memory Sections (Actual Usage)
-
-| Section | F4 | F7 | H7 | Used For |
+| Section | F4 | F7 | H7 | Content |
 |---|---|---|---|---|
-| `.ccm` | 64KB @ 0x10000000 | 64KB @ 0x10000000 | — | Audio filters, spectrum, NR states (`__MCHF_SPECIALMEM`) |
-| `.dmamem` | — | — | 128KB @ 0x30000000 | LCD pixelbuffer only (`__UHSDR_DMAMEM`) |
+| `.ccm` | 64KB @ 0x10000000 | 64KB @ 0x10000000 | — | Audio filters, spectrum, NR states |
+| `.ram2` | — | 128KB @ 0x20000000 | — | DMA buffers (F7) |
+| `.dma_mem` | — | — | 128KB @ 0x30000000 | DMA buffers (H7) |
 | `.ram` | 128KB @ 0x20000000 | 256KB @ 0x20000000 | 512KB @ 0x24000000 | Default data, stack |
 
-> **Note:** `.ccm` is no-op on F7/H7. `.dmamem` is H7-only. F7 has no dedicated DMA section.
+### Allocation Rules
 
----
-
-## 7. Fault Handlers (Actual State)
-
-### 7.1 F4 (mcHF)
-| Handler | Location | Behavior |
-|---|---|---|
-| HardFault_Handler | `stm32f4xx_it.c` | Naked, extracts registers, calls `Debug_FaultGetRegistersFromStack()` |
-| MemManage_Handler | `stm32f4xx_it.c` | Empty while(1) loop |
-| BusFault_Handler | `uhsdr_board.c` | Naked, dual-purpose: RAM size detection (192/256/512KB) + general fault dump via `FaultHandler_Common()` |
-| UsageFault_Handler | `stm32f4xx_it.c` | Empty while(1) loop |
-
-### 7.2 F7 (ovi40)
-| Handler | Location | Behavior |
-|---|---|---|
-| HardFault_Handler | `stm32f7xx_it.c` | Calls `FaultHandler_Common()` — register dump |
-| MemManage_Handler | `stm32f7xx_it.c` | Calls `FaultHandler_Common()` — register dump |
-| BusFault_Handler | `uhsdr_board.c` | Present, dual-purpose: RAM detect + fault dump |
-| UsageFault_Handler | `stm32f7xx_it.c` | Calls `FaultHandler_Common()` — register dump |
-
-### 7.3 H7 (ovi40-h7)
-| Handler | Location | Behavior |
-|---|---|---|
-| HardFault_Handler | `stm32h7xx_it.c` | Calls `FaultHandler_Common()` — register dump |
-| MemManage_Handler | `stm32h7xx_it.c` | Calls `FaultHandler_Common()` — register dump |
-| BusFault_Handler | `uhsdr_board.c` | Present, dual-purpose: RAM detect + fault dump |
-| UsageFault_Handler | `stm32h7xx_it.c` | Calls `FaultHandler_Common()` — register dump |
-
-### 7.4 Notes
-- All MCUs now have fault handlers with register dump via shared `FaultHandler_Common()` in `uhsdr_fault.c`
-- BusFault_Handler is shared between RAM detection and general fault handling on all MCUs
-- F4 BusFault_Handler uses C code with `if (ram_detect_in_progress)` check; F7/H7 use pure assembly to avoid naked C issues with LTO
-
----
-
-## 8. Audio Pipeline
-
-### 8.1 Signal Chain
 ```
-RX: ADC → DMA → Audio ISR → IQ decimation → Hilbert → AGC → Filter → NR → DAC
-TX: ADC → DMA → Audio ISR → Filter → ALC → Interpolation → DAC
-```
-
-### 8.2 Audio Interfaces
-
-| MCU | Peripheral | Callbacks | Codec | Channels |
-|---|---|---|---|---|
-| F4 | I2S3 | `HAL_I2S_RxCpltCallback`, `HAL_I2S_RxHalfCpltCallback` | WM8731 | 1 |
-| F7 | SAI1 | `HAL_SAI_RxCpltCallback`, `HAL_SAI_RxHalfCpltCallback` | WM8731 | 1 |
-| H7 | SAI1+SAI2 | Same + SAI2 callbacks | WM8731 + external | 2 |
-
-### 8.3 Audio ISR Contract
-- **Frequency:** 1.5kHz (`IQ_INTERRUPT_FREQ`)
-- **Block size:** 128-256 samples
-- **ISR time budget:** < 100µs
-- **Deferred work:** PendSV for FreeDV, NR, PTT
-- **No blocking:** No HAL_Delay, no printf, no malloc
-
-### 8.4 Audio Codec File
-`drivers/audio/codec/uhsdr_hw_i2s.c` contains both I2S (F4) and SAI (F7/H7) callbacks, selected via `#ifdef UI_BRD_MCHF` / `#ifdef UI_BRD_OVI40`.
-
-### 8.5 Audio State Placement
-```c
-// Filter states, decimation, interpolation — all in .ccm on F4
-float32_t __MCHF_SPECIALMEM decimState_I[...];
-float32_t __MCHF_SPECIALMEM decimState_Q[...];
-float32_t __MCHF_SPECIALMEM interpState[...];
-
-// On F7/H7: __MCHF_SPECIALMEM is no-op → placed in default .data/.bss
+1. Static arrays only — NO malloc/free in ISR, audio, RF paths
+2. DMA buffers: __ALIGN(CPU_DMA_BUFFER_ALIGN) + __UHSDR_DMAMEM
+3. Filter states: __MCHF_SPECIALMEM → .ccm on F4, .ram on F7/H7
+4. Stack guard: static buffer (uhsdr_canary.c)
 ```
 
 ---
 
-## 9. Display Subsystem
+## 7. Safety Mechanisms
 
-### 9.1 Supported Controllers
+### 7.1 Watchdog
+- `HAL_IWDG_Init()` in `Board_WatchdogInit()` — IWDG1 on H7, IWDG on F4/F7
+- `HAL_IWDG_Refresh()` every 1s in main loop (`WATCHDOG_KICK_TICKS = 100`)
 
-| Controller | Interface | Resolution | Detection |
-|---|---|---|---|
-| ILI9320/ILI9325 | SPI/Parallel | 320x240 | Read ID |
-| ILI9486 | Parallel | 480x320 | Read ID 0x9486 |
-| RA8875 | SPI/Parallel | 800x480 | Read ID 0x8875 |
-| SSD1289 | Parallel | 320x240 | HY32D |
-| RPi 3.5" | SPI | 480x320 | Force detect |
+### 7.2 Fault Handlers
+All MCUs: HardFault, MemManage, BusFault, UsageFault call `FaultHandler_Common()` — register dump + infinite loop.
 
-### 9.2 Display Abstraction
-```c
-// mchf-eclipse/drivers/ui/lcd/ui_lcd_hy28.h
-typedef struct {
-    uint16_t (*ReadDisplayId)(void);
-    void (*SetActiveWindow)(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2);
-    void (*SetCursorA)(uint16_t Xpos, uint16_t Ypos);
-    void (*WriteRAM_Prepare)(void);
-    void (*WriteReg)(uint16_t reg, uint16_t val);
-    // ... drawing primitives
-} uhsdr_display_info_t;
+### 7.3 Stack Guard
+- `uhsdr_canary.c`: static buffer, checked every main loop iteration
+- LED indication on corruption (red + green)
 
-const uhsdr_display_info_t display_infos[]; // Detection table
-```
-
-### 9.3 SPI Prescalers (Per MCU)
-
-| MCU | LCD Default | LCD High-Speed | Touch |
-|---|---|---|---|
-| F4 | SPI_BAUDRATEPRESCALER_4 | SPI_BAUDRATEPRESCALER_2 | SPI_BAUDRATEPRESCALER_64 |
-| F7 | SPI_BAUDRATEPRESCALER_8 | SPI_BAUDRATEPRESCALER_4 | SPI_BAUDRATEPRESCALER_128 |
-| H7 | SPI_BAUDRATEPRESCALER_8 | SPI_BAUDRATEPRESCALER_4 | SPI_BAUDRATEPRESCALER_32 |
-
-### 9.4 DMA Buffer
-```c
-// mchf-eclipse/drivers/ui/lcd/ui_lcd_hy28.c
-static __UHSDR_DMAMEM uint16_t pixelbuffer[PIXELBUFFERCOUNT][PIXELBUFFERSIZE];
-```
-- F4: `.ccm` (DMA-capable)
-- F7: No-op → regular RAM (cache maintenance MISSING)
-- H7: `.dmamem` (SRAM1, cache maintenance MISSING)
-
-### 9.5 Touchscreen (XPT2046)
-- **Controller:** XPT2046 (resistive, SPI)
-- **IRQ:** Active low, debounced in main loop
-- **State machine:** `TP_DATASETS_NONE → TP_DATASETS_WAIT → TP_DATASETS_PROCESSED`
-- **SPI speed:** Dynamic prescaler change during touch read
-
----
-
-## 10. Input Subsystem
-
-### 10.1 Keypad Matrix
-```c
-// mchf-eclipse/hardware/uhsdr_keypad.c
-typedef struct {
-    GPIO_TypeDef *keyPort;
-    uint16_t keyPin;
-    uint16_t button_id;
-} Keypad_KeyPhys_t;
-
-// Board-specific map arrays: bm_set_normal_arr[], etc.
-void Keypad_Init(void);
-void Keypad_Scan(void);
-bool Keypad_IsKeyPressed(uint16_t button_id);
-```
-
-### 10.2 Button Mapping
-
-**mcHF (17 buttons + touch):**
-- F1-F5, G1-G4, M1-M3, BNDM, BNDP, STEPM, STEPP, PWR
-- Encoders: ENC_ONE, ENC_TWO, ENC_THREE, FREQ_ENC
-
-**OVI40 (23 buttons + touch):**
-- F1-F6, G1-G4, M1-M3, E1-E4, S18, S19
-- BNDM, BNDP, STEPM, STEPP, PWR
-- Encoders: same as mcHF
-
----
-
-## 11. Spectrum/Waterfall
-
-### 11.1 Implementation
-- **FFT:** CMSIS DSP `arm_rfft_fast_f32`, `arm_cfft_f32`
-- **Update rate:** 40-80ms (main loop, not ISR)
-- **Ring buffer:** `FFT_RingBuffer[FFT_IQ_BUFF_LEN]` — accessed from ISR and main loop
-
-### 11.2 Memory Budget
-
-| MCU | Waterfall | Buffer Location |
-|---|---|---|
-| F4 | Half resolution | `.ccm` (static) |
-| F7 | Full resolution | `.ram` (static in `sd` struct) |
-| H7 | Full resolution | `.ram` (static in `sd` struct) |
-
-### 11.3 Cache Considerations (F7/H7)
-- `sd.FFT_RingBuffer` written by audio ISR, read by main loop
-- **No cache maintenance** — potential corruption on F7/H7
-- **No cache maintenance** for LCD pixelbuffer DMA on F7/H7
-
----
-
-## 12. Safety Mechanisms
-
-### 12.1 Watchdog
-**STATUS: IMPLEMENTED**
-- `HAL_IWDG_Init()` in `uhsdr_main.c` (IWDG1 on H7, IWDG on F4/F7)
-- `HAL_IWDG_Refresh()` every 1s in main loop (`WATCHDOG_KICK_TICKS = 100` at 100Hz sysclock)
-
-### 12.2 Stack Guard
-**STATUS: IMPLEMENTED**
-- `uhsdr_canary.c` exists with canary word
-- `Canary_IsIntact()` checked every main loop iteration
-- Visual indication via LEDs on corruption
-
-### 12.3 Cache Maintenance
-**STATUS: IMPLEMENTED for LCD + FFT**
-- `DMA_BUFFER_CLEAN()` / `DMA_BUFFER_INVALIDATE()` macros in `uhsdr_mcu.h`
-- LCD pixelbuffer: clean/invalidate in `ui_lcd_hy28.c`
-- FFT ring buffer: invalidate in `ui_spectrum.c`
+### 7.4 Cache Maintenance
+- `DMA_BUFFER_CLEAN()` / `DMA_BUFFER_INVALIDATE()` macros
+- Applied to: LCD pixelbuffer, FFT ring buffer
 - `Board_Reboot()`: `SCB_CleanDCache()` on F7/H7
 
-### 12.4 Bootloader Safety
-**STATUS: IMPLEMENTED**
-- CRC32 validation of firmware image (IEEE 802.3)
-- Anti-rollback version string check
-- 3-strike boot counter in SRAM2/RTC backup
+### 7.5 Bootloader Safety
+- CRC32 firmware validation
+- Anti-rollback version string
+- 3-strike boot counter (SRAM2/RTC backup)
 - Recovery mode after N failed boots
 
-### 12.5 Known Gaps
-- USB Host code still present in HAL/build system but not initialized in product code
-- `uhsdr_fault.c` provides shared fault helpers for F7/H7; H7 HAL defines `Error_Handler` as macro to `_Error_Handler`
-- `assert_failed` stubs now provided unconditionally for F4/F7/H7 release builds
+---
+
+## 8. Build System
+
+### Key Files
+
+| File | Purpose |
+|---|---|
+| `Makefile` | Root orchestrator — `make f4-mchf`, `make all-firmware` |
+| `files.mak` | Shared product code (all MCUs) |
+| `include.mak` | Shared include paths |
+| `stm32-files.mak` | STM32 vendor HAL sources |
+| `*-bootloader.mak` | Bootloader-only sources |
+
+### Commands
+
+```bash
+make f4-mchf              # Default build (F4 firmware + bootloader)
+make BUILDFOR=F7 BOARD=ovi40 firmware   # F7 firmware only
+make BUILDFOR=H7 BOARD=ovi40 both       # H7 firmware + bootloader
+make all-firmware         # All 4 valid firmware combos
+make all-bootloader       # All 3 valid bootloader combos
+make doctor               # Pre-flight environment check
+make check                # Repo sanity check
+make info                 # Build matrix summary
+make size-summary         # Flash/RAM usage report
+make test                 # Host unit tests
+```
 
 ---
 
-## 13. Existing Scattered `#ifdef` (730 instances)
+## 9. Coding Standards
 
-### In Product Code (excluding board_configs/)
+### 9.1 Naming
 
-**Total:** 730 instances across product code
-**Reality:** Initial audit reported 173, but actual count is 730. Most remaining `#ifdef`s are legitimate feature flags, not platform scattering.
-
-| File | Count | Nature |
+| Scope | Pattern | Example |
 |---|---|---|
-| `drivers/audio/audio_driver.c` | 46 | Feature flags (`USE_FREEDV`, `USE_CONVOLUTION`, `USE_TWO_CHANNEL_AUDIO`, etc.) |
-| `drivers/audio/audio_convolution.c` | 22 | Feature flags (`USE_CONVOLUTION`, `USE_FREEDV`, `USE_RTTY_PROCESSOR`) |
-| `drivers/audio/fsk.c` | 21 | Feature flags (`USE_HANN_TABLE`, `DEMOD_ALLOC_STACK`, `MODEMPROBE_ENABLE`) |
-| `drivers/ui/ui_driver.c` | 19 | Feature flags (`USE_FREEDV`, `USE_HIGH_PRIO_PTT`, `USE_MEMORY_MODE`) |
-| `drivers/audio/codec/uhsdr_hw_i2s.c` | 19 | Board configs (`UI_BRD_MCHF`, `UI_BRD_OVI40`) + profiling |
-| `drivers/ui/lcd/ui_lcd_hy28.c` | 11 | Board configs (`USE_DISPLAY_PAR`, `USE_SPI_DISPLAY`, `USE_GFX_*`) |
-| Other files | ~592 | MCU-specific optimizations, HAL guards, debug/trace flags |
+| Public API | `Module_Function()` | `AudioDriver_SetFreq()` |
+| HAL API | `HAL_Module_Function()` | `HAL_GPIO_WritePin()` |
+| Private | `static` | `static void encoder_update()` |
+| Config struct | `module_config_t` | `audio_config_t` |
+| Context struct | `module_context_t` | `audio_context_t` |
+| Board config | `BOARD_*` | `BOARD_LCD_WIDTH` |
+| MCU macro | `CPU_*` / `STM32*` | `CPU_GetType()` |
 
-**Target:** <20 remaining (was based on incorrect initial audit of 173)
-**Achieved:** `ui_lcd_hy28.c` reduced from 66 → 11 (controller guards removed, board configs consolidated)
-**Strategy:** Consolidate into `uhsdr_mcu.h` + `board_configs/` + vtable abstractions |
+### 9.2 Error Handling
 
----
+```c
+typedef enum {
+    HAL_OK = 0,
+    HAL_ERR_TIMEOUT = -1,
+    HAL_ERR_BUSY = -2,
+    HAL_ERR_INVALID_PARAM = -3,
+    HAL_ERR_NOT_SUPPORTED = -4,
+    HAL_ERR_HW_FAILURE = -5,
+} hal_status_t;
+```
 
-## 14. What Already Exists (Keep)
+All HAL shims return `hal_status_t`. Product code checks return values.
 
-✅ **Audio DMA ISR + PendSV pattern** — proven across all MCUs  
-✅ **Shared product code** (`files.mak`) — single source of truth  
-✅ **Board config system** — `#error` guards, `__MCHF_SPECIALMEM`, `__UHSDR_DMAMEM`  
-✅ **MCU abstraction** (`uhsdr_mcu.h`) — GPIO, CPU type, flash size  
-✅ **Display detection logic** (`display_infos[]`) — flexible, both boards  
-✅ **Keypad scanning** (`uhsdr_keypad.c`) — board-specific maps, shared scanner  
-✅ **Touchscreen state machine** — XPT2046, both boards  
-✅ **PendSV for deferred work** — `UiDriver_TaskHandler_HighPrioTasks()`  
-✅ **Static allocation in CCM** — F4 uses CCM effectively  
-✅ **Full HAL per MCU** — `basesw/{mcHF,ovi40,ovi40-h7}/`  
-✅ **F4 HardFault handler** — register dump via `Debug_FaultGetRegistersFromStack()`  
-✅ **BusFault handler** — RAM size detection on F4/F7  
-✅ **SPI prescaler abstraction** — per-MCU in `ui_lcd_hy28.c`  
-✅ **Cache maintenance** — `Board_Reboot()` and bootloader  
+### 9.3 State Management
 
----
+```c
+// ❌ FORBIDDEN: file-scope static in product code
+static uint32_t hidden_state;  // BAD
 
-## 15. What's Already Implemented
+// ✅ ALLOWED: explicit context struct
+typedef struct { uint32_t state; } audio_context_t;
+int AudioDriver_Init(audio_context_t *ctx, ...);
 
-### Safety
-- ✅ Watchdog: `HAL_IWDG_Init()` + `HAL_IWDG_Refresh()` every 1s in main loop
-- ✅ Fault handlers: F4/F7/H7 all have register dump via `FaultHandler_Common()`
-- ✅ BusFault_Handler: present on F4/F7/H7, dual-purpose (RAM detect + fault dump)
-- ✅ Stack guard: `Canary_IsIntact()` checked every main loop iteration
+// ✅ ALLOWED: documented global (uhsdr_board.h)
+extern __IO TransceiverState ts;
+```
 
-### Hardware
-- ✅ H7 RAM detection: 128KB/256KB/512KB/1024KB via BusFault probing
-- ✅ I2C timing abstraction: F4/F7/H7 timing calculation in `uhsdr_hw_i2c.c`
-- ✅ H7 RTC: LSE/LSI init implemented for all MCUs
-- ✅ H7 SPI DMA: enabled (removed `#ifndef STM32H7` disable)
+### 9.4 Include Rules
 
-### Cache & Memory
-- ✅ Cache maintenance macros: `DMA_BUFFER_CLEAN()` / `DMA_BUFFER_INVALIDATE()`
-- ✅ LCD pixelbuffer cache: clean/invalidate in `ui_lcd_hy28.c`
-- ✅ FFT ring buffer cache: invalidate in `ui_spectrum.c`
-- ✅ Audio interface vtable: abstracts I2S (F4) vs SAI (F7/H7)
+```
+Product code (drivers/, hardware/, misc/, src/):
+  ✅ #include "uhsdr_mcu.h"
+  ✅ #include "hal_i2s.h"
+  ❌ #include "stm32f4xx_hal.h"     ← FORBIDDEN
+  ❌ #include "stm32f7xx_hal.h"     ← FORBIDDEN
+  ❌ HAL_I2S_Receive_DMA()          ← FORBIDDEN
 
-### Cleanup
-- ✅ USB Host removed from firmware, retained in bootloader for DFU
-- ✅ Bootloader safety: CRC32 + anti-rollback + 3-strike boot counter
-- ✅ Low-power idle: `__WFI()` in main loop via `Board_EnterLowPowerIdle()`
-- ✅ Named constants: `WATCHDOG_KICK_TICKS`, `IQ_BLOCK_SIZE`, etc.
-
-## 16. What's Still Missing (Actual)
-
-### High Priority
-1. **File splits:** `ui_driver.c` (6637 lines), `audio_driver.c` (2799 lines), `ui_lcd_hy28.c` (2683 lines) — deferred due to tight global state coupling
-2. **Global state:** 118 file-scope `static` variables in key files
-3. **USB Host removal:** could be fully removed if DFU moves to USB Device
-4. **newlib reduction:** diag/trace still uses newlib stubs
-
-### Medium Priority
-5. **Documentation sync:** AGENTS.md and docs/TODO.md need final update
-6. **H7 bootloader `Error_Handler`:** symbol conflict resolved in firmware; bootloader guard in place
-7. **H7 `assert_failed`:** now provided unconditionally for release builds
-8. **Bootloader build robustness:** `all-firmware` now cleans between configs
-
-### Low Priority
-9. **Performance budgets:** WCET, CPU load, stack watermark
-10. **Power management:** sleep mode config, current profiling
-11. **Toolchain qualification:** document compiler versions, reproducible builds
+HAL backends (hal/src/*/):
+  ✅ #include "stm32f4xx_hal.h"     ← ONLY here
+  ✅ #include "hal_i2s.h"
+```
 
 ---
 
-## 17. Non-Negotiable Rules
+## 10. Current State (Verified 2026-08-21)
 
-1. No `malloc`/`free` in ISR, audio, or RF paths (all MCUs) — **currently satisfied**
-2. Watchdog always running in production builds (all MCUs) — **MISSING, must add**
-3. HardFault/MemManage/BusFault/UsageFault handlers must have register dump (all MCUs) — **partial on F4, missing on F7/H7**
-4. All blocking calls have bounded timeout (all MCUs)
-5. ISR must be non-blocking and deterministic (all MCUs)
-6. Vendor headers never in public API (all MCUs)
-7. Static allocation is default (all MCUs) — **currently satisfied, heap = 0**
-8. All string operations are bounded (all MCUs)
-9. DMA buffers must be cache-line aligned + maintained (F7/H7) — **partial, LCD only**
-10. Board-specific code stays in `board_configs/` or `hardware/`
-11. Product code stays MCU-agnostic — use `uhsdr_mcu.h` abstractions where possible
-12. All new code must compile on F4, F7, and H7 without modification
-
----
-
-## 18. Migration Strategy
-
-### Phase 1: Safety Critical (1-2 weeks)
-1. Add watchdog init + kick in `uhsdr_main.c`
-2. Add F7/H7 fault handlers with register dump (match F4 pattern)
-3. Add BusFault_Handler on F7/H7
-4. Add always-on stack guard enforcement
-
-### Phase 2: Hardware Support (2-3 weeks)
-5. Fix H7 RAM detection (replace hardcoded 512KB)
-6. Add F7/H7 I2C timing abstraction
-7. Implement H7 RTC support
-8. Fix H7 SPI DMA
-
-### Phase 3: Cache & Memory (1-2 weeks)
-9. Add cache maintenance to LCD DMA buffers
-10. Add cache maintenance to FFT ring buffer
-11. Add audio interface vtable (I2S vs SAI)
-
-### Phase 4: Cleanup (1-2 weeks)
-12. Remove USB Host dead code or gate behind `USE_USBHOST`
-13. Remove scattered `#ifdef` where possible (target: <20 remaining)
-14. Split `ui_driver.c` and `audio_driver.c`
-15. Update documentation
-
----
-
-## 19. Current Codebase Health (Verified 2026-08-18)
-
-### Strengths
-- ✅ Shared product code across all MCUs — single `files.mak`
-- ✅ Audio DMA ISR + PendSV pattern works across all MCUs
-- ✅ Board config system with compile-time `#error` guards
-- ✅ MCU abstraction in `uhsdr_mcu.h` (GPIO, CPU type, flash, cache, SPI prescalers)
-- ✅ Display detection logic works for both boards
-- ✅ F4/F7/H7 fault handlers have register dump via `FaultHandler_Common()`
-- ✅ BusFault_Handler present on F4/F7/H7 (RAM detect + fault dump)
-- ✅ Watchdog always running in production builds (all MCUs)
-- ✅ Stack guard enforcement in main loop (`Canary_IsIntact()`)
-- ✅ Static allocation — no heap usage in product code
-- ✅ Bootloader safety: CRC32, anti-rollback, 3-strike boot counter
-- ✅ Cache maintenance for LCD/FFT DMA buffers (F7/H7)
-- ✅ Audio interface vtable abstracts I2S vs SAI
-- ✅ Low-power idle via `__WFI()` in main loop
+### Implemented
+- ✅ Watchdog: `HAL_IWDG_Init()` + refresh every 1s
+- ✅ Fault handlers: F4/F7/H7 register dump via `FaultHandler_Common()`
+- ✅ Stack guard: static buffer, main loop check
+- ✅ Cache maintenance: LCD + FFT DMA buffers
+- ✅ Audio vtable: I2S (F4) vs SAI (F7/H7)
 - ✅ H7 RAM detection: 128KB/256KB/512KB/1024KB
-- ✅ I2C timing abstraction for F4/F7/H7
-- ✅ H7 RTC support implemented
-- ✅ SPI DMA enabled on F7/H7
-- ✅ USB Host removed from firmware, retained in bootloader for DFU
-- ✅ Unit tests and CI pipeline present
-- ✅ WCET and stack profiling scripts present
+- ✅ I2C timing: F4/F7/H7 abstraction
+- ✅ H7 RTC: LSE/LSI init
+- ✅ Bootloader safety: CRC32 + anti-rollback + 3-strike
+- ✅ Low-power idle: `__WFI()` in main loop
+- ✅ CI + unit tests + size regression detection
 
-### Weaknesses
-- ❌ 173 scattered `#ifdef` in product code (target: <20)
-- ❌ `ui_driver.c` still 6637 lines (partial split: utils/touch/power extracted)
-- ❌ `audio_driver.c` still 2799 lines (partial split: filters extracted)
-- ❌ `ui_lcd_hy28.c` still 2809 lines (not started)
-- ❌ 118 file-scope static variables in key files (global state reduction incomplete)
-- ❌ Bootloader build lacks intermediate clean between configs in `make all-bootloader`
-- ❌ H7 bootloader `Error_Handler` symbol conflict with `uhsdr_fault.c`
-- ❌ H7 firmware `assert_failed` missing in release builds (only under `USE_FULL_ASSERT`)
-- ⚠️ USB Host could be fully removed from bootloader if DFU moves to USB Device
-- ⚠️ CI pipeline builds subset, not all 9+6 combos
-- ⚠️ AGENTS.md documentation needs update with final audit results
+### Remaining (STM32-specific)
+- 🔄 HAL shim layer: 15 abstract APIs for GPIO/SPI/I2S/DMA etc. (Phase 1)
+- 🟡 Large file splits: `ui_driver.c` (6637L), `audio_driver.c` (2799L), `ui_lcd_hy28.c` (2683L)
+- 🟡 Global state: encapsulate in context structs
+- 🟡 `#ifdef` reduction: 730 total; ~27 platform guards remain in hardware abstraction
 
 ---
 
-## 20. Completed Platform Improvements (2026-08-18)
+## 11. Success Metrics
 
-All items from Phases 1–9 of the migration strategy have been completed.
+| Metric | Current | Target |
+|---|---|---|
+| Vendor HAL includes in product code | 10+ files | 0 |
+| Direct HAL calls in product code | 50+ | 0 |
+| Platform `#ifdef` in product code | ~27 | <10 |
+| Time to add new STM32 MCU | 2-3 weeks | 1 week (HAL shim only) |
+| Time to add new board | 1-2 days | 1 day (config header only) |
+| Host test coverage | 5 tests | 30+ tests |
+| Binary size regression tolerance | — | < 1% |
+| Build time (all targets) | ~5 min | <10 min |
 
-### Phase 1: Safety Critical ✅
-1. ✅ Watchdog init + kick in `uhsdr_main.c` (`HAL_IWDG_Init()`, `HAL_IWDG_Refresh()` every 1s)
-2. ✅ F7/H7 HardFault_Handler with register dump (match F4 pattern)
-3. ✅ F7/H7 MemManage_Handler with register dump
-4. ✅ F7/H7 UsageFault_Handler with register dump
-5. ✅ BusFault_Handler on F7/H7 (RAM detect + fault dump)
-6. ✅ Always-on stack guard enforcement in main loop (`Canary_IsIntact()`)
+---
 
-### Phase 2: Hardware Support ✅
-7. ✅ H7 RAM detection (128KB/256KB/512KB/1024KB)
-8. ✅ F7/H7 I2C timing calculation abstraction
-9. ✅ H7 RTC init implemented (LSE/LSI)
-10. ✅ H7 SPI DMA enabled (removed `#ifndef STM32H7` disable)
+## 12. How to Add a New STM32 MCU
 
-### Phase 3: Cache & Memory ✅
-11. ✅ Cache maintenance macros added to `uhsdr_mcu.h`
-12. ✅ Cache clean/invalidate added to LCD pixelbuffer DMA
-13. ✅ Cache invalidate added to FFT ring buffer read
-14. ✅ Audio interface vtable added (I2S vs SAI abstraction)
-15. ✅ All DMA buffers audited for cache alignment
+1. Add `basesw/stm32/STM32<New>xx/` — CubeMX HAL + startup
+2. Add `new-files.mak` — vendor HAL sources
+3. Add `new-include.mak` — vendor include paths
+4. Add `hal/src/*/hal_*_stm32.c` variant OR extend existing STM32 backend
+5. Update `uhsdr_mcu.h` — add `CPU_STM32<NEW>` enum + cache/flash macros
+6. Add `UHSDR_UI_<new>_config.h` board config OR reuse existing
+7. `make BUILDFOR=<new> BOARD=<board> firmware`
 
-### Phase 4: Cleanup ✅
-16. ✅ USB Host removed from firmware, retained in bootloader for DFU
-17. ✅ Scattered `#ifdef` reduced (173 remaining, target <20)
-18. ✅ `ui_driver.c` partial split (utils/touch/power extracted)
-19. ✅ `audio_driver.c` partial split (filters extracted)
-20. ✅ Magic numbers replaced with named constants
-21. ✅ Low-power idle via `__WFI()` in main loop
+---
 
-### Phase 5: Testing & CI ✅
-22. ✅ CI pipeline added (`.travis.yml`)
-23. ✅ Unit test framework added (`mchf-eclipse/test/`)
-24. ✅ Static analysis scripts (`scripts/static_analysis.sh`)
-25. ✅ Size regression detection (`scripts/size_regression.sh`)
-26. ✅ WCET analysis (`scripts/analyze_wcet.sh`)
-27. ✅ Stack usage profiling
+## 13. How to Add a New Board
 
-### Phase 6: Verification & Polish ✅
-28. ✅ All 4 valid firmware builds verified compiling cleanly
-29. ✅ All 3 valid bootloader builds verified compiling cleanly
-30. ✅ Bootloader safety: CRC32, anti-rollback, boot counter (3-strike recovery)
-31. ✅ Platform documentation updated
+1. Copy existing `board_configs/UHSDR_UI_*_config.h`
+2. Change pin assignments, LCD type, keypad map
+3. Add `#ifdef` board-specific macros in new header
+4. `make BOARD=<new> firmware`
 
-### Phase 7: Build Fixes ✅
-32. ✅ Fix H7 bootloader `Error_Handler` multiple definition with `uhsdr_fault.c`
-33. ✅ Fix H7 firmware `assert_failed` missing in release builds
-34. ✅ Fix BusFault_Handler naked assembly for LTO builds
-35. ✅ Verify clean `make all-firmware` + `make all-bootloader`
+---
 
-### Updated Codebase Health
+## 14. Non-Negotiable Rules
 
-#### Strengths
-- ✅ Watchdog always running in production builds (all MCUs)
-- ✅ F7/H7 fault handlers have register dump (matching F4)
-- ✅ BusFault_Handler present on F7/H7
-- ✅ H7 RAM detection implemented (128KB/256KB/512KB/1024KB)
-- ✅ I2C timing abstraction for F4/F7/H7
-- ✅ H7 RTC support implemented
-- ✅ Cache maintained for LCD/FFT DMA (F7/H7)
-- ✅ SPI DMA enabled on H7
-- ✅ Low-power idle via WFI in main loop
-- ✅ Bootloader safety: CRC, boot counter, anti-rollback
-- ✅ Unit tests and CI pipeline
-- ✅ WCET and stack profiling
-
-#### Remaining Opportunities
-- ⚠️ Reduce `#ifdef` count from 173 to <20
-- ⚠️ Complete file splits: `ui_driver.c`, `audio_driver.c`, `ui_lcd_hy28.c`
-- ⚠️ Encapsulate global state in context structs
-- ⚠️ USB Host could be fully removed if DFU moves to USB Device
-- ⚠️ CI pipeline should build all 9+6 combos
-- ⚠️ AGENTS.md and docs/TODO.md need final synchronization
+1. No `malloc`/`free` in ISR, audio, or RF paths
+2. Watchdog always running in production builds
+3. Fault handlers must have register dump (all MCUs)
+4. All blocking calls have bounded timeout
+5. ISR is non-blocking and deterministic
+6. Vendor headers NEVER in public API of `drivers/`, `hardware/`, `misc/`, `src/`
+7. Static allocation is default — heap = 0
+8. All string operations are bounded
+9. DMA buffers are cache-line aligned + maintained (F7/H7)
+10. Board-specific code ONLY in `board_configs/`
+11. Product code is MCU-agnostic — use `hal_*` APIs
+12. All new code compiles on F4, F7, and H7 without modification

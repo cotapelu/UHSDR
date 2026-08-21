@@ -18,7 +18,8 @@ LDFLAGS = -lm
 
 SRCS    = test.c \
           test_audio_filters.c \
-          audio_driver_filters_standalone.c
+          audio_driver_filters_standalone.c \
+          test_canary.c
 
 TARGET  = test_runner
 

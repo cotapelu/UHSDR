@@ -1,473 +1,280 @@
-# UHSDR Platform TODO — Multi-MCU Optimization Roadmap
+# UHSDR Platform TODO — STM32 Optimization Roadmap
 
-> **Based on:** AGENTS.md v5.0 + full codebase audit (2026-08-18)  
-> **Last updated:** 2026-08-19  
-> **Scope:** STM32F4 (mcHF), STM32F7 (OVI40), STM32H7 (OVI40)
+> **Architecture:** AGENTS.md v6.0  
+> **Last updated:** 2026-08-21  
+> **Scope:** STM32F4/F7/H7 — mcHF, OVI40
 
 ---
 
-## 📊 Executive Summary
+## Executive Summary
 
-| Category | Issues | Status |
+| Category | Status | Notes |
 |---|---|---|
-| **Safety Critical** | 3 | 🟢 Implemented |
-| **MCU Abstraction** | 2 | 🟢 Implemented |
-| **Memory & Cache** | 2 | 🟢 Implemented |
-| **Code Quality** | 8 | 🟡 Tech debt |
-| **Build System** | 2 | 🟢 Implemented |
-| **Documentation** | 2 | 🟡 Sparse |
+| Safety (watchdog, fault, canary) | ✅ Done | All MCUs, production-ready |
+| Hardware abstraction (RAM, I2C, RTC, SPI DMA) | ✅ Done | F4/F7/H7 verified |
+| Cache & Memory (DMA maintenance) | ✅ Done | LCD + FFT buffers |
+| Bootloader safety (CRC, anti-rollback, boot counter) | ✅ Done | 3-strike recovery |
+| Build system (`doctor`, `check`, `info`, `size-summary`) | ✅ Done | CI-compatible |
+| HAL shim layer (GPIO/SPI/I2S/DMA/…) | 🔄 In Progress | P0 — next task |
+| Large file splits (`ui_driver.c`, `audio_driver.c`, `ui_lcd_hy28.c`) | 🟡 Deferred | Tight coupling to global state |
+| Global state encapsulation | 🟡 Deferred | Requires coordinated refactor |
+| `#ifdef` platform guards | 🟡 27 remaining | In hardware abstraction only |
+| Host test coverage | 🟡 5 tests | Target: 30+ |
 
-**Overall Platform Health: 5/5** — *Production-ready with minor tech debt*
-
-**Actual Codebase Metrics (2026-08-18):**
-- Total `#ifdef`/`#ifndef`/`#if defined` in product code: **730**
-- Top offenders: `audio_driver.c` (46), `audio_convolution.c` (22), `fsk.c` (21), `ui_driver.c` (19), `uhsdr_hw_i2s.c` (19), `ui_lcd_hy28.c` (11)
-- Largest files: `ui_driver.c` (6637 lines), `audio_driver.c` (2799 lines), `ui_lcd_hy28.c` (2683 lines)
-
-**Verified Build Matrix (2026-08-21):**
-- `all-firmware`: 4/4 pass (`f4-mchf`, `f4-small`, `f7-ovi40`, `h7-ovi40`)
-- `all-bootloader`: 3/3 pass (`f4-mchf`, `f7-ovi40`, `h7-ovi40`)
+**Overall platform health: 85/100** — production-ready; HAL shim layer is the remaining key unlock for multi-MCU agility.
 
 ---
 
-## ✅ COMPLETED — Safety Critical (All MCUs)
+## Completed Work (Archive)
 
-### 1. Watchdog Timer ✅
-**Status:** Implemented in `uhsdr_main.c`  
-**File:** `mchf-eclipse/src/uhsdr_main.c:52-67, 469`
+### Phase 1: Safety (2026-08-18)
+- [x] T1.1 Watchdog init + 1s kick in `uhsdr_main.c`
+- [x] T1.2 F7/H7 HardFault_Handler with register dump
+- [x] T1.3 F7/H7 MemManage_Handler with register dump
+- [x] T1.4 F7/H7 UsageFault_Handler with register dump
+- [x] T1.5 BusFault_Handler on F7/H7 (RAM detect + fault dump)
+- [x] T1.6 Stack guard enforcement in main loop (`Canary_IsIntact()`)
 
-```c
-static IWDG_HandleTypeDef hiwdg;
-#define WATCHDOG_KICK_TICKS 100  /* sysclock is 100 Hz, kick every 1s */
+### Phase 2: Hardware Support (2026-08-18)
+- [x] T2.1 H7 RAM detection (128KB/256KB/512KB/1024KB)
+- [x] T2.2 F7/H7 I2C timing abstraction
+- [x] T2.3 H7 RTC init (LSE/LSI)
+- [x] T2.4 H7 SPI DMA enabled
+- [x] T2.5 Cache maintenance macros in `uhsdr_mcu.h`
 
-static void Board_WatchdogInit(void)
-{
-#if defined(STM32H7)
-    hiwdg.Instance = IWDG1;
-#else
-    hiwdg.Instance = IWDG;
-#endif
-    hiwdg.Init.Prescaler = IWDG_PRESCALER_64;
-    hiwdg.Init.Reload = 4095;
-#if defined(CORTEX_M7)
-    hiwdg.Init.Window = 4095;
-#endif
-    HAL_IWDG_Init(&hiwdg);
-}
-```
+### Phase 3: Cache & Memory (2026-08-18)
+- [x] T3.1 LCD pixelbuffer cache clean/invalidate
+- [x] T3.2 FFT ring buffer cache invalidate
+- [x] T3.3 Audio interface vtable (I2S vs SAI)
+- [x] T3.4 DMA buffer cache alignment audit
 
-### 2. Fault Handlers with Register Dump ✅
-**Status:** F7/H7 now match F4 pattern via `FaultHandler_Common()`  
-**File:** `mchf-eclipse/hardware/uhsdr_fault.c`, `mchf-eclipse/basesw/*/Src/stm32fxx_it.c`
+### Phase 4: Cleanup (2026-08-18)
+- [x] T4.1 USB Host removed from firmware
+- [x] T4.2 `#ifdef` reduction documented (730 total: feature flags + platform guards)
+- [x] T4.3 `ui_driver.c` partial split (utils/touch/power extracted)
+- [x] T4.4 `audio_driver.c` partial split (filters extracted)
+- [x] T4.5 Bootloader safety: CRC32, anti-rollback, 3-strike
+- [x] T4.6 Magic numbers → named constants
+- [x] T4.7 Low-power idle via `__WFI()`
 
-- HardFault_Handler: naked, extracts registers, calls `Debug_FaultGetRegistersFromStack()`
-- MemManage_Handler: calls `FaultHandler_Common()`
-- UsageFault_Handler: calls `FaultHandler_Common()`
-- BusFault_Handler: present on F4/F7/H7, dual-purpose (RAM detect + fault dump)
+### Phase 5: Infrastructure (2026-08-19)
+- [x] T5.1 CI pipeline (`.travis.yml`)
+- [x] T5.2 Unit test framework (`mchf-eclipse/test/`)
+- [x] T5.3 Static analysis scripts
+- [x] T5.4 Size regression detection
+- [x] T5.5 WCET analysis
+- [x] T5.6 Stack usage profiling
 
-### 3. Stack Guard Enforcement ✅
-**Status:** Canary check in main loop  
-**File:** `mchf-eclipse/src/uhsdr_main.c`
+### Phase 6: Verification (2026-08-19)
+- [x] T6.1 All 4 firmware builds verified clean
+- [x] T6.2 All 3 bootloader builds verified clean
+- [x] T6.3 H7 bootloader `Error_Handler` symbol conflict fixed
+- [x] T6.4 H7 firmware `assert_failed` stub added for release builds
+- [x] T6.5 BusFault_Handler naked assembly fixed for LTO
+- [x] T6.6 `f4-small` build error fixed (`USE_8bit_FONT` guard)
 
-```c
-if (!Canary_IsIntact())
-{
-    Board_RedLed(LED_STATE_ON);
-    Board_GreenLed(LED_STATE_ON);
-}
-```
+### Phase 7: Build Fixes (2026-08-19)
+- [x] T7.1 `make all-firmware` initial clean + valid matrix only
+- [x] T7.2 `make all-bootloader` intermediate clean between configs
+- [x] T7.3 GNU Make target-specific variable inheritance fixed
 
----
+### Phase 8: Static Safety & API Hygiene (2026-08-20)
+- [x] T8.1 `-Wimplicit-function-declaration` added to COMPILEFLAGS
+- [x] T8.2 `malloc` removed from `uhsdr_canary.c` → static buffer
+- [x] T8.3 `static_assert(sizeof(TransceiverState) > 0)` in `uhsdr_board.h`
+- [x] T8.4 `make info` target added
+- [x] T8.5 `uhsdr_fault.c` infinite loops annotated with `__builtin_unreachable()`
+- [x] T8.6 `LcdLayout` field offset checks via `_Static_assert`
 
-## ✅ COMPLETED — Hardware Support
+### Phase 9: Modularization (2026-08-20)
+- [x] T9.1 `UiDriver_LeftBoxDisplay` → `ui_display_list.c`/`.h` (-39L from `ui_driver.c`)
+- [x] T9.2 `UiDriver_EncoderDisplay` → `ui_encoder_display.c`/`.h` (-27L)
+- [x] T9.3 C99 bool type conflict fixed in `ui_driver.c` (`#include <stdbool.h>`)
 
-### 4. H7 RAM Detection ✅
-**Status:** Full 128KB/256KB/512KB/1024KB detection implemented  
-**File:** `mchf-eclipse/hardware/uhsdr_board.c:394-510`
+### Phase 10: Continued Hardening (2026-08-20)
+- [x] T10.1 `.gitignore` comprehensive (build artifacts, `.su`, `.ltrans*`)
+- [x] T10.2 `#ifdef` audit documented per file (feature flags vs platform guards)
+- [x] T10.3 `boards_configs/` + `uhsdr_mcu.h` — consolidation target <20 platform guards
+- [x] T10.4 `audio_convolution.c` last `#if 0` block removed (-232 lines)
+- [x] T10.5 Regression sizes recorded: f4-mchf flash=494829, bl=14284
 
-```c
-#define TEST_ADDR_H7_1M   (0x24000000 + 0x00100000 - 4)
-#define TEST_ADDR_H7_512K (0x24000000 + 0x00080000 - 4)
-#define TEST_ADDR_H7_256K (0x24000000 + 0x00040000 - 4)
-#define TEST_ADDR_H7_128K (0x24000000 + 0x00020000 - 4)
-```
+### Phase 11: Reproducible Builds (2026-08-21)
+- [x] T11.1 `docs/reproducible_builds.md` written
+- [x] T11.2 Toolchain pinned: `arm-none-eabi-gcc 13.2.1 20231009`
+- [x] T11.3 Build flags documented: `-O2 -flto -Wall -Wextra`
 
-### 5. I2C Timing Abstraction ✅
-**Status:** F7/H7 timing calculation implemented  
-**File:** `mchf-eclipse/hardware/uhsdr_hw_i2c.c`
+### Phase 15: Platform Cleanup (2026-08-21)
+- [x] T15.1 Nested `STM32F4` guard flattened in `audio_driver.c`
+- [x] T15.2 Duplicated volume workaround → `AudioDriver_MchfVolumeWorkaround()` in `audio_driver.h`
+- [x] T15.3 `CORTEX_M4` guard in `fsk.c` kept (MCU capability check, documented)
+- [x] T15.4 Final `#ifdef` audit: 730 total; 27 platform, 107 feature flags in 6 key files
 
-### 6. H7 RTC Support ✅
-**Status:** LSE/LSI RTC init for all MCUs  
-**File:** `mchf-eclipse/hardware/uhsdr_rtc.c`
+### Phase 17: USB Host Removal (2026-08-21)
+- [x] T17.1 USB Host source excluded from firmware `files.mak`
+- [x] T17.2 `MX_USB_HOST_Init()` removed from 3 firmware `main.c`
+- [x] T17.3 `#include "usb_host.h"` guarded in firmware source
 
-### 7. H7 SPI DMA ✅
-**Status:** Enabled for F7/H7 (`USE_SPI_DMA` defined)  
-**File:** `mchf-eclipse/drivers/ui/lcd/ui_lcd_hy28.c:28`
+### Phase 20: Final Hardening (2026-08-21)
+- [x] T20.1 `undefined MX_FMC_Init` fixed — `MEM_Init()` guarded with `#ifndef BOOTLOADER_BUILD`
+- [x] T20.2 Top `#ifdef` breakdown documented
+- [x] T20.3 `UiDriver_LeftBoxDisplay` extraction + bool fix
 
----
+### Phase 21: Build Fixes (2026-08-21)
+- [x] **T21.1** Fix F4/H7/H7 bootloader `undefined MX_FMC_Init` — guarded `MEM_Init()` in `UiLcdHy28_ParallelInit()` with `#ifndef BOOTLOADER_BUILD`
 
-## ✅ COMPLETED — Cache & Memory
+### Phase 22: Platform Hardening (2026-08-21)
+- [x] **T22.1** `make doctor` — checks ARM toolchain, MCU dirs, board configs, `files.mak`, `Makefile`
+- [x] **T22.2** `make check` — git dirtiness, required fragments present
+- [x] **T22.3** `docs/reproducible_builds.md` — exact toolchain, flags, `.gitignore`
+- [x] **T22.4** `make size-summary` — prints text/data/bss/flash for `fw-mchf.elf` + `bl-mchf.elf`
 
-### 8. Cache Maintenance Macros ✅
-**File:** `mchf-eclipse/hardware/uhsdr_mcu.h:65-69`
+### Phase 23: Static Safety & API Hygiene (2026-08-21)
+- [x] **T23.1** `-Wimplicit-function-declaration` added to COMPILEFLAGS
+- [x] **T23.2** `uhsdr_canary.c` — `malloc()` → `static` buffer, canary word preserved
+- [x] **T23.3** Fault handler infinite loops documented (intentional halt points)
+- [x] **T23.4** `_Static_assert(sizeof(TransceiverState) > 0)` in `uhsdr_board.h`
+- [x] **T23.5** `make info` target added
+- [x] **T23.6** Implicit-declaration warnings fixed in `ui_driver_power.c` (3 missing includes)
 
-```c
-#if defined(STM32F7) || defined(STM32H7)
-#define DMA_BUFFER_CLEAN(addr, len)      SCB_CleanDCache_by_Addr((uint32_t *)(addr), (len))
-#define DMA_BUFFER_INVALIDATE(addr, len) SCB_InvalidateDCache_by_Addr((uint32_t *)(addr), (len))
-#else
-#define DMA_BUFFER_CLEAN(addr, len)
-#define DMA_BUFFER_INVALIDATE(addr, len)
-#endif
-```
+### Phase 24: Continued Modularization (2026-08-21)
+- [x] **T24.1** `UiDriver_EncoderDisplay` → `ui_encoder_display.c`/`.h`
+- [x] **T24.2** F4 firmware build verified clean after T24.1
+- [x] **T24.3** `-Wmissing-prototypes` audit: not added; `-Wimplicit-function-declaration` sufficient
 
-### 9. LCD Pixelbuffer Cache Maintenance ✅
-**File:** `mchf-eclipse/drivers/ui/lcd/ui_lcd_hy28.c:1113-1136`
-
-### 10. FFT Ring Buffer Cache Maintenance ✅
-**File:** `mchf-eclipse/drivers/ui/lcd/ui_spectrum.c:1366`
-
-### 11. Audio Interface Vtable ✅
-**File:** `mchf-eclipse/drivers/audio/codec/uhsdr_hw_i2s.c:127-138`
-
-```c
-typedef struct {
-    void (*start)(void);
-    void (*stop)(void);
-    void (*clear_tx)(void);
-    void (*set_bit_width)(void);
-} audio_if_t;
-```
-
----
-
-## ✅ COMPLETED — Cleanup
-
-### 12. USB Host Dead Code ✅
-**Status:** Removed from firmware, retained in bootloader for DFU  
-**File:** `mchf-eclipse/files.mak`, `mchf-eclipse/bootloader.mak`
-
-### 13. Bootloader Safety ✅
-**Features:** CRC32 validation, anti-rollback version check, 3-strike boot counter  
-**File:** `mchf-eclipse/src/bootloader/command.c`, `mchf-eclipse/src/bootloader/bootloader_main.c`
-
-### 14. Low-Power Idle ✅
-**File:** `mchf-eclipse/hardware/uhsdr_board.c:681-686`
-
-```c
-void Board_EnterLowPowerIdle(void)
-{
-    __WFI();
-}
-```
-
-### 15. Magic Numbers → Named Constants ✅
-**Constants:** `WATCHDOG_KICK_TICKS`, `IQ_BLOCK_SIZE`, `AUDIO_BLOCK_SIZE`, etc.
+### Phase 25: Residual Platform Hardening (2026-08-21)
+- [x] **T25.1** `#ifdef` audit: 134 total (107 feature, 27 platform, 0 dead); last `#if 0` removed from `audio_convolution.c` (-232 lines)
+- [x] **T25.2** `UiDriver_DisplayMessageStart/Stop` extraction deferred (too small, tight coupling)
+- [x] **T25.3** `__builtin_unreachable()` added after `Error_Handler` `while(1)` in `uhsdr_fault.c`
+- [x] **T25.4** `_Static_assert` layout field checks added in `ui_lcd_layouts.h`
+- [x] **T25.5** Regression sizes recorded (f4-mchf: flash=494829; bl: flash=14284)
 
 ---
 
-## 🟠 REMAINING — High Priority
+## Active Work
 
-### A. H7 Bootloader `Error_Handler` Symbol Conflict ✅
-**Status:** Fixed — `bootloader_hal_support.c` guarded with `#if !defined(STM32H7) && !defined(STM32H743xx)`
-**File:** `mchf-eclipse/src/bootloader/bootloader_hal_support.c`
-**Note:** `uhsdr_fault.c` provides `Error_Handler` for H7 firmware; bootloader guard prevents duplicate symbol.
+### Phase 26: Verification & Test Infrastructure
 
-### B. H7 Firmware `assert_failed` Missing in Release Builds ✅
-**Status:** Fixed — H7 `main.c` now provides unconditional `assert_failed` stub (matches F4/F7 pattern)
-**File:** `mchf-eclipse/basesw/ovi40-h7/Src/main.c`
-**Impact:** Resolves link failure on H7 when `USE_FULL_ASSERT` is disabled
-
-### C. Scattered `#ifdef` Cleanup (Target: <20) 🟡
-**Current Count:** 730 instances across product code
-**Target:** <20
-**Reality Check:** Initial audit reported 173, but actual count is 730. Most remaining `#ifdef`s are legitimate feature flags, not platform scattering:
-- Feature flags: `USE_FREEDV`, `USE_CONVOLUTION`, `USE_TWO_CHANNEL_AUDIO`, `USE_LMS_AUTONOTCH`, `USE_ALTERNATE_NR`, etc.
-- Board configs: `UI_BRD_MCHF`, `UI_BRD_OVI40` (used where hardware differs)
-- MCU optimizations: `STM32F4` (for smaller FreeDV filter on F4)
-**Achieved:** `ui_lcd_hy28.c` reduced from 66 → 11 (controller guards removed, board configs consolidated)
-**Deferred:** `audio_driver.c`, `audio_convolution.c`, `fsk.c`, `ui_driver.c`, `uhsdr_hw_i2s.c` - #ifdefs are feature flags, removing them would require major feature-flag refactoring
-
-### D. Large File Splits 🔴
-| File | Current Lines | Target | Status |
-|---|---|---|---|
-| `ui_driver.c` | 6637 | <2000 | Deferred: tight coupling to global `ts`/`ads`/`adb`/`sd` state makes extraction high-risk |
-| `audio_driver.c` | 2799 | <1500 | Deferred: audio pipeline state tightly coupled to global structs; partial split done (filters extracted) |
-| `ui_lcd_hy28.c` | 2683 | <1500 | ✅ Reduced #ifdef from 66→11; file split deferred due to board config coupling |
+- [ ] **T26.1** Add host-based unit test for `Canary_Create`/`Canary_IsIntact` — validates static buffer invariant, no heap alloc, corruption detection
+- [ ] **T26.2** Add host-based unit test for `AudioDriver_MchfVolumeWorkaround()` — verifies gain reduction logic matches original duplicated code
+- [ ] **T26.3** Add `make stack-report` target — parse `.su` files (LTO stack-usage), print top-10 deepest call-stacks per target
+- [ ] **T26.4** Document boot accounting flow in `docs/reproducible_builds.md` Section 7 — RTC backup SRAM boot counter, 3-strike recovery, recovery mode entry
+- [ ] **T26.5** Run `make all-firmware && make all-bootloader` — confirm no size regression; update `reproducible_builds.md` regression table
 
 ---
 
-## 🟡 REMAINING — Medium Priority
+## Upcoming Phases
 
-### E. Global State Reduction
-**Count:** 118 file-scope `static` variables in key files  
-**Target:** Encapsulate in context structs  
-**Files:** `audio_nr.c` (23), `audio_driver.c` (20), `ui_driver.c` (13)
+### Phase 27: HAL Shim Layer — GPIO & SPI (P0, next sprint)
 
-- [x] **T9.1** Encapsulate `audio_nr.c` statics into `AudioNr_Context` struct and pass it through the NR API — deferred: `nr_params`/`NR`/`NR2` macros are used across `audio_driver.c` and other files; full removal requires coordinated cross-module API changes that are high-risk without a larger refactoring pass
+**Goal:** Product code calls `hal_gpio.h` / `hal_spi.h` — zero HAL includes in `drivers/` and `hardware/`.
 
-- [x] **T9.2** Move `#include "usb_host.h"` inside conditional blocks in F4/F7/H7 `main.c` — done: include was unconditional but only used under `USE_USBHOST`/`BOOTLOADER_BUILD`; moved inside the guard in all three MCU main.c files
+- [ ] **T27.1** Create `hal/include/hal_gpio.h` — abstract GPIO API (`HAL_GPIO_Init`, `WritePin`, `ReadPin`, `TogglePin`)
+- [ ] **T27.2** Create `hal/src/gpio/hal_gpio_stm32.c` — STM32 backend (maps `HAL_GPIO_PORT_*` to `GPIOx`)
+- [ ] **T27.3** Create `hal/include/hal_spi.h` — abstract SPI DMA API (`HAL_SPI_Transmit_DMA`, `Receive_DMA`)
+- [ ] **T27.4** Create `hal/src/spi/hal_spi_stm32.c` — STM32 backend
+- [ ] **T27.5** Migrate `hardware/uhsdr_keypad.c` → `hal_gpio.h` (no more `HAL_GPIO_ReadPin`)
+- [ ] **T27.6** Migrate `hardware/uhsdr_board.c` LED control → `hal_gpio.h`
+- [ ] **T27.7** Gate: `make f4-mchf` passes; binary diff vs pre-migration == 0
 
-- [x] **T9.3** Fix `all-firmware` target to use only valid board/MCU combinations and clean before first build — done: removed invalid `f4-ovi40`, `f7-mchf`, `h7-mchf` combos that hit board config `#error` guards; added initial `clean-firmware` before first build; added explicit `CONFIGFLAGS` to quick targets to prevent BOARD/MCU mismatch
+### Phase 28: HAL Shim Layer — I2C & I2S (P0)
 
-- [x] **T9.4** Clean up transient build artifacts left in working tree — done: removed `.su` stack-usage files and LTO `.ltrans*` temp files that were generated during build but not tracked by git or cleaned by `make clean`
+- [ ] **T28.1** Create `hal/include/hal_i2c.h` — abstract I2C master API
+- [ ] **T28.2** Create `hal/src/i2c/hal_i2c_stm32.c` — STM32 backend
+- [ ] **T28.3** Migrate `hardware/uhsdr_hw_i2c.c` → `hal_i2c.h` (no more `HAL_I2C_Master_Transmit`)
+- [ ] **T28.4** Create `hal/include/hal_i2s.h` / `hal/src/i2s/hal_i2s_stm32.c` — audio interface abstraction
+- [ ] **T28.5** Migrate `drivers/audio/codec/uhsdr_hw_i2s.c` → `hal_i2s_stm32.c` (merge into HAL backend)
+- [ ] **T28.6** Migrate `drivers/audio/audio_driver.c` → use `hal_i2s.h` instead of audio_iface_t vtable
+- [ ] **T28.7** Gate: `make all-firmware` passes; binary diff per config == 0
 
-- [x] **T9.5** Document valid build matrix in docs/TODO.md — done: updated section 12.1 to reflect actual verified matrix: 4 firmware combos (`f4-mchf`, `f4-small`, `f7-ovi40`, `h7-ovi40`) and 3 bootloader combos (`f4-mchf`, `f7-ovi40`, `h7-ovi40`), with notes on invalid combos that hit board config `#error` guards
+### Phase 29: HAL Shim Layer — Remaining Peripherals
 
-- [x] **T9.6** Update AGENTS.md build matrix to reflect actual valid combinations — done: changed section 2 from `7 firmware + 6 bootloader` to `4 firmware + 3 bootloader` valid combos; updated section 12.1 table to show only verified builds; updated section 19/20 to remove stale references to 7/6 matrices
+- [ ] **T29.1** `hal/include/hal_dma.h` + `hal/src/dma/hal_dma_stm32.c`
+- [ ] **T29.2** `hal/include/hal_flash.h` + `hal/src/flash/hal_flash_stm32.c`
+- [ ] **T29.3** `hal/include/hal_watchdog.h` + `hal/src/watchdog/hal_watchdog_stm32.c`
+- [ ] **T29.4** `hal/include/hal_clock.h` + `hal/src/clock/hal_clock_stm32.c`
+- [ ] **T29.5** `hal/include/hal_uart.h` + `hal/src/uart/hal_uart_stm32.c`
+- [ ] **T29.6** Update `uhsdr_mcu.c` / `hardware/` to use new HAL APIs
+- [ ] **T29.7** Gate: `make all-firmware` + `make all-bootloader` pass; 0 vendor HAL includes in product code
 
-- [x] **T10.1** Audit newlib usage in diag/trace code — done: `drivers/diag/Trace.c` already implements custom `trace_vsnprintf` with explicit comment 'Minimal vsnprintf without newlib dependency'; `trace_printf`/`trace_puts` are wrappers around this custom implementation; no newlib dependency found in diag code
+### Phase 30: Global State Encapsulation
 
-- [x] **T10.2** Update stale build matrix references in docs/TODO.md — done: changed executive summary Verified Build Matrix from `7/7` and `6/6` to `4/4` and `3/3`; updated section G CI Pipeline note from `7 firmware + 6 bootloader` to `4 firmware + 3 bootloader`; updated T6.1/T6.2 task descriptions to reflect actual verified matrix
+**Goal:** Reduce file-scope `static` variables from 118 → <30.
 
-- [x] **T11.1** Remove unused USB Host code from firmware builds — done: USB Host source files (`usb_host.c`, `usbh_*.c`) are already excluded from firmware `files.mak` and only present in bootloader `.mak` files; this was completed as part of T4.1
+- [ ] **T30.1** Encapsulate `audio_nr.c` statics into `AudioNr_Context` struct
+- [ ] **T30.2** Encapsulate `audio_driver.c` statics into `AudioDriver_Context` struct
+- [ ] **T30.3** Encapsulate `ui_driver.c` statics into `UiDriver_Context` struct
+- [ ] **T30.4** Document remaining global state ownership (`TransceiverState ts` — single owner)
 
-- [x] **T12.1** Audit and remove dead `usb_host.h` includes from firmware source files — done: all `usb_host.h` includes in firmware `main.c` files are already guarded by `#if defined(USE_USBHOST) || defined(BOOTLOADER_BUILD)`; no unconditional/dead includes remain in firmware source files
+### Phase 31: Large File Splits (Deferred — low priority)
 
-- [x] **T13.1** Remove USB Host initialization from firmware `main.c` files — done: removed `MX_USB_HOST_Init()` and `#include "usb_host.h"` blocks from all three firmware `main.c` files (`basesw/mcHF/Src/main.c`, `basesw/ovi40/Src/main.c`, `basesw/ovi40-h7/Src/main.c`); bootloader uses separate `src/bootloader/main.c` and retains its own USB Host init
+> **Note:** Splits deferred due to tight coupling to global `ts`/`sd`/`ads`/`adb` state.
+> Revisit only after State Encapsulation (Phase 30) is complete.
 
-- [x] **T13.2** Verify firmware builds after USB Host init removal — done: `f4-mchf`, `f7-ovi40`, and `h7-ovi40` firmware builds succeed after T13.1 source changes; `all-bootloader` (6/6) succeeds; `f4-small` fails with pre-existing `ui_lcd_hy28.c` compile error unrelated to T13.1; also fixed GNU Make target-specific variable inheritance bug in outer `Makefile` that was preventing `all-firmware` from propagating `BUILDFOR`/`BOARD` into sub-make
-
-- [x] **T13.3** Fix pre-existing `f4-small` build error in `ui_lcd_hy28.c` — done: wrapped `UiLcdHy28_DrawChar_8bit` with `#ifdef USE_8bit_FONT` so small builds fall back to `UiLcdHy28_DrawChar_1bit`; also removed 8-bit font from `fontList[]` and guarded `GL_Font16x24_8b_Square` extern; promoted `UiLcdHy28_DrawChar_1bit` to external linkage so fallback stub can call it; verified `make all-firmware` (7/7) succeeds
-
-### F. Bootloader Build Robustness ✅
-**Status:** Fixed — `make all-firmware` now runs `clean-firmware` between configs; `make all-bootloader` already cleans between configs
-**File:** `Makefile:168-176`
-**Risk:** Config contamination eliminated
-
-### G. CI Pipeline Completeness ✅
-**Status:** Fixed — `.travis.yml` now uses `make all-firmware` and `make all-bootloader` to build all 4 firmware + 3 bootloader valid combos
-**File:** `.travis.yml`
-**Note:** Matrix builds consolidated into single `all-firmware`/`all-bootloader` targets; intermediate clean prevents config contamination
-
-### H. Documentation Updates
-**AGENTS.md:** Update audit results, current line counts, remaining issues  
-**docs/TODO.md:** This file — keep in sync with actual status
-
----
-
-## 🟢 LOW PRIORITY — Nice to Have
-
-### I. Performance Budgets
-- WCET analysis for ISR and critical tasks
-- CPU load profiling per MCU
-- Stack usage watermark
-
-### J. Power Management
-- Sleep mode configuration
-- Low-power idle state
-- Current consumption profiling
-
-### K. Toolchain Qualification
-- Document compiler versions
-- Build profile definitions
-- Reproducible builds
+- [ ] **T31.1** `ui_driver.c` → split into `ui_radio.c`, `ui_menu.c`, `ui_spectrum_ctrl.c`
+- [ ] **T31.2** `audio_driver.c` → split into `audio_rx.c`, `audio_tx.c`, `audio_codec.c`
+- [ ] **T31.3** `ui_lcd_hy28.c` → split into `ui_lcd_hy28_draw.c`, `ui_lcd_hy28_touch.c`
 
 ---
 
-## 📋 Verified Task Status
-
-### Phase 1: Safety Critical ✅
-- [x] **T1.1** Watchdog init + kick in `uhsdr_main.c`
-- [x] **T1.2** F7/H7 HardFault_Handler with register dump
-- [x] **T1.3** F7/H7 MemManage_Handler with register dump
-- [x] **T1.4** F7/H7 UsageFault_Handler with register dump
-- [x] **T1.5** BusFault_Handler on F7/H7 (RAM detect + fault dump)
-- [x] **T1.6** Stack guard enforcement in main loop
-
-### Phase 2: Hardware Support ✅
-- [x] **T2.1** H7 RAM detection (128KB/256KB/512KB/1024KB)
-- [x] **T2.2** F7/H7 I2C timing abstraction
-- [x] **T2.3** H7 RTC init (LSE/LSI)
-- [x] **T2.4** H7 SPI DMA enabled
-- [x] **T2.5** Cache maintenance macros in `uhsdr_mcu.h`
-
-### Phase 3: Cache & Memory ✅
-- [x] **T3.1** LCD pixelbuffer cache clean/invalidate
-- [x] **T3.2** FFT ring buffer cache invalidate
-- [x] **T3.3** Audio interface vtable (I2S vs SAI)
-- [x] **T3.4** DMA buffer cache alignment audit
-
-### Phase 4: Cleanup ✅
-- [x] **T4.1** USB Host removed from firmware, kept in bootloader
-- [x] **T4.2** Scattered `#ifdef` reduced (173 remaining, target <20)
-- [x] **T4.3** `ui_driver.c` partial split (utils/touch/power extracted)
-- [x] **T4.4** `audio_driver.c` partial split (filters extracted)
-- [x] **T4.5** Bootloader safety: CRC32, anti-rollback, boot counter
-- [x] **T4.6** Magic numbers → named constants
-- [x] **T4.7** Low-power idle via WFI in main loop
-
-### Phase 5: Infrastructure ✅
-- [x] **T5.1** CI pipeline (`.travis.yml`)
-- [x] **T5.2** Unit test framework (`mchf-eclipse/test/`)
-- [x] **T5.3** Static analysis scripts (`scripts/static_analysis.sh`)
-- [x] **T5.4** Size regression detection (`scripts/size_regression.sh`)
-- [x] **T5.5** WCET analysis (`scripts/analyze_wcet.sh`)
-- [x] **T5.6** Stack usage profiling
-
-### Phase 6: Verification & Polish ✅
-- [x] **T6.1** All 7 firmware builds verified (2026-08-19)
-- [x] **T6.2** All 6 bootloader builds verified (2026-08-19)
-- [x] **T6.3** Bootloader safety: CRC, anti-rollback, boot counter
-- [x] **T6.4** Power management: WFI idle in main loop
-
-### Phase 7: Build Fixes ✅
-- [x] **T7.1** Fix `Error_Handler` multiple definition in H7 bootloader
-- [x] **T7.2** Fix `assert_failed` missing in H7 release builds
-- [x] **T7.3** Fix BusFault_Handler naked assembly for LTO builds
-- [x] **T7.4** Verify clean `make all-firmware` + `make all-bootloader`
-- [x] **T7.5** Fix `f4-small` build error in `ui_lcd_hy28.c` — `USE_8bit_FONT` guard + font list cleanup
-
-### Phase 15: Further #ifdef Consolidation
-- [x] **T15.1** Flatten nested `STM32F4` platform guard in `audio_driver.c` FreeDV filter init
-- [x] **T15.2** Consolidate duplicated `#ifdef UI_BRD_MCHF` volume workaround blocks in `audio_driver.c` and `audio_convolution.c` into `AudioDriver_MchfVolumeWorkaround()` inline in `audio_driver.h`
-- [x] **T15.3** Replace `CORTEX_M4` feature guard in `fsk.c` with MCU-agnostic config flag if memory layout differs — documented rationale in comment; kept `#ifdef CORTEX_M4` as it is the standard MCU capability check in this codebase and maps directly to STM32F4 vs F7/H7 memory constraints
-- [x] **T15.4** Document final `#ifdef` audit counts per file and verify no platform scattering remains in product code
-
-  Final audit (product code only, excluding `board_configs/`, `basesw/`, `bootloader/`):
-  - `audio_driver.c`: 46 (feature flags: 44, platform: 1 `#if defined(STM32F4)` consolidated, dead: 1 `#if 0`)
-  - `audio_convolution.c`: 23 (feature flags: 22, dead: 1 `#if 0`)
-  - `fsk.c`: 21 (feature flags: 20, MCU capability: 1 `CORTEX_M4` documented)
-  - `ui_driver.c`: 22 (feature flags: 21, dead: 1 `#if 0`)
-  - `ui_lcd_hy28.c`: 18 (platform/hardware: 6 for cache/SPI/board, feature: 8, dead: 4)
-  - `uhsdr_hw_i2c.c`: 2 (platform: 2 for I2C timing — expected in HAL layer)
-  
-  **Platform scattering verdict:** No unguarded MCU-specific code remains in product
-  drivers. Remaining platform guards are concentrated in `ui_lcd_hy28.c` and
-  `uhsdr_hw_i2c.c` where hardware genuinely differs (cache, SPI, I2C timing).
-  These are appropriate locations for MCU abstraction and do not constitute
-  scattered platform scattering.
-
-### Phase 17: USB Host Removal
-- [x] **T17.1** Remove USB Host source files and HAL middleware from firmware build system entirely — USB Host source files already removed from firmware `files.mak` (T4.1) and init removed from firmware `main.c` (T13.1); product-level USB Host include path removed from `include.mak`; HAL middleware USB Host include paths retained in MCU-specific `*-include.mak` files for bootloader support (cannot be separated without Makefile restructuring)
-- [x] **T17.2** Fix pre-existing F4 bootloader `Error_Handler` multiple definition link error — `bl-mchf` fails to link because `Error_Handler` is defined in both `bootloader_hal_support.c` and `uhsdr_fault.c`
-- [x] **T18.1** Fix pre-existing bootloader `MX_FMC_Init` undefined reference — all bootloaders (`bl-mchf`, `bl-ovi40`) fail to link because `UiLcdHy28_Init` calls `MX_FMC_Init` but the bootloader HAL doesn't compile `fmc.c`
-
-### Phase 8: Remaining Work 🟡
-- [x] **T8.1** Reduce `#ifdef` in `ui_lcd_hy28.c` from 66 → 11 (board_configs + vtable consolidation)
-- [x] **T8.1b** Document `audio_driver.c` #ifdefs: 46 instances are primarily feature flags and MCU-specific optimizations, not platform scattering
-- [x] **T8.2b** Document `audio_convolution.c` #ifdefs: 22 instances are feature flags, not platform scattering
-- [x] **T8.3b** Document `fsk.c` #ifdefs: 21 instances are feature flags, not platform scattering
-- [x] **T8.4** Split `ui_driver.c` into focused modules (<2000 lines) — deferred: tight coupling to global state (`ts`, `ads`, `adb`, `sd`) makes extraction high-risk without significant refactoring
-- [x] **T8.5** Split `audio_driver.c` into focused modules (<1500 lines) — deferred: audio pipeline state tightly coupled to global `ts`/`sd` structs; partial split already done (filters extracted)
-- [x] **T8.6** Complete `ui_lcd_hy28.c` split (<1500 lines) — deferred: display driver tightly coupled to board configs and global `mchf_display` state; #ifdefs reduced from 66→11 instead
-
----
-
-## 🗂️ Issue Tracker Labels
+## Issue Labels
 
 ```
-critical-safety     # Watchdog, fault handlers, stack guard
-critical-hw         # H7 RAM, I2C, RTC, SPI DMA, assert_failed
-high-cache          # Cache maintenance for DMA
-high-refactor       # #ifdef cleanup, file splits
-medium-quality      # Magic numbers, global state, newlib
-low-feature         # Performance budgets, power mgmt
-infrastructure      # CI, tests, docs
-build-fix           # Linker errors, symbol conflicts, bootloader
+safety          # Watchdog, fault handlers, stack guard
+hw-support      # RAM, I2C, RTC, SPI DMA
+cache-memory    # DMA buffer maintenance, alignment
+hal-shim        # HAL abstraction layer (GPIO/SPI/I2S/etc.)
+refactor        # #ifdef cleanup, file splits, global state
+build           # Makefile, linker, CI
+test            # Unit tests, regression, WCET
+docs            # Architecture, build, API reference
 ```
 
 ---
 
-## 📝 How to Contribute
+## Workflow
 
 1. Pick an issue with appropriate label
-2. Create branch: `fix/assert_failed-h7` or `refactor/ifdef-cleanup`
-3. Implement with `-Werror`
-4. Test on affected MCU(s)
-5. Run `make all-firmware` and `make all-bootloader`
-6. Update `docs/TODO.md` with completion date
-7. Submit PR
+2. Create branch: `feat/hal-gpio` or `fix/fault-h7`
+3. Implement with `-Wall -Wextra -Wimplicit-function-declaration`
+4. Gate: `make f4-mchf && make f7-ovi40 && make h7-ovi40` all pass
+5. Gate: `make all-firmware && make all-bootloader` pass
+6. Gate: binary diff vs `make clean` baseline == 0 (no behavior change)
+7. Update this file with completion date
+8. Submit PR
 
 ---
 
-## Phase 20: Final Platform Hardening
+## Build Matrix Reference
 
-- [x] **T21.1** Fix F4/H7/H7 bootloader `undefined MX_FMC_Init` — guarded `MEM_Init()` in `UiLcdHy28_ParallelInit()` with `#ifndef BOOTLOADER_BUILD` so LCD FMC/FSMC init is skipped in bootloader; all 3 bootloaders link clean
-- [x] **T20.1** Add comprehensive `.gitignore` for build artifacts so `git status` stays clean without manual `git clean`
-- [x] **T20.2** Document top `#ifdef` breakdown — feature flags dominate; platform guards confined to hardware abstraction layer
-- [x] **T20.3** Extract `UiDriver_LeftBoxDisplay` from `ui_driver.c` (6637L) into new `ui_display_list.c`/`.h` module; F4 firmware verified
-  - Also fixed C99 bool type conflict in `ui_driver.c` by adding `#include <stdbool.h>`
-  - **Deferred to T21.1:** F4 bootloader link error `undefined MX_FMC_Init` in `ui_lcd_hy28.c` — pre-existing, not introduced by T20.3
+```
+Valid firmware targets:
+  f4-mchf       STM32F4   mcHF    (default)
+  f4-small      STM32F4-512KB mcHF  (small build)
+  f7-ovi40      STM32F7   OVI40
+  h7-ovi40      STM32H7   OVI40
 
-  **T20.2 audit result (2026-08-21):**
-  | File | Total `#if`/`#ifdef` | Feature flags | Platform guards | Dead |
-  |---|---|---|---|---|
-  | `audio_driver.c` | 54 | 53 | 1 (`#if defined(STM32F4)` FreeDV blitter) | 0 (removed earlier) |
-  | `audio_convolution.c` | 26 | 25 | 0 | 1 (`#if 0`, removed earlier) |
-  | `fsk.c` | 28 | 27 | 1 (`#ifdef CORTEX_M4` — F4-only TT bucketing) | 0 |
-  | `uhsdr_hw_i2s.c` | 24 | 11 | 13 (I2S vs SAI init, callback dispatch) | 0 |
-  | `ui_driver.c` | 22 | 21 | 0 | 1 (`#if 0`, removed earlier) |
-  | `ui_lcd_hy28.c` | 22 | 8 | 14 (cache/SPI/board config) | 0 |
+Valid bootloader targets:
+  f4-mchf       STM32F4   mcHF
+  f7-ovi40      STM32F7   OVI40
+  h7-ovi40      STM32H7   OVI40
 
-  **Verdict:** Remaining `#ifdef`s are overwhelmingly feature flags and legitimate
-  hardware-abstraction guards. No scattered platform code remains. To reduce further
-  would require introducing a formal feature-flag enum + runtime config system, which
-  is out of scope for this hardening phase. Deferred to future refactoring sprint.
+Invalid combos (board config #error):
+  f4-ovi40, f7-mchf, h7-mchf
+```
 
 ---
 
----
+## Key Decisions Log
 
-## Phase 22: Platform Hardening — QoL & Producible Builds
-
-- [x] **T21.1** Fix F4/H7/H7 bootloader `undefined MX_FMC_Init` — guarded `MEM_Init()` in `UiLcdHy28_ParallelInit()` with `#ifndef BOOTLOADER_BUILD`
-- [x] **T22.1** Add `make doctor` target to root Makefile — checks ARM toolchain availability + critical `mchf-eclipse/` MCU dirs + board config headers + `files.mak` and `Makefile` existence; uses `set +e` so partial failures don't abort the script
-- [x] **T22.2** Add `make check` target to root Makefile — runs lightweight sanity checks: git tree dirtiness, `mchf-eclipse/Makefile` present, `mchf-eclipse/files.mak` present, all `*-files.mak` / `bootloader.mak` / `include.mak` fragments present; uses `set +e`
-- [x] **T22.3** Document reproducible build instructions — exact verified toolchain and flags recorded in `docs/reproducible_builds.md`; pinned to `arm-none-eabi-gcc 13.2.1 20231009` (verified 2026-08-21); `.gitignore` covers all build artifacts; `make doctor` and `make check` provide pre-flight verification; `make size-summary` provides regression baseline
-- [x] **T22.4** Add build size summary target — `make size-summary` prints text/data/bss/flash-total and build timestamp for `mchf-eclipse/fw-mchf.elf` (last-built firmware) and `mchf-eclipse/bl-mchf.elf` (last-built bootloader); note: ELF filename is shared across configs (last build wins)
-
-  **T22.1/T22.2 implementation notes:**
-  - `SHELL := /bin/bash` added to root Makefile to avoid dash strictness
-  - `doctor` and `check` use `set +e` at recipe start so a partial failure (e.g. missing optional file) does not abort the remaining checks
-  - Both targets check paths under `mchf-eclipse/` (BUILD_DIR), not repo root
-  - `check` warns on uncommitted product-tree changes; this is a useful gate for CI
+| Date | Decision | Rationale |
+|---|---|---|
+| 2026-08-21 | HAL shim layer for STM32 (not multi-vendor) | Reduce surface area; prove pattern within single vendor first |
+| 2026-08-21 | `hal/src/*/` backends include vendor HAL — ONLY place | Enforce zero HAL includes in product code |
+| 2026-08-21 | `uhsdr_mcu.h` remains primary MCU abstraction | Already works; extend rather than replace |
+| 2026-08-21 | Large file splits deferred after global state encapsulation | Risk of subtle bugs from partial state extraction |
+| 2026-08-21 | `#ifdef` target: <10 (not <20) in product code | 27 remaining are legitimate hardware abstraction in `hal/` and `board_configs/` |
+| 2026-08-21 | Bootloader retains USB Host for DFU | USB Device DFU not yet implemented; Host path works |
 
 ---
 
----
-
-## Phase 23: Static Safety & API Hygiene
-
-- [x] **T23.1** Add `-Wimplicit-function-declaration` to firmware and bootloader `COMPILEFLAGS` — implicit declarations are a valid C99 warning; 3 pre-existing occurrences flagged in `ui_driver_power.c` (Codec_MuteDAC, UiDriver_IsButtonPressed, UiDriver_WaitForBandMAndBandPorPWR); build passes clean; minor C++ cc1plus note about flag being C-only is harmless
-- [x] **T23.2** Replace `malloc` pointer in `uhsdr_canary.c` with a fixed-size `static` buffer — removed `<malloc.h>` include and `malloc()`/`assert()` calls; canary is now a `static uint8_t canary_word_buf[]` with `canary_word_ptr` pointing directly at it; verified compiles clean with `-Wall -Wextra`
-- [x] **T23.3** Document infinite-loop intent in fault handlers — `while(1)` loops in `Error_Handler` (hw/uhsdr_fault.c:32) and `Debug_FaultGetRegistersFromStack` (hw/uhsdr_fault.c:75) are intentional halt points for debugger attach; F4 `stm32f4xx_it.c:228` is CubeMX-generated default handler stub (left as-is to avoid merge conflicts)
-- [x] **T23.4** Add `static_assert` for `sizeof(TransceiverState)` in `uhsdr_board.h` — added `_Static_assert(sizeof(TransceiverState) > 0, ...)` after struct definition; catches incomplete-type or forward-declaration misuse at compile time
-- [x] **T23.5** Add `make info` target to root Makefile — prints build matrix summary, valid targets, and current default config; improves onboarding
-- [x] **T23.6** Fix implicit-declaration warnings found by T23.1 — added `#include "ui_driver_utils.h"` and `#include "codec.h"` to `ui_driver_power.c`; all 3 warnings (Codec_MuteDAC, UiDriver_IsButtonPressed, UiDriver_WaitForBandMAndBandPorPWR) resolved
----
-
----
-
-## Phase 24: Continued Modularization
-
-- [x] **T24.1** Extract `UiDriver_EncoderDisplay` from `ui_driver.c` (6637L) into new `ui_encoder_display.c`/`.h` module — `UiDriver_EncoderDisplaySimple` stays in `ui_driver.c` and calls extracted function via `#include "ui_encoder_display.h"`; verified F4 firmware build passes clean
-- [x] **T24.2** Verify build after T24.1 — `make f4-mchf` passes clean (0 errors, 0 implicit-declaration warnings); full matrix verification deferred to CI (all 4 firmware + 3 bootloader combos verified clean in prior sessions)
-- [x] **T24.3** Audit `-Wmissing-prototypes` noise level — not added as global flag; `-Wimplicit-function-declaration` (T23.1) already catches the actionable class of bugs (calling undeclared functions) without the noise of `-Wmissing-prototypes` which warns on every `static` function defined without a prior prototype in the same TU; this codebase has intentional file-local `static` helpers throughout
-
----
-
----
-
-## Phase 25: Residual Platform Hardening
-
-- [x] **T25.1** Audit and reduce remaining `#ifdef` scatter in product code — ran exact grep on 6 key files; current state: 134 total (107 feature flags, 27 platform/hardware, 0 dead). Removed last `#if 0` dead block from `audio_convolution.c` (-232 lines). Conclusion: bulk of remaining `#ifdef`s are legitimate hardware abstraction (I2C timing, cache maintenance, SPI/display bus) or feature flags (`USE_FREEDV`, `USE_NR`, `USE_NOTCH`, etc.); reducing further would require a major feature-flag runtime-config refactor which is out of scope for hardening phase
-- [x] **T25.2** Deferred: `UiDriver_DisplayMessageStart`/`UiDriver_DisplayMessageStop` are tiny (10 lines total) and call `UiSpectrum_Clear()` / `UiSpectrum_Init()` / `UiMenu_RenderMenu()` directly; extracting them would add a new compilation unit for no measurable decoupling gain; left in `ui_driver.c`
-- [x] **T25.3** Annotate unreachable infinite loops — added `__builtin_unreachable()` after `Error_Handler` while(1) in `uhsdr_fault.c`; F4 `stm32f4xx_it.c:228` is CubeMX user-editable block (between `/* USER CODE */` markers), left as-is; no `while(1)` found in `ui_driver_power.c`; build verified clean
-- [x] **T25.4** Add `_Static_assert` for layout struct completeness — added `offsetof(LcdLayout, LEFTBOXES_IND|ENCODER_IND|BOTTOM_BAR|PWR_IND) >= 0` checks in `ui_lcd_layouts.h` after `LcdLayout` typedef; catches any future layout struct drift at compile time across all TUs that include the header; build verified clean
-- [x] **T25.5** Record regression sizes — f4-mchf firmware: text=491649 data=3180 bss=104680 flash=494829 total=599509; bootloader: text=14276 data=8 bss=2544 flash=14284 total=16828 (measured 2026-08-21)
-
----
-
-## 📚 References
-
-- [AGENTS.md](../AGENTS.md) — Platform architecture baseline
-- [UHSDR Codebase](https://github.com/df8oe/UHSDR) — Original repository
-- [STM32F4xx HAL](https://www.st.com/en/embedded-software/stm32cubef4.html)
-- [STM32F7xx HAL](https://www.st.com/en/embedded-software/stm32cubef7.html)
-- [STM32H7xx HAL](https://www.st.com/en/embedded-software/stm32cubelh7.html)
-- [CMSIS-DSP](https://developer.arm.com/architectures/cpu-architecture/cortex-m/cortex-m-ecosystem/cmsis/cmsis-dsp)
-
----
-
-*This TODO is a living document. Update after each completed task.*
+*This TODO is a living document. Update after each completed task with date and brief note.*
