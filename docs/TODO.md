@@ -425,6 +425,18 @@ build-fix           # Linker errors, symbol conflicts, bootloader
 
 ---
 
+---
+
+## Phase 23: Static Safety & API Hygiene
+
+- [x] **T23.1** Add `-Wimplicit-function-declaration` to firmware and bootloader `COMPILEFLAGS` — implicit declarations are a valid C99 warning; 3 pre-existing occurrences flagged in `ui_driver_power.c` (Codec_MuteDAC, UiDriver_IsButtonPressed, UiDriver_WaitForBandMAndBandPorPWR); build passes clean; minor C++ cc1plus note about flag being C-only is harmless
+- [x] **T23.2** Replace `malloc` pointer in `uhsdr_canary.c` with a fixed-size `static` buffer — removed `<malloc.h>` include and `malloc()`/`assert()` calls; canary is now a `static uint8_t canary_word_buf[]` with `canary_word_ptr` pointing directly at it; verified compiles clean with `-Wall -Wextra`
+- [x] **T23.3** Document infinite-loop intent in fault handlers — `while(1)` loops in `Error_Handler` (hw/uhsdr_fault.c:32) and `Debug_FaultGetRegistersFromStack` (hw/uhsdr_fault.c:75) are intentional halt points for debugger attach; F4 `stm32f4xx_it.c:228` is CubeMX-generated default handler stub (left as-is to avoid merge conflicts)
+- [x] **T23.4** Add `static_assert` for `sizeof(TransceiverState)` in `uhsdr_board.h` — added `_Static_assert(sizeof(TransceiverState) > 0, ...)` after struct definition; catches incomplete-type or forward-declaration misuse at compile time
+- [x] **T23.5** Add `make info` target to root Makefile — prints build matrix summary (valid firmware/bootloader targets, invalid combos, current default config, quick-start targets, toolchain version); declared `.PHONY` in both `.PHONY` blocks
+
+---
+
 ## 📚 References
 
 - [AGENTS.md](../AGENTS.md) — Platform architecture baseline

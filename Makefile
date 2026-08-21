@@ -90,7 +90,7 @@ endef
 # Main Targets
 # =============================================================================
 
-.PHONY: all help firmware bootloader clean clean-firmware clean-bootloader clean-libs \
+.PHONY: all help firmware bootloader clean clean-firmware clean-bootloader clean-libs info \
 	doctor check size-summary \
 	docs docs-clean handbook handbook-test handbook-ui-menu handbook-ui-menu-clean \
 	gcc-version release handy version
@@ -317,6 +317,37 @@ config:
 	@echo "OPT_GCC_ARM = $(OPT_GCC_ARM)"
 	@echo "CONFIGFLAGS = $(CONFIGFLAGS)"
 
+# Build matrix summary (T23.5)
+info:
+	@echo "UHSDR Build Matrix Summary"
+	@echo "=========================="
+	@echo ""
+	@echo "Valid firmware targets:"
+	@echo "  f4-mchf     — STM32F4 (mcHF board)"
+	@echo "  f4-small    — STM32F4-512KB (mcHF, reduced features)"
+	@echo "  f7-ovi40    — STM32F7 (OVI40 board)"
+	@echo "  h7-ovi40    — STM32H7 (OVI40 board)"
+	@echo ""
+	@echo "Valid bootloader targets:"
+	@echo "  bl-mchf F4  — STM32F4 mcHF bootloader"
+	@echo "  bl-mchf F7  — STM32F7 OVI40 bootloader"
+	@echo "  bl-mchf H7  — STM32H7 OVI40 bootloader"
+	@echo ""
+	@echo "Invalid combos (intentional, guarded by board_config #error):"
+	@echo "  f4-ovi40, f7-mchf, h7-mchf, h7-mchf"
+	@echo ""
+	@echo "Current default: BUILDFOR=$(BUILDFOR) BOARD=$(BOARD)"
+	@echo "  CONFIGFLAGS=$(CONFIGFLAGS)"
+	@echo ""
+	@echo "Quick targets: make f4-mchf | make f4-small | make f7-ovi40 | make h7-ovi40"
+	@echo "Meta targets:  make all-firmware | make all-bootloader | make clean"
+	@echo "New checks:    make doctor | make check | make size-summary | make info"
+	@echo ""
+	@echo "Toolchain:"
+	@which arm-none-eabi-gcc >/dev/null 2>&1 && \
+	  arm-none-eabi-gcc --version | head -1 | sed 's/^/  /' || \
+	  echo "  WARNING: arm-none-eabi-gcc not found in PATH"
+
 # List all available targets
 list-targets:
 	@$(MAKE) -C $(BUILD_DIR) -f Makefile $(SUBMAKE_FLAGS) help
@@ -454,7 +485,7 @@ size-summary:
 	fi
 
 
-.PHONY: all help firmware bootloader clean clean-firmware clean-bootloader clean-libs \
+.PHONY: all help firmware bootloader clean clean-firmware clean-bootloader clean-libs info \
 	f4-mchf f4-ovi40 f7-mchf f7-ovi40 h7-mchf h7-ovi40 \
 	debug-f4 debug-f7 debug-h7 \
 	config list-targets check-toolchain \

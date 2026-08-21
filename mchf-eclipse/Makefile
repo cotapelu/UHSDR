@@ -101,7 +101,7 @@ endif
 
 COMPILEFLAGS := -D_GNU_SOURCE -DTRX_ID=\"$(TRX_ID)\" -DTRX_NAME=\"$(TRX_NAME)\" $(CONFIGFLAGS) -DUSE_HAL_DRIVER\
 	-DFDV_ARM_MATH -DFREEDV_MODE_EN_DEFAULT=0 -DFREEDV_MODE_1600_EN=1 -DCODEC2_MODE_EN_DEFAULT=0 -DCODEC2_MODE_1300_EN=1\
-	-ffunction-sections -fdata-sections -flto -Wall -Wuninitialized -Wextra -Wno-unused-parameter -Wno-unused-function -Wno-sign-compare -g3 -fstack-usage
+	-ffunction-sections -fdata-sections -flto -Wall -Wuninitialized -Wextra -Wimplicit-function-declaration -Wno-unused-parameter -Wno-unused-function -Wno-sign-compare -g3 -fstack-usage
 
 # identifying of "official builds by DF8OE"
 ifneq (,$(wildcard ../DF8OE))

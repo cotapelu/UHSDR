@@ -8,22 +8,20 @@
  **                                                                                 **
  **  Licence:       GNU GPLv3                                                       **
  ************************************************************************************/
-#include <malloc.h>
 #include <string.h>
 #include <assert.h>
 #include "uhsdr_canary.h"
 
 static const uint8_t canary_word[] = { 'D', 'O', ' ', 'G', 'N', 'U', ' ', 'G', 'P', 'L', 'v', '3' };
-uint8_t* canary_word_ptr;
+static uint8_t canary_word_buf[sizeof(canary_word)];
+uint8_t* canary_word_ptr = canary_word_buf;
 
 /**
  * this has to be called after all dynamic memory allocation has happened
  */
 void Canary_Create( void )
 {
-    canary_word_ptr = (uint8_t*)malloc( sizeof( canary_word ));
-    assert( canary_word_ptr );
-    memcpy ( canary_word_ptr, canary_word, sizeof(canary_word) );
+    memcpy ( canary_word_ptr, canary_word, sizeof( canary_word ) );
 }
 
 /**
