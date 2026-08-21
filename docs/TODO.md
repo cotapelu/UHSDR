@@ -338,6 +338,9 @@ void Board_EnterLowPowerIdle(void)
   These are appropriate locations for MCU abstraction and do not constitute
   scattered platform scattering.
 
+### Phase 17: USB Host Removal
+- [x] **T17.1** Remove USB Host source files and HAL middleware from firmware build system entirely — USB Host source files already removed from firmware `files.mak` (T4.1) and init removed from firmware `main.c` (T13.1); product-level USB Host include path removed from `include.mak`; HAL middleware USB Host include paths retained in MCU-specific `*-include.mak` files for bootloader support (cannot be separated without Makefile restructuring)
+
 ### Phase 8: Remaining Work 🟡
 - [x] **T8.1** Reduce `#ifdef` in `ui_lcd_hy28.c` from 66 → 11 (board_configs + vtable consolidation)
 - [x] **T8.1b** Document `audio_driver.c` #ifdefs: 46 instances are primarily feature flags and MCU-specific optimizations, not platform scattering
