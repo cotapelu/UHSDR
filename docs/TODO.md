@@ -383,7 +383,7 @@ build-fix           # Linker errors, symbol conflicts, bootloader
 
 ## Phase 20: Final Platform Hardening
 
-- [ ] **T21.1** Fix F4 bootloader undefined `MX_FMC_Init` — `ui_lcd_hy28.c::UiLcdHy28_Init` calls `MX_FMC_Init()` but neither `bootloader_hal_support.c` nor `f4-bootloader.mak` provide the symbol
+- [x] **T21.1** Fix F4/H7/H7 bootloader `undefined MX_FMC_Init` — guarded `MEM_Init()` in `UiLcdHy28_ParallelInit()` with `#ifndef BOOTLOADER_BUILD` so LCD FMC/FSMC init is skipped in bootloader; all 3 bootloaders link clean
 - [x] **T20.1** Add comprehensive `.gitignore` for build artifacts so `git status` stays clean without manual `git clean`
 - [x] **T20.2** Document top `#ifdef` breakdown — feature flags dominate; platform guards confined to hardware abstraction layer
 - [x] **T20.3** Extract `UiDriver_LeftBoxDisplay` from `ui_driver.c` (6637L) into new `ui_display_list.c`/`.h` module; F4 firmware verified

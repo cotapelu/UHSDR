@@ -732,7 +732,9 @@ inline static void UiLcdHy28_SpiLcdCsEnable()
 
 static void UiLcdHy28_ParallelInit()
 {
+#ifndef BOOTLOADER_BUILD
     MEM_Init();
+#endif
 }
 
 static void UiLcdHy28_ParallelDeInit()
