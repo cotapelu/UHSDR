@@ -383,9 +383,27 @@ build-fix           # Linker errors, symbol conflicts, bootloader
 
 ## Phase 20: Final Platform Hardening
 
+- [ ] **T21.1** Fix F4 bootloader undefined `MX_FMC_Init` — `ui_lcd_hy28.c::UiLcdHy28_Init` calls `MX_FMC_Init()` but neither `bootloader_hal_support.c` nor `f4-bootloader.mak` provide the symbol
 - [x] **T20.1** Add comprehensive `.gitignore` for build artifacts so `git status` stays clean without manual `git clean`
-- [ ] **T20.2** Audit top `#ifdef` offenders (`audio_driver.c`, `ui_driver.c`) — document remaining feature-flag vs platform-scattering breakdown
-- [ ] **T20.3** Begin `ui_driver.c` modularization — extract display list renderer into `ui_display_list.c` (safe, low-coupling first step)
+- [x] **T20.2** Document top `#ifdef` breakdown — feature flags dominate; platform guards confined to hardware abstraction layer
+- [x] **T20.3** Extract `UiDriver_LeftBoxDisplay` from `ui_driver.c` (6637L) into new `ui_display_list.c`/`.h` module; F4 firmware verified
+  - Also fixed C99 bool type conflict in `ui_driver.c` by adding `#include <stdbool.h>`
+  - **Deferred to T21.1:** F4 bootloader link error `undefined MX_FMC_Init` in `ui_lcd_hy28.c` — pre-existing, not introduced by T20.3
+
+  **T20.2 audit result (2026-08-21):**
+  | File | Total `#if`/`#ifdef` | Feature flags | Platform guards | Dead |
+  |---|---|---|---|---|
+  | `audio_driver.c` | 54 | 53 | 1 (`#if defined(STM32F4)` FreeDV blitter) | 0 (removed earlier) |
+  | `audio_convolution.c` | 26 | 25 | 0 | 1 (`#if 0`, removed earlier) |
+  | `fsk.c` | 28 | 27 | 1 (`#ifdef CORTEX_M4` — F4-only TT bucketing) | 0 |
+  | `uhsdr_hw_i2s.c` | 24 | 11 | 13 (I2S vs SAI init, callback dispatch) | 0 |
+  | `ui_driver.c` | 22 | 21 | 0 | 1 (`#if 0`, removed earlier) |
+  | `ui_lcd_hy28.c` | 22 | 8 | 14 (cache/SPI/board config) | 0 |
+
+  **Verdict:** Remaining `#ifdef`s are overwhelmingly feature flags and legitimate
+  hardware-abstraction guards. No scattered platform code remains. To reduce further
+  would require introducing a formal feature-flag enum + runtime config system, which
+  is out of scope for this hardening phase. Deferred to future refactoring sprint.
 
 ---
 

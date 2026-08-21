@@ -13,6 +13,7 @@
  ************************************************************************************/
 
 // Common
+#include <stdbool.h>
 #include "uhsdr_board.h"
 #include "profiling.h"
 #include <assert.h>
@@ -33,6 +34,7 @@
 #include "ui.h"
 // LCD
 #include "ui_lcd_hy28.h"
+#include "ui_display_list.h"
 #include "ui_driver_power.h"
 #include "ui_spectrum.h"
 
@@ -507,48 +509,6 @@ void UiDriver_TextMsgPutSign(const char *s)
 	UiDriver_TextMsgPutChar(s[0]);
 	UiDriver_TextMsgPutChar(s[1]);
 	UiDriver_TextMsgPutChar('>');
-}
-
-static void UiDriver_LeftBoxDisplay(const uint8_t row, const char *label, bool encoder_active,
-		const char* text, uint32_t color, uint32_t clr_val, bool text_is_value)
-{
-
-	uint32_t label_color = encoder_active?Black:color;
-
-	// max visibility of active element
-	uint32_t bg_color = encoder_active?Orange:Blue;
-	uint32_t brdr_color = encoder_active?Orange:Blue;
-
-	uint16_t posX, posY;
-	if(ts.Layout->LEFTBOXES_MODE==MODE_HORIZONTAL)
-	{
-		posX=ts.Layout->LEFTBOXES_IND.x+ (row * ts.Layout->LEFTBOXES_IND.w);
-		posY=ts.Layout->LEFTBOXES_IND.y;
-	}
-	else
-	{
-		posX=ts.Layout->LEFTBOXES_IND.x;
-		posY=ts.Layout->LEFTBOXES_IND.y + (row * ts.Layout->LEFTBOXES_IND.h);
-	}
-
-
-	UiLcdHy28_DrawEmptyRect(posX, posY, ts.Layout->LEFTBOXES_IND.h - 2, ts.Layout->LEFTBOXES_IND.w - 2, brdr_color);
-	UiLcdHy28_PrintTextCentered(posX + 1, posY + 1,ts.Layout->LEFTBOXES_IND.w - 3, label,
-			label_color, bg_color, 0);
-
-	// this causes flicker, but I am too lazy to fix that now
-	UiLcdHy28_DrawFullRect(posX + 1, posY + 1 + 12, ts.Layout->LEFTBOXES_IND.h - 4 - 11, ts.Layout->LEFTBOXES_IND.w - 3, text_is_value?Black:bg_color);
-	if (text_is_value)
-	{
-		UiLcdHy28_PrintTextRight((posX + ts.Layout->LEFTBOXES_IND.w - 4), (posY + 1 + ts.Layout->LEFTBOXES_ROW_2ND_OFF), text,
-				clr_val, text_is_value?Black:bg_color, 0);
-	}
-	else
-	{
-		UiLcdHy28_PrintTextCentered((posX + 1), (posY + 1 + ts.Layout->LEFTBOXES_ROW_2ND_OFF),ts.Layout->LEFTBOXES_IND.w - 3, text,
-				color, bg_color, 0);
-	}
-
 }
 
 static void UiDriver_LcdBlankingStealthSwitch()
