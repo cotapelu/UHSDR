@@ -612,17 +612,15 @@ static arm_fir_instance_f32    Fir_FreeDV_Rx_Hilbert_Q;
 
 static void AudioDriver_FreeDV_Rx_Init()
 {
-#ifdef USE_SIMPLE_FREEDV_FILTERS
+#if defined(USE_SIMPLE_FREEDV_FILTERS)
     IIR_biquad_FreeDV_I.pCoeffs = FreeDV_coeffs[0];  // FreeDV Filter test -DL2FW-
     IIR_biquad_FreeDV_Q.pCoeffs = FreeDV_coeffs[0];
-#else
-#ifdef STM32F4
+#elif defined(STM32F4)
     arm_fir_init_f32(&Fir_FreeDV_Rx_Hilbert_I,IQ_RX_NUM_TAPS_LO,(float32_t*)i_rx_FREEDV_700D_F4_coeffs,Fir_FreeDV_Rx_Hilbert_State_I, IQ_BLOCK_SIZE);
     arm_fir_init_f32(&Fir_FreeDV_Rx_Hilbert_Q,IQ_RX_NUM_TAPS_LO,(float32_t*)q_rx_FREEDV_700D_F4_coeffs,Fir_FreeDV_Rx_Hilbert_State_Q, IQ_BLOCK_SIZE);
 #else
     arm_fir_init_f32(&Fir_FreeDV_Rx_Hilbert_I,IQ_RX_NUM_TAPS,(float32_t*)i_rx_FREEDV_700D_coeffs,Fir_FreeDV_Rx_Hilbert_State_I, IQ_BLOCK_SIZE);
     arm_fir_init_f32(&Fir_FreeDV_Rx_Hilbert_Q,IQ_RX_NUM_TAPS,(float32_t*)q_rx_FREEDV_700D_coeffs,Fir_FreeDV_Rx_Hilbert_State_Q, IQ_BLOCK_SIZE);
-#endif
 #endif
 }
 

@@ -318,6 +318,12 @@ void Board_EnterLowPowerIdle(void)
 - [x] **T7.4** Verify clean `make all-firmware` + `make all-bootloader`
 - [x] **T7.5** Fix `f4-small` build error in `ui_lcd_hy28.c` — `USE_8bit_FONT` guard + font list cleanup
 
+### Phase 15: Further #ifdef Consolidation
+- [x] **T15.1** Flatten nested `STM32F4` platform guard in `audio_driver.c` FreeDV filter init
+- [ ] **T15.2** Consolidate `USE_TWO_CHANNEL_AUDIO` guards in `audio_driver.c` and `audio_convolution.c` into shared macros where semantics are identical
+- [ ] **T15.3** Replace `CORTEX_M4` feature guard in `fsk.c` with MCU-agnostic config flag if memory layout differs
+- [ ] **T15.4** Document final `#ifdef` audit counts per file and verify no platform scattering remains in product code
+
 ### Phase 8: Remaining Work 🟡
 - [x] **T8.1** Reduce `#ifdef` in `ui_lcd_hy28.c` from 66 → 11 (board_configs + vtable consolidation)
 - [x] **T8.1b** Document `audio_driver.c` #ifdefs: 46 instances are primarily feature flags and MCU-specific optimizations, not platform scattering
