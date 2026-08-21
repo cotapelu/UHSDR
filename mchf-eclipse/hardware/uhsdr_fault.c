@@ -19,6 +19,12 @@
 /* H7 HAL headers define Error_Handler as a macro to _Error_Handler, but some
    product code and LTO builds still require a real Error_Handler symbol. */
 #undef Error_Handler
+#endif
+
+/* Provide Error_Handler for all MCUs. The HAL headers define a weak symbol
+   for some targets, but with LTO and --gc-sections the linker may discard it
+   if no direct reference is seen. Defining it here guarantees a real symbol
+   exists for both firmware and bootloader builds. */
 void Error_Handler(void)
 {
     /* User can add his own implementation to report the HAL error return state */
@@ -26,7 +32,6 @@ void Error_Handler(void)
     {
     }
 }
-#endif
 
 /* These are volatile to try and prevent the compiler/linker optimising them
    away as the variables never actually get used.  If the debugger won't show the

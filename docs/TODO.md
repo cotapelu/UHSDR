@@ -340,6 +340,8 @@ void Board_EnterLowPowerIdle(void)
 
 ### Phase 17: USB Host Removal
 - [x] **T17.1** Remove USB Host source files and HAL middleware from firmware build system entirely — USB Host source files already removed from firmware `files.mak` (T4.1) and init removed from firmware `main.c` (T13.1); product-level USB Host include path removed from `include.mak`; HAL middleware USB Host include paths retained in MCU-specific `*-include.mak` files for bootloader support (cannot be separated without Makefile restructuring)
+- [x] **T17.2** Fix pre-existing F4 bootloader `Error_Handler` multiple definition link error — `bl-mchf` fails to link because `Error_Handler` is defined in both `bootloader_hal_support.c` and `uhsdr_fault.c`
+- [x] **T18.1** Fix pre-existing bootloader `MX_FMC_Init` undefined reference — all bootloaders (`bl-mchf`, `bl-ovi40`) fail to link because `UiLcdHy28_Init` calls `MX_FMC_Init` but the bootloader HAL doesn't compile `fmc.c`
 
 ### Phase 8: Remaining Work 🟡
 - [x] **T8.1** Reduce `#ifdef` in `ui_lcd_hy28.c` from 66 → 11 (board_configs + vtable consolidation)
