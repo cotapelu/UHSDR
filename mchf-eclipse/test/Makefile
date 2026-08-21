@@ -17,9 +17,7 @@ CFLAGS  = -Wall -Wextra -std=c11 -O2 -I.
 LDFLAGS = -lm
 
 SRCS    = test.c \
-          test_audio_filters.c \
-          audio_driver_filters_standalone.c \
-          test_canary.c
+          audio_driver_filters_standalone.c
 
 TARGET  = test_runner
 

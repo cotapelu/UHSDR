@@ -423,4 +423,8 @@ release:
 	/@inkscape --export-png=$(ROOTLOC)/useful_manuals/mcHF-quick-manual.png $(ROOTLOC)/useful_manuals/mcHF-quick-manual.svg
 	@inkscape --export-pdf=$(ROOTLOC)/useful_manuals/mcHF-quick-manual.pdf $(ROOTLOC)/useful_manuals/mcHF-quick-manual.svg
 
+stack-report: 
+	# prints top-10 deepest call-stacks per target from LTO stack-usage .su files
+	@python3 $(ROOTLOC)/support/stack-report.py $(ROOTLOC)
+
 # EOFILE

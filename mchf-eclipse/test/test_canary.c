@@ -15,6 +15,7 @@
  ************************************************************************************/
 
 #include "test.h"
+#include <stdint.h>
 
 /*
  * T26.1: the canary was refactored from malloc() to a static buffer.
@@ -100,20 +101,4 @@ static void test_canary_static_buffer_stable(void)
 }
 
 /* ---- Test runner ---- */
-
-int test_main(void)
-{
-    printf("UHSDR Canary Tests (T26.1)\n");
-    printf("==========================\n\n");
-
-    TEST_REGISTER(test_canary_initialized_intact);
-    TEST_REGISTER(test_canary_pointer_non_null);
-    TEST_REGISTER(test_canary_detects_corruption);
-    TEST_REGISTER(test_canary_restored_after_corruption);
-    TEST_REGISTER(test_canary_static_buffer_stable);
-
-    printf("\n==========================\n");
-    printf("Passed: %d  Failed: %d\n", test_pass_count, test_fail_count);
-
-    return test_fail_count > 0 ? 1 : 0;
-}
+/* Tests are registered in test.c to avoid multiple test_main definitions */

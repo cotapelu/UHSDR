@@ -177,7 +177,54 @@ build/
 
 ---
 
-## 7. Reproducibility Checklist
+## 7. Boot Accounting Flow
+
+The bootloader and firmware use **STM32 backup SRAM (SRAM2)** to maintain boot state across resets without relying on Flash wear-leveling.
+
+### 7.1 Memory Layout (SRAM2_BASE)
+
+| Offset | Content | Type |
+|---|---|---|
+| `+0x00` | Boot reason code | `uint32_t` |
+| `+0x04` | Boot failure counter | `uint32_t` |
+| `+0x08` | Firmware CRC32 | `uint32_t` |
+
+### 7.2 Boot Reason Codes
+
+```c
+BOOT_CLEARED     = 0x00000000
+BOOT_REBOOT      = 0x00000055   // firmware-requested immediate reboot
+BOOT_DFU         = 0x00000099   // enter DFU mode
+BOOT_FIRMWARE    = 0x66993300   // normal firmware boot
+```
+
+These are written by `COMMAND_ResetMCU()` before `NVIC_SystemReset()`.
+
+### 7.3 Boot Failure Counter (3-Strike Recovery)
+
+- **Increment:** `Bootloader_IncrementBootCounter()` adds 1 on flash/CRC failure (capped at 255).
+- **Reset:** `Bootloader_ResetBootCounter()` clears counter after successful flash + CRC verification.
+- **Check:** Before jumping to firmware, bootloader compares counter against `BOOTLOADER_MAX_BOOT_FAILURES` (3).
+- **Recovery:** If counter >= 3, bootloader calls `BootFail_Handler(5)` which blinks the backlight and halts, prompting user to reflash.
+
+### 7.4 Firmware CRC Persistence
+
+After successful flash, the computed CRC32 is stored at `SRAM2_BASE + 8`. This allows the firmware (if desired) to verify its own integrity on next boot without re-reading Flash.
+
+### 7.5 Cache Maintenance
+
+On F7, `COMMAND_ResetMCU()` performs `SCB_CleanDCache()` before `NVIC_SystemReset()` to ensure SRAM2 writes are visible to the next boot stage. H7 does not enable DCache in current main.c, so this is guarded.
+
+### 7.6 Recovery Mode Entry
+
+1. User reflashes firmware via DFU or external programmer.
+2. Bootloader verifies CRC32 of new firmware image.
+3. On success: `Bootloader_ResetBootCounter()` → counter = 0.
+4. On next boot: counter < 3 → normal jump to application.
+
+---
+
+## 8. Reproducibility Checklist
 
 - [x] Toolchain version pinned to `arm-none-eabi-gcc 13.2.1 20231009`
 - [x] Build order enforced (`clean` between configs in `all-firmware` / `all-bootloader`)
@@ -190,7 +237,7 @@ build/
 
 ---
 
-## 8. Known Limitations
+## 9. Known Limitations
 
 1. **Invalid combos fail at compile time** — `f4-ovi40`, `f7-mchf`, `h7-mchf` hit `#error` guards in `UHSDR_UI_*_config.h`. This is intentional.
 2. **Inner `fw-mchf.elf` overwritten** — building multiple configs in the same `mchf-eclipse/` dir clobbers the ELF. The outer Makefile handles copying to unique names.
@@ -199,7 +246,7 @@ build/
 
 ---
 
-## 9. Regression Size Table (2026-08-21)
+## 10. Regression Size Table (2026-08-21)
 
 | Config | text | data | bss | flash (text+data) | total dec |
 |---|---|---|---|---|---|

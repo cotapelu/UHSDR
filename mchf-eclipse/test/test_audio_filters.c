@@ -90,18 +90,4 @@ static void test_calc_shelf_filters(void)
 }
 
 /* Test runner entry point */
-int test_main(void)
-{
-    printf("UHSDR Unit Tests: audio_driver_filters\n");
-    printf("========================================\n\n");
-
-    TEST_REGISTER(test_set_biquad_coeffs);
-    TEST_REGISTER(test_scale_biquad_coeffs);
-    TEST_REGISTER(test_calc_bandstop);
-    TEST_REGISTER(test_calc_bandpass);
-    TEST_REGISTER(test_calc_shelf_filters);
-
-    printf("\nResults: %d passed, %d failed\n", test_pass_count, test_fail_count);
-
-    return test_fail_count ? 1 : 0;
-}
+/* Tests are registered in test.c to avoid multiple test_main definitions */

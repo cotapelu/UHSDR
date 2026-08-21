@@ -3,18 +3,37 @@
   "phases": [
     {
       "id": "phase-1",
-      "name": "Phase 19: Final Verification",
+      "name": "Phase 26",
       "tasks": [
         {
           "id": "task-1",
-          "content": "Final build matrix verification — all firmware (7/7) and bootloader (6/6) combos must pass clean (T19.1)",
-          "status": "in_progress",
-          "details": "Run make clean-firmware && make all-firmware and make clean-bootloader && make all-bootloader to verify the complete build matrix after all changes in this session. This is the final verification before considering the platform work complete."
+          "content": "Add host-based unit test for Canary_Create/IsIntact",
+          "status": "completed"
+        },
+        {
+          "id": "task-2",
+          "content": "Add host-based unit test for AudioDriver_MchfVolumeWorkaround",
+          "status": "completed"
+        },
+        {
+          "id": "task-3",
+          "content": "Add make stack-report target",
+          "status": "completed"
+        },
+        {
+          "id": "task-4",
+          "content": "Document boot accounting flow in reproducible_builds.md",
+          "status": "in_progress"
+        },
+        {
+          "id": "task-5",
+          "content": "Run make all-firmware && make all-bootloader, confirm no size regression",
+          "status": "pending"
         }
       ]
     }
   ],
-  "nextTaskId": 2,
+  "nextTaskId": 6,
   "nextPhaseId": 2,
-  "updatedAt": "2026-08-21T01:09:11.550Z"
+  "updatedAt": "2026-08-21T09:54:46.114Z"
 }
