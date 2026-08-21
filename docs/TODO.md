@@ -24,9 +24,9 @@
 - Top offenders: `audio_driver.c` (46), `audio_convolution.c` (22), `fsk.c` (21), `ui_driver.c` (19), `uhsdr_hw_i2s.c` (19), `ui_lcd_hy28.c` (11)
 - Largest files: `ui_driver.c` (6637 lines), `audio_driver.c` (2799 lines), `ui_lcd_hy28.c` (2683 lines)
 
-**Verified Build Matrix (2026-08-18):**
-- `all-firmware`: 7/7 pass (F4/mcHF, F4-512KB/mcHF, F7/ovi40, H7/ovi40 + 3 invalid combos excluded by board config guards)
-- `all-bootloader`: 6/6 pass (F4/mcHF, F4-512KB/mcHF, F7/ovi40, H7/ovi40)
+**Verified Build Matrix (2026-08-21):**
+- `all-firmware`: 4/4 pass (`f4-mchf`, `f4-small`, `f7-ovi40`, `h7-ovi40`)
+- `all-bootloader`: 3/3 pass (`f4-mchf`, `f7-ovi40`, `h7-ovi40`)
 
 ---
 
