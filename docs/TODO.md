@@ -381,6 +381,14 @@ build-fix           # Linker errors, symbol conflicts, bootloader
 
 ---
 
+## Phase 20: Final Platform Hardening
+
+- [x] **T20.1** Add comprehensive `.gitignore` for build artifacts so `git status` stays clean without manual `git clean`
+- [ ] **T20.2** Audit top `#ifdef` offenders (`audio_driver.c`, `ui_driver.c`) — document remaining feature-flag vs platform-scattering breakdown
+- [ ] **T20.3** Begin `ui_driver.c` modularization — extract display list renderer into `ui_display_list.c` (safe, low-coupling first step)
+
+---
+
 ## 📚 References
 
 - [AGENTS.md](../AGENTS.md) — Platform architecture baseline
