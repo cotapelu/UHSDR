@@ -91,19 +91,19 @@ F4 builds do **not** define these (FreeDV 700D/C codec2 modes disabled on F4).
 ```bash
 # mcHF on F4 (default, 1MB flash)
 make BUILDFOR=F4 BOARD=mchf CONFIGFLAGS="-DUI_BRD_MCHF -DRF_BRD_MCHF" firmware
-# → mchf-eclipse/fw-mchf.bin  (432348 bytes, 2026-08-21)
+# → mchf-eclipse/fw-mchf.bin  (434396 bytes, 2026-08-21)
 
 # mcHF on F4-512KB (small build)
 make BUILDFOR=F4-512KB BOARD=mchf CONFIGFLAGS="-DUI_BRD_MCHF -DRF_BRD_MCHF -DIS_SMALL_BUILD" firmware
-# → mchf-eclipse/fw-mchf.bin  (286224 bytes, 2026-08-21)
+# → mchf-eclipse/fw-mchf.bin  (288468 bytes, 2026-08-21)
 
 # OVI40 on F7
 make BUILDFOR=F7 BOARD=ovi40 CONFIGFLAGS="-DUI_BRD_OVI40 -DRF_BRD_OVI40" firmware
-# → mchf-eclipse/fw-mchf.bin  (485300 bytes, 2026-08-21)
+# → mchf-eclipse/fw-mchf.bin  (485236 bytes, 2026-08-21)
 
 # OVI40 on H7
 make BUILDFOR=H7 BOARD=ovi40 CONFIGFLAGS="-DUI_BRD_OVI40 -DRF_BRD_OVI40" firmware
-# → mchf-eclipse/fw-mchf.bin  (494832 bytes, 2026-08-21)
+# → mchf-eclipse/fw-mchf.bin  (494704 bytes, 2026-08-21)
 ```
 
 ### 4.2 Bootloader (3 valid combos)
@@ -111,7 +111,7 @@ make BUILDFOR=H7 BOARD=ovi40 CONFIGFLAGS="-DUI_BRD_OVI40 -DRF_BRD_OVI40" firmwar
 ```bash
 # mcHF on F4
 make BUILDFOR=F4 BOARD=mchf CONFIGFLAGS="-DUI_BRD_MCHF -DRF_BRD_MCHF" bootloader
-# → mchf-eclipse/bl-mchf.bin  (12576 bytes, 2026-08-21)
+# → mchf-eclipse/bl-mchf.bin  (12264 bytes, 2026-08-21)
 
 # OVI40 on F7
 make BUILDFOR=F7 BOARD=ovi40 CONFIGFLAGS="-DUI_BRD_OVI40 -DRF_BRD_OVI40" bootloader
@@ -233,6 +233,7 @@ On F7, `COMMAND_ResetMCU()` performs `SCB_CleanDCache()` before `NVIC_SystemRese
 - [x] `make check` verifies repo tree + make fragment integrity
 - [x] `make size-summary` provides regression baseline
 - [x] All 4 firmware + 3 bootloader combos verified clean (2026-08-21)
+- [x] Size regression: all configs within <1% variance
 - [ ] Containerized build env (`Dockerfile`) — deferred (no urgent need; toolchain available via `apt`)
 
 ---
@@ -250,12 +251,12 @@ On F7, `COMMAND_ResetMCU()` performs `SCB_CleanDCache()` before `NVIC_SystemRese
 
 | Config | text | data | bss | flash (text+data) | total dec |
 |---|---|---|---|---|---|
-| `f4-mchf` firmware | 491649 | 3180 | 104680 | 494829 | 599509 |
-| `f4-small` firmware | — | — | — | — | — |
-| `f7-ovi40` firmware | — | — | — | — | — |
-| `h7-ovi40` firmware | — | — | — | — | — |
-| `f4-mchf` bootloader | 12576 | 8 | 2544 | 12584 | 15056 |
-| `f7-ovi40` bootloader | — | — | — | — | — |
-| `h7-ovi40` bootloader | — | — | — | — | — |
+| `f4-mchf` firmware | 431921 | 2472 | 93656 | 434393 | 528049 |
+| `f4-small` firmware | 286153 | 2312 | 92104 | 288465 | 380569 |
+| `f7-ovi40` firmware | 482049 | 3184 | 104296 | 485233 | 589529 |
+| `h7-ovi40` firmware | 491521 | 3180 | 104688 | 494701 | 599389 |
+| `f4-mchf` bootloader | 12256 | 8 | 2472 | 12264 | 14736 |
+| `f7-ovi40` bootloader | 13216 | 8 | 2488 | 13224 | 15712 |
+| `h7-ovi40` bootloader | 14276 | 8 | 2544 | 14284 | 16828 |
 
 > Full table populated by running `make all-firmware && make all-bootloader && make size-summary`.

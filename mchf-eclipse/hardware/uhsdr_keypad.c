@@ -9,16 +9,17 @@
  **  Licence:       GNU GPLv3                                                       **
  ************************************************************************************/
 #include <assert.h>
+#include <stdbool.h>
 
 #include "uhsdr_board_config.h"
 #include "uhsdr_keypad.h"
-#include "gpio.h"
+#include "hal_gpio.h"
 
 // Key map structure
 // represents a physical key which can be pressed (via GPIO)
 typedef struct
 {
-    GPIO_TypeDef*   keyPort;
+    hal_gpio_port_t keyPort;
     uint16_t        keyPin;
     uint16_t        button_id;
     const char*     label;
@@ -194,18 +195,18 @@ uint32_t Keypad_ButtonStates()
 void Keypad_KeypadInit()
 {
     UhsdrHwKey_t* keyMap = &hwKeys;
-    GPIO_InitTypeDef GPIO_InitStructure;
+    hal_gpio_config_t cfg;
 
     // Common init
-    GPIO_InitStructure.Mode = GPIO_MODE_INPUT;
-    GPIO_InitStructure.Speed = GPIO_SPEED_FREQ_LOW;
-    GPIO_InitStructure.Pull = GPIO_PULLUP;
+    cfg.mode = HAL_GPIO_MODE_INPUT;
+    cfg.speed = HAL_GPIO_SPEED_LOW;
+    cfg.pull = HAL_GPIO_PULL_UP;
 
     // Init all hw gpio from public struct declaration
     for(keyMap->num = 0; keyMap->map[keyMap->num].keyPort != NULL; keyMap->num++)
     {
-        GPIO_InitStructure.Pin = keyMap->map[keyMap->num].keyPin;
-        HAL_GPIO_Init(keyMap->map[keyMap->num].keyPort, &GPIO_InitStructure);
+        cfg.pin = keyMap->map[keyMap->num].keyPin;
+        hal_gpio_init(keyMap->map[keyMap->num].keyPort, &cfg);
     }
 }
 
@@ -214,7 +215,7 @@ void Keypad_KeypadInit()
  */
 static bool Keypad_GetKeyGPIOState(const Keypad_KeyPhys_t* key)
 {
-    return HAL_GPIO_ReadPin(key->keyPort, key->keyPin) == 0;
+    return hal_gpio_read_pin(key->keyPort, key->keyPin) == HAL_GPIO_PIN_RESET;
 }
 
 /*

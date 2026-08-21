@@ -1,5 +1,6 @@
 SUBDIRS := \
 . \
+hal/include \
 hardware \
 hardware/board_configs \
 drivers/freedv \

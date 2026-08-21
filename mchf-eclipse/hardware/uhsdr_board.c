@@ -22,6 +22,7 @@
 #include "uhsdr_rtc.h"
 
 #include "ui_driver.h"
+#include "hal_gpio.h"
 
 #include "ui_rotary.h"
 
@@ -43,17 +44,16 @@ __IO __MCHF_SPECIALMEM TransceiverState ts;
 
 static void Board_Led_Init(void)
 {
-    GPIO_InitTypeDef  GPIO_InitStructure;
+    hal_gpio_config_t cfg;
 
-    GPIO_InitStructure.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStructure.Pull = GPIO_PULLUP;
-    GPIO_InitStructure.Speed = GPIO_SPEED_FREQ_LOW;
+    cfg.mode = HAL_GPIO_MODE_OUTPUT_PP;
+    cfg.pull = HAL_GPIO_PULL_UP;
+    cfg.speed = HAL_GPIO_SPEED_LOW;
+    cfg.pin = GREEN_LED;
+    hal_gpio_init(GREEN_LED_PIO, &cfg);
 
-    GPIO_InitStructure.Pin = GREEN_LED;
-    HAL_GPIO_Init(GREEN_LED_PIO, &GPIO_InitStructure);
-
-    GPIO_InitStructure.Pin = RED_LED;
-    HAL_GPIO_Init(RED_LED_PIO, &GPIO_InitStructure);
+    cfg.pin = RED_LED;
+    hal_gpio_init(RED_LED_PIO, &cfg);
 }
 
 #if 0
@@ -710,13 +710,13 @@ void Board_GreenLed(ledstate_t state)
     switch(state)
     {
     case LED_STATE_ON:
-        GPIO_SetBits(GREEN_LED_PIO, GREEN_LED);
+        hal_gpio_write_pin(GREEN_LED_PIO, GREEN_LED, HAL_GPIO_PIN_SET);
         break;
     case LED_STATE_OFF:
-        GPIO_ResetBits(GREEN_LED_PIO, GREEN_LED);
+        hal_gpio_write_pin(GREEN_LED_PIO, GREEN_LED, HAL_GPIO_PIN_RESET);
         break;
     default:
-        GPIO_ToggleBits(GREEN_LED_PIO, GREEN_LED);
+        hal_gpio_toggle_pin(GREEN_LED_PIO, GREEN_LED);
         break;
     }
 }
@@ -726,13 +726,13 @@ void Board_RedLed(ledstate_t state)
     switch(state)
     {
     case LED_STATE_ON:
-        GPIO_SetBits(RED_LED_PIO, RED_LED);
+        hal_gpio_write_pin(RED_LED_PIO, RED_LED, HAL_GPIO_PIN_SET);
         break;
     case LED_STATE_OFF:
-        GPIO_ResetBits(RED_LED_PIO, RED_LED);
+        hal_gpio_write_pin(RED_LED_PIO, RED_LED, HAL_GPIO_PIN_RESET);
         break;
     default:
-        GPIO_ToggleBits(RED_LED_PIO, RED_LED);
+        hal_gpio_toggle_pin(RED_LED_PIO, RED_LED);
         break;
     }
 }
@@ -743,13 +743,13 @@ void Board_BlueLed(ledstate_t state)
     switch(state)
     {
     case LED_STATE_ON:
-        GPIO_SetBits(BLUE_LED_PIO, BLUE_LED);
+        hal_gpio_write_pin(BLUE_LED_PIO, BLUE_LED, HAL_GPIO_PIN_SET);
         break;
     case LED_STATE_OFF:
-        GPIO_ResetBits(BLUE_LED_PIO, BLUE_LED);
+        hal_gpio_write_pin(BLUE_LED_PIO, BLUE_LED, HAL_GPIO_PIN_RESET);
         break;
     default:
-        GPIO_ToggleBits(BLUE_LED_PIO, BLUE_LED);
+        hal_gpio_toggle_pin(BLUE_LED_PIO, BLUE_LED);
         break;
     }
 }
@@ -789,12 +789,12 @@ void Board_EnableTXSignalPath(bool tx_enable)
  * Is the hardware contact named DAH pressed
  */
 bool Board_PttDahLinePressed() {
-    return  !HAL_GPIO_ReadPin(PADDLE_DAH_PIO,PADDLE_DAH);
+    return  !hal_gpio_read_pin(PADDLE_DAH_PIO,PADDLE_DAH);
 }
 
 /**
  * Is the hardware contact named DIT pressed
  */
 bool Board_DitLinePressed() {
-    return  !HAL_GPIO_ReadPin(PADDLE_DIT_PIO,PADDLE_DIT);
+    return  !hal_gpio_read_pin(PADDLE_DIT_PIO,PADDLE_DIT);
 }

@@ -1,6 +1,8 @@
 HAL_SRC := \
 basesw/ovi40-h7/Src/startup_stm32h743xx.S \
 basesw/ovi40-h7/Src/system_stm32h7xx.c \
+hal/src/gpio/hal_gpio_stm32.c \
+hal/src/spi/hal_spi_stm32.c \
 basesw/ovi40-h7/Src/stm32h7xx_it.c \
 basesw/ovi40-h7/Src/adc.c \
 basesw/ovi40-h7/Src/dac.c \

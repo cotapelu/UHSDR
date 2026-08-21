@@ -2,6 +2,8 @@
 HAL_SRC := \
 basesw/mcHF/Src/startup_stm32f407xx.S \
 basesw/mcHF/Src/system_stm32f4xx.c \
+hal/src/gpio/hal_gpio_stm32.c \
+hal/src/spi/hal_spi_stm32.c \
 basesw/mcHF/Src/adc.c \
 basesw/mcHF/Src/dac.c \
 basesw/mcHF/Src/dma.c \
