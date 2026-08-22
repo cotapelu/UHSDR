@@ -201,7 +201,13 @@
 **Goal:** Reduce file-scope `static` variables from 118 → <30.
 
 - [x] **T30.1** Encapsulate `audio_nr.c` statics into `AudioNr_Context` struct
-- [ ] **T30.2** Encapsulate `audio_driver.c` statics into `AudioDriver_Context` struct
+- [x] **T30.2** Encapsulate `audio_driver.c` statics into `AudioDriver_Context` struct
+  - Added `AudioDriver_Context_t` with all filter instances, state arrays, and coefficient tables
+  - Created global `g_audio_driver_ctx` with `__MCHF_SPECIALMEM` for F4 CCM placement
+  - Added `AudioDriver_InitContext()` to initialize context fields and pointers
+  - Used backward-compatible macros for internal references
+  - File-scope statics reduced from ~26 to 0
+  - Gate verified: `make all-firmware` + `make all-bootloader` pass; binary diff <1%
 - [ ] **T30.3** Encapsulate `ui_driver.c` statics into `UiDriver_Context` struct
 - [ ] **T30.4** Document remaining global state ownership (`TransceiverState ts` — single owner)
 

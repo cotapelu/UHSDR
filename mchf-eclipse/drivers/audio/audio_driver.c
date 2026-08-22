@@ -42,6 +42,7 @@
 #include "freedv_uhsdr.h"
 #include "freq_shift.h"
 #include "audio_nr.h"
+#include "ui_configuration.h"
 #ifdef USE_CONVOLUTION
 #include "audio_convolution.h"
 #endif
@@ -67,356 +68,129 @@ typedef struct
 } LMSData;
 #endif
 
-// Decimator for Zoom FFT
-static	arm_fir_decimate_instance_f32	DECIMATE_ZOOM_FFT_I;
-float32_t			__MCHF_SPECIALMEM decimZoomFFTIState[FIR_RXAUDIO_BLOCK_SIZE + FIR_RXAUDIO_NUM_TAPS];
-
-// Decimator for Zoom FFT
-static	arm_fir_decimate_instance_f32	DECIMATE_ZOOM_FFT_Q;
-float32_t			__MCHF_SPECIALMEM decimZoomFFTQState[FIR_RXAUDIO_BLOCK_SIZE + FIR_RXAUDIO_NUM_TAPS];
-
-// Audio RX - Interpolator
-static	arm_fir_interpolate_instance_f32 INTERPOLATE_RX[NUM_AUDIO_CHANNELS];
-float32_t			__MCHF_SPECIALMEM interpState[NUM_AUDIO_CHANNELS][FIR_RXAUDIO_BLOCK_SIZE + FIR_RXAUDIO_NUM_TAPS];
-
-
-
 #define NR_INTERPOLATE_NO_TAPS 40
-static  arm_fir_decimate_instance_f32   DECIMATE_NR;
-float32_t           decimNRState[FIR_RXAUDIO_BLOCK_SIZE + 4];
-
-static	arm_fir_interpolate_instance_f32 INTERPOLATE_NR;
-float32_t			interplNRState[FIR_RXAUDIO_BLOCK_SIZE + NR_INTERPOLATE_NO_TAPS];
-
 #define IIR_RX_STATE_ARRAY_SIZE    (IIR_RXAUDIO_BLOCK_SIZE + IIR_RXAUDIO_NUM_STAGES_MAX)
+#define AUDIO_DRIVER_FIR_RX_HILBERT_STATE_SIZE (IQ_RX_NUM_TAPS_MAX + IQ_RX_BLOCK_SIZE)
+
+typedef struct AudioDriverContext
+{
+    // FIR Decimate instances
+    arm_fir_decimate_instance_f32 decimate_zoom_fft_i;
+    arm_fir_decimate_instance_f32 decimate_zoom_fft_q;
+    arm_fir_decimate_instance_f32 decimate_nr;
+    
+    // FIR Interpolate instances
+    arm_fir_interpolate_instance_f32 interpolate_rx[NUM_AUDIO_CHANNELS];
+    arm_fir_interpolate_instance_f32 interpolate_nr;
+    
+    // FIR state arrays
+    float32_t decim_zoom_fft_i_state[FIR_RXAUDIO_BLOCK_SIZE + FIR_RXAUDIO_NUM_TAPS];
+    float32_t decim_zoom_fft_q_state[FIR_RXAUDIO_BLOCK_SIZE + FIR_RXAUDIO_NUM_TAPS];
+    float32_t interp_rx_state[NUM_AUDIO_CHANNELS][FIR_RXAUDIO_BLOCK_SIZE + FIR_RXAUDIO_NUM_TAPS];
+    float32_t decim_nr_state[FIR_RXAUDIO_BLOCK_SIZE + 4];
+    float32_t interp_nr_state[FIR_RXAUDIO_BLOCK_SIZE + NR_INTERPOLATE_NO_TAPS];
+    
+    // IIR Lattice instances
+    arm_iir_lattice_instance_f32 iir_pre_filter[NUM_AUDIO_CHANNELS];
+    arm_iir_lattice_instance_f32 iir_anti_alias[NUM_AUDIO_CHANNELS];
+    arm_iir_lattice_instance_f32 iir_squelch_hpf;
+    
+    // IIR state arrays
+    float32_t iir_rx_state[NUM_AUDIO_CHANNELS][IIR_RX_STATE_ARRAY_SIZE];
+    float32_t iir_aa_state[NUM_AUDIO_CHANNELS][IIR_RX_STATE_ARRAY_SIZE];
+    float32_t iir_squelch_rx_state[IIR_RX_STATE_ARRAY_SIZE];
+    
+    // Biquad instances
+    arm_biquad_casd_df1_inst_f32 iir_biquad_1[NUM_AUDIO_CHANNELS];
+    arm_biquad_casd_df1_inst_f32 iir_biquad_2[NUM_AUDIO_CHANNELS];
+    arm_biquad_casd_df1_inst_f32 iir_biquad_zoom_fft_i;
+    arm_biquad_casd_df1_inst_f32 iir_biquad_zoom_fft_q;
+    arm_biquad_casd_df1_inst_f32 iir_biquad_freedv_i;
+    arm_biquad_casd_df1_inst_f32 iir_biquad_freedv_q;
+    
+    // Biquad state arrays
+    float32_t iir_biquad_1_state[NUM_AUDIO_CHANNELS][4 * 4];
+    float32_t iir_biquad_2_state[NUM_AUDIO_CHANNELS][4 * 4];
+    float32_t iir_biquad_zoom_fft_i_state[4 * 4];
+    float32_t iir_biquad_zoom_fft_q_state[4 * 4];
+    float32_t iir_biquad_freedv_i_state[2 * 4];
+    float32_t iir_biquad_freedv_q_state[2 * 4];
+    
+    // FreeDV FIR
+    arm_fir_instance_f32 fir_freedv_rx_hilbert_i;
+    arm_fir_instance_f32 fir_freedv_rx_hilbert_q;
+    float32_t fir_freedv_rx_hilbert_state_i[AUDIO_DRIVER_FIR_RX_HILBERT_STATE_SIZE];
+    float32_t fir_freedv_rx_hilbert_state_q[AUDIO_DRIVER_FIR_RX_HILBERT_STATE_SIZE];
+    
+    // Coefficient arrays
+    float32_t nr_decimate_coeffs[4];
+    float32_t nr_interpolate_coeffs[NR_INTERPOLATE_NO_TAPS];
+    float32_t biquad_passthrough[5];
+    
+    // Coefficient pointer arrays
+    float32_t* mag_coeffs[MAGNIFY_NUM];
+    float32_t* freedv_coeffs[1];
+} AudioDriver_Context_t;
+
+__MCHF_SPECIALMEM AudioDriver_Context_t g_audio_driver_ctx = {0};
+
+// Backward-compatible aliases for internal use
+#define DECIMATE_ZOOM_FFT_I g_audio_driver_ctx.decimate_zoom_fft_i
+#define DECIMATE_ZOOM_FFT_Q g_audio_driver_ctx.decimate_zoom_fft_q
+#define INTERPOLATE_RX g_audio_driver_ctx.interpolate_rx
+#define DECIMATE_NR g_audio_driver_ctx.decimate_nr
+#define INTERPOLATE_NR g_audio_driver_ctx.interpolate_nr
+#define IIR_PreFilter g_audio_driver_ctx.iir_pre_filter
+#define IIR_AntiAlias g_audio_driver_ctx.iir_anti_alias
+#define IIR_biquad_1 g_audio_driver_ctx.iir_biquad_1
+#define IIR_biquad_2 g_audio_driver_ctx.iir_biquad_2
+#define IIR_biquad_Zoom_FFT_I g_audio_driver_ctx.iir_biquad_zoom_fft_i
+#define IIR_biquad_Zoom_FFT_Q g_audio_driver_ctx.iir_biquad_zoom_fft_q
+#define IIR_biquad_FreeDV_I g_audio_driver_ctx.iir_biquad_freedv_i
+#define IIR_biquad_FreeDV_Q g_audio_driver_ctx.iir_biquad_freedv_q
+#define IIR_Squelch_HPF g_audio_driver_ctx.iir_squelch_hpf
+#define Fir_FreeDV_Rx_Hilbert_I g_audio_driver_ctx.fir_freedv_rx_hilbert_i
+#define Fir_FreeDV_Rx_Hilbert_Q g_audio_driver_ctx.fir_freedv_rx_hilbert_q
+#define NR_decimate_coeffs g_audio_driver_ctx.nr_decimate_coeffs
+#define NR_interpolate_coeffs g_audio_driver_ctx.nr_interpolate_coeffs
+#define mag_coeffs g_audio_driver_ctx.mag_coeffs
+#define FreeDV_coeffs g_audio_driver_ctx.freedv_coeffs
+#define biquad_passthrough g_audio_driver_ctx.biquad_passthrough
+#define decimZoomFFTIState g_audio_driver_ctx.decim_zoom_fft_i_state
+#define decimZoomFFTQState g_audio_driver_ctx.decim_zoom_fft_q_state
+#define interpState g_audio_driver_ctx.interp_rx_state
+#define decimNRState g_audio_driver_ctx.decim_nr_state
+#define interplNRState g_audio_driver_ctx.interp_nr_state
+#define iir_rx_state g_audio_driver_ctx.iir_rx_state
+#define iir_aa_state g_audio_driver_ctx.iir_aa_state
+#define iir_squelch_rx_state g_audio_driver_ctx.iir_squelch_rx_state
+#define Fir_FreeDV_Rx_Hilbert_State_I g_audio_driver_ctx.fir_freedv_rx_hilbert_state_i
+#define Fir_FreeDV_Rx_Hilbert_State_Q g_audio_driver_ctx.fir_freedv_rx_hilbert_state_q
+
 // variables for RX IIR filters
-static float32_t		iir_rx_state[NUM_AUDIO_CHANNELS][IIR_RX_STATE_ARRAY_SIZE];
-static arm_iir_lattice_instance_f32	IIR_PreFilter[NUM_AUDIO_CHANNELS];
 
 // variables for RX antialias IIR filter
-static float32_t		iir_aa_state[NUM_AUDIO_CHANNELS][IIR_RX_STATE_ARRAY_SIZE];
-static arm_iir_lattice_instance_f32	IIR_AntiAlias[NUM_AUDIO_CHANNELS];
 
 // static float32_t Koeff[20];
 // variables for RX manual notch, manual peak & bass shelf IIR biquad filter
-static arm_biquad_casd_df1_inst_f32 IIR_biquad_1[NUM_AUDIO_CHANNELS] =
-{
-        {
-                .numStages = 4,
-                .pCoeffs = (float32_t *)(float32_t [])
-                {
-                    1,0,0,0,0,  1,0,0,0,0,  1,0,0,0,0,  1,0,0,0,0
-                }, // 4 x 5 = 20 coefficients
-
-                .pState = (float32_t *)(float32_t [])
-                {
-                    0,0,0,0,   0,0,0,0,   0,0,0,0,   0,0,0,0
-                } // 4 x 4 = 16 state variables
-        },
-#ifdef USE_TWO_CHANNEL_AUDIO
-        {
-                .numStages = 4,
-                .pCoeffs = (float32_t *)(float32_t [])
-                {
-                    1,0,0,0,0,  1,0,0,0,0,  1,0,0,0,0,  1,0,0,0,0
-                }, // 3 x 5 = 15 coefficients
-
-                .pState = (float32_t *)(float32_t [])
-                {
-                    0,0,0,0,   0,0,0,0,   0,0,0,0,   0,0,0,0
-                } // 3 x 4 = 12 state variables
-        }
-#endif
-};
-
 
 // variables for RX treble shelf IIR biquad filter
-static arm_biquad_casd_df1_inst_f32 IIR_biquad_2[NUM_AUDIO_CHANNELS] =
-{
-        {
-                .numStages = 1,
-                .pCoeffs = (float32_t *)(float32_t [])
-                {
-                    1,0,0,0,0
-                }, // 1 x 5 = 5 coefficients
-
-                .pState = (float32_t *)(float32_t [])
-                {
-                    0,0,0,0
-                } // 1 x 4 = 4 state variables
-        },
-#ifdef USE_TWO_CHANNEL_AUDIO
-        {
-                .numStages = 1,
-                .pCoeffs = (float32_t *)(float32_t [])
-                {
-                    1,0,0,0,0
-                }, // 1 x 5 = 5 coefficients
-
-                .pState = (float32_t *)(float32_t [])
-                {
-                    0,0,0,0
-                } // 1 x 4 = 4 state variables
-        }
-#endif
-};
-
 
 // variables for ZoomFFT lowpass filtering
-static arm_biquad_casd_df1_inst_f32 IIR_biquad_Zoom_FFT_I =
-{
-        .numStages = 4,
-        .pCoeffs = (float32_t *)(float32_t [])
-        {
-            1,0,0,0,0,  1,0,0,0,0 // passthru
-        }, // 2 x 5 = 10 coefficients
-
-        .pState = (float32_t *)(float32_t [])
-        {
-            0,0,0,0,   0,0,0,0,    0,0,0,0,   0,0,0,0
-        } // 4 x 4 = 16 state variables
-};
-
-static arm_biquad_casd_df1_inst_f32 IIR_biquad_Zoom_FFT_Q =
-{
-        .numStages = 4,
-        .pCoeffs = (float32_t *)(float32_t [])
-        {
-            1,0,0,0,0,  1,0,0,0,0 // passthru
-        }, // 2 x 5 = 10 coefficients
-
-        .pState = (float32_t *)(float32_t [])
-        {
-            0,0,0,0,   0,0,0,0,   0,0,0,0,   0,0,0,0
-        } // 4 x 4 = 16 state variables
-};
 
 // sr = 12ksps, Fstop = 2k7, we lowpass-filtered the audio already in the main aido path (IIR),
 // so only the minimum size filter (4 taps) is used here
-static float32_t NR_decimate_coeffs [4] = {0.099144206287089282, 0.492752007869707798, 0.492752007869707798, 0.099144206287089282};
 
 // 12ksps, Fstop = 2k7, KAISER, 40 taps, a good interpolation filter after the interpolation, maybe too many taps?
-static float32_t NR_interpolate_coeffs [NR_INTERPOLATE_NO_TAPS] = {-495.0757586677611930E-6, 0.001320676868426568, 0.001533845835568487,-0.002357633129357554,-0.003572560455091757, 0.003388797052024843, 0.007032840952358404,-0.003960820803871866,-0.012365795129023015, 0.003357357660531775, 0.020101326014980946,-475.4964584295063900E-6,-0.031094910247864812,-0.006597041050034579, 0.047436525317202147, 0.022324808965607446,-0.076541709512474090,-0.064246467306504046, 0.167750545742874818, 0.427794841657261171, 0.427794841657261171, 0.167750545742874818,-0.064246467306504046,-0.076541709512474090, 0.022324808965607446, 0.047436525317202147,-0.006597041050034579,-0.031094910247864812,-475.4964584295063900E-6, 0.020101326014980946, 0.003357357660531775,-0.012365795129023015,-0.003960820803871866, 0.007032840952358404, 0.003388797052024843,-0.003572560455091757,-0.002357633129357554, 0.001533845835568487, 0.001320676868426568,-495.0757586677611930E-6};
 
 // this is wrong! Interpolation filters act at the sample rate AFTER the interpolation, in this case at 12ksps
 // 6ksps, Fstop = 2k65, KAISER
-//static float32_t NR_interpolate_coeffs [NR_INTERPOLATE_NO_TAPS] = {-903.6623076669911820E-6, 0.001594488333496738,-0.002320508982899863, 0.002832351511451895,-0.002797105957386612, 0.001852836963547170, 308.6133633078010230E-6,-0.003842008360761881, 0.008649943961959465,-0.014305251526745446, 0.020012524686320185,-0.024618364878703208, 0.026664997481476788,-0.024458388333600374, 0.016080841021827566, 818.1032282579135430E-6,-0.029933800539235892, 0.079833661336890141,-0.182038248016552551, 0.626273078268197225, 0.626273078268197225,-0.182038248016552551, 0.079833661336890141,-0.029933800539235892, 818.1032282579135430E-6, 0.016080841021827566,-0.024458388333600374, 0.026664997481476788,-0.024618364878703208, 0.020012524686320185,-0.014305251526745446, 0.008649943961959465,-0.003842008360761881, 308.6133633078010230E-6, 0.001852836963547170,-0.002797105957386612, 0.002832351511451895,-0.002320508982899863, 0.001594488333496738,-903.6623076669911820E-6};
-
-static float32_t* mag_coeffs[MAGNIFY_NUM] =
-{
-
-        // for Index 0 [1xZoom == no zoom] the mag_coeffs will a NULL  ptr, since the filter is not going to be used in this  mode!
-        NULL,
-
-        (float32_t*)(const float32_t[]) {
-            // 2x magnify - index 1
-            // 12kHz, sample rate 48k, 60dB stopband, elliptic
-            // a1 and coeffs[A2] negated! order: coeffs[B0], coeffs[B1], coeffs[B2], a1, coeffs[A2]
-            // Iowa Hills IIR Filter Designer, DD4WH Aug 16th 2016
-            0.228454526413293696,
-            0.077639329099949764,
-            0.228454526413293696,
-            0.635534925142242080,
-            -0.170083307068779194,
-
-            0.436788292542003964,
-            0.232307972937606161,
-            0.436788292542003964,
-            0.365885230717786780,
-            -0.471769788739400842,
-
-            0.535974654742658707,
-            0.557035600464780845,
-            0.535974654742658707,
-            0.125740787233286133,
-            -0.754725697183384336,
-
-            0.501116342273565607,
-            0.914877831284765408,
-            0.501116342273565607,
-            0.013862536615004284,
-            -0.930973052446900984
-        },
-
-        (float32_t*)(const float32_t[])
-        {
-            // 4x magnify - index 2
-            // 6kHz, sample rate 48k, 60dB stopband, elliptic
-            // a1 and coeffs[A2] negated! order: coeffs[B0], coeffs[B1], coeffs[B2], a1, coeffs[A2]
-            // Iowa Hills IIR Filter Designer, DD4WH Aug 16th 2016
-            0.182208761527446556,
-            -0.222492493114674145,
-            0.182208761527446556,
-            1.326111070880959810,
-            -0.468036100821178802,
-
-            0.337123762652097259,
-            -0.366352718812586853,
-            0.337123762652097259,
-            1.337053579516321200,
-            -0.644948386007929031,
-
-            0.336163175380826074,
-            -0.199246162162897811,
-            0.336163175380826074,
-            1.354952684569386670,
-            -0.828032873168141115,
-
-            0.178588201750411041,
-            0.207271695028067304,
-            0.178588201750411041,
-            1.386486967455699220,
-            -0.950935065984588657
-        },
-
-        (float32_t*)(const float32_t[])
-        {
-            // 8x magnify - index 3
-            // 3kHz, sample rate 48k, 60dB stopband, elliptic
-            // a1 and coeffs[A2] negated! order: coeffs[B0], coeffs[B1], coeffs[B2], a1, coeffs[A2]
-            // Iowa Hills IIR Filter Designer, DD4WH Aug 16th 2016
-            0.185643392652478922,
-            -0.332064345389014803,
-            0.185643392652478922,
-            1.654637402827731090,
-            -0.693859842743674182,
-
-            0.327519300813245984,
-            -0.571358085216950418,
-            0.327519300813245984,
-            1.715375037176782860,
-            -0.799055553586324407,
-
-            0.283656142708241688,
-            -0.441088976843048652,
-            0.283656142708241688,
-            1.778230635987093860,
-            -0.904453944560528522,
-
-            0.079685368654848945,
-            -0.011231810140649204,
-            0.079685368654848945,
-            1.825046003243238070,
-            -0.973184930412286708
-        },
-
-        (float32_t*)(const float32_t[])
-        {
-            // 16x magnify - index 4
-            // 1k5, sample rate 48k, 60dB stopband, elliptic
-            // a1 and coeffs[A2] negated! order: coeffs[B0], coeffs[B1], coeffs[B2], a1, coeffs[A2]
-            // Iowa Hills IIR Filter Designer, DD4WH Aug 16th 2016
-            0.194769868656866380,
-            -0.379098413160710079,
-            0.194769868656866380,
-            1.824436402073870810,
-            -0.834877726226893380,
-
-            0.333973874901496770,
-            -0.646106479315673776,
-            0.333973874901496770,
-            1.871892825636887640,
-            -0.893734096124207178,
-
-            0.272903880596429671,
-            -0.513507745397738469,
-            0.272903880596429671,
-            1.918161772571113750,
-            -0.950461788366234739,
-
-            0.053535383722369843,
-            -0.069683422367188122,
-            0.053535383722369843,
-            1.948900719896301760,
-            -0.986288064973853129
-        },
-
-        (float32_t*)(const float32_t[])
-        {
-            // 32x magnify - index 5
-            // 750Hz, sample rate 48k, 60dB stopband, elliptic
-            // a1 and coeffs[A2] negated! order: coeffs[B0], coeffs[B1], coeffs[B2], a1, coeffs[A2]
-            // Iowa Hills IIR Filter Designer, DD4WH Aug 16th 2016
-            0.201507402588557594,
-            -0.400273615727755550,
-            0.201507402588557594,
-            1.910767558906650840,
-            -0.913508748356010480,
-
-            0.340295203367131205,
-            -0.674930558961690075,
-            0.340295203367131205,
-            1.939398230905991390,
-            -0.945058078678563840,
-
-            0.271859921641011359,
-            -0.535453706265515361,
-            0.271859921641011359,
-            1.966439529620203740,
-            -0.974705666636711099,
-
-            0.047026497485465592,
-            -0.084562104085501480,
-            0.047026497485465592,
-            1.983564238653704900,
-            -0.993055129539134551
-        }
-};
+//
 
 #ifdef USE_SIMPLE_FREEDV_FILTERS
 //******* From here 2 set of filters for the I/Q FreeDV aliasing filter**********
 // I- and Q- Filter instances for FreeDV downsampling aliasing filters
 
-static arm_biquad_casd_df1_inst_f32 IIR_biquad_FreeDV_I =
-{
-        .numStages = 2,
-        .pCoeffs = (float32_t *)(float32_t [])
-        {
-            1,0,0,0,0,  1,0,0,0,0 // passthru
-        }, // 2 x 5 = 10 coefficients
-
-        .pState = (float32_t *)(float32_t [])
-        {
-            0,0,0,0,   0,0,0,0
-        } // 2 x 4 = 8 state variables
-};
-
-static arm_biquad_casd_df1_inst_f32 IIR_biquad_FreeDV_Q =
-{
-        .numStages = 2,
-        .pCoeffs = (float32_t *)(float32_t [])
-        {
-            1,0,0,0,0,  1,0,0,0,0 // passthru
-        }, // 2 x 5 = 10 coefficients
-
-        .pState = (float32_t *)(float32_t [])
-        {
-            0,0,0,0,   0,0,0,0
-        } // 2 x 4 = 8 state variables
-};
-
-static float32_t* FreeDV_coeffs[1] =
-{
-        (float32_t*)(const float32_t[]){
-            // index 1
-            // 2,4kHz, sample rate 48k, 50dB stopband, elliptic
-            // only 2 stages!!!!!
-            // a1 and coeffs[A2] negated! order: coeffs[B0], coeffs[B1], coeffs[B2], a1, coeffs[A2]
-            // Iowa Hills IIR Filter Designer, DL2FW 20-10-16
-
-            0.083165011486267731,
-            -0.118387356334666696,
-            0.083165011486267731,
-            1.666027486884941840,
-            -0.713970153522810569,
-
-            0.068193683664968877,
-            -0.007220581127135660,
-            0.068193683664968877,
-            1.763363677375461290,
-            -0.892530463578263378
-        }
-};
 #endif
 
 //******* End of 2 set of filters for the I/Q FreeDV aliasing filter**********
@@ -464,10 +238,7 @@ int32_t AudioDriver_GetTranslateFreq()
     return fdelta;
 }
 
-
 // RX variables for FM squelch IIR filters
-static float32_t    iir_squelch_rx_state[IIR_RX_STATE_ARRAY_SIZE];
-static arm_iir_lattice_instance_f32 IIR_Squelch_HPF;
 
 static void AudioDriver_FM_Rx_Init(fm_conf_t* fm)
 {
@@ -576,8 +347,302 @@ void AudioDriver_LeakyLmsNr (float32_t *in_buff, float32_t *out_buff, int buff_s
 }
 #endif
 
+#undef DECIMATE_ZOOM_FFT_I
+#undef DECIMATE_ZOOM_FFT_Q
+#undef INTERPOLATE_RX
+#undef DECIMATE_NR
+#undef INTERPOLATE_NR
+#undef IIR_PreFilter
+#undef IIR_AntiAlias
+#undef IIR_biquad_1
+#undef IIR_biquad_2
+#undef IIR_biquad_Zoom_FFT_I
+#undef IIR_biquad_Zoom_FFT_Q
+#undef IIR_biquad_FreeDV_I
+#undef IIR_biquad_FreeDV_Q
+#undef IIR_Squelch_HPF
+#undef Fir_FreeDV_Rx_Hilbert_I
+#undef Fir_FreeDV_Rx_Hilbert_Q
+#undef NR_decimate_coeffs
+#undef NR_interpolate_coeffs
+#undef mag_coeffs
+#undef FreeDV_coeffs
+#undef biquad_passthrough
+#undef decimZoomFFTIState
+#undef decimZoomFFTQState
+#undef interpState
+#undef decimNRState
+#undef interplNRState
+#undef iir_rx_state
+#undef iir_aa_state
+#undef iir_squelch_rx_state
+#undef Fir_FreeDV_Rx_Hilbert_State_I
+#undef Fir_FreeDV_Rx_Hilbert_State_Q
+
+static void AudioDriver_InitContext(AudioDriver_Context_t* ctx)
+{
+    // Initialize NR decimate coefficients
+    ctx->nr_decimate_coeffs[0] = 0.099144206287089282f;
+    ctx->nr_decimate_coeffs[1] = 0.492752007869707798f;
+    ctx->nr_decimate_coeffs[2] = 0.492752007869707798f;
+    ctx->nr_decimate_coeffs[3] = 0.099144206287089282f;
+
+    // Initialize NR interpolate coefficients
+    ctx->nr_interpolate_coeffs[0] = -495.0757586677611930E-6f;
+    ctx->nr_interpolate_coeffs[1] = 0.001320676868426568f;
+    ctx->nr_interpolate_coeffs[2] = 0.001533845835568487f;
+    ctx->nr_interpolate_coeffs[3] = -0.002357633129357554f;
+    ctx->nr_interpolate_coeffs[4] = -0.003572560455091757f;
+    ctx->nr_interpolate_coeffs[5] = 0.003388797052024843f;
+    ctx->nr_interpolate_coeffs[6] = 0.007032840952358404f;
+    ctx->nr_interpolate_coeffs[7] = -0.003960820803871866f;
+    ctx->nr_interpolate_coeffs[8] = -0.012365795129023015f;
+    ctx->nr_interpolate_coeffs[9] = 0.003357357660531775f;
+    ctx->nr_interpolate_coeffs[10] = 0.020101326014980946f;
+    ctx->nr_interpolate_coeffs[11] = -475.4964584295063900E-6f;
+    ctx->nr_interpolate_coeffs[12] = -0.031094910247864812f;
+    ctx->nr_interpolate_coeffs[13] = -0.006597041050034579f;
+    ctx->nr_interpolate_coeffs[14] = 0.047436525317202147f;
+    ctx->nr_interpolate_coeffs[15] = 0.022324808965607446f;
+    ctx->nr_interpolate_coeffs[16] = -0.076541709512474090f;
+    ctx->nr_interpolate_coeffs[17] = -0.064246467306504046f;
+    ctx->nr_interpolate_coeffs[18] = 0.167750545742874818f;
+    ctx->nr_interpolate_coeffs[19] = 0.427794841657261171f;
+    ctx->nr_interpolate_coeffs[20] = 0.427794841657261171f;
+    ctx->nr_interpolate_coeffs[21] = 0.167750545742874818f;
+    ctx->nr_interpolate_coeffs[22] = -0.064246467306504046f;
+    ctx->nr_interpolate_coeffs[23] = -0.076541709512474090f;
+    ctx->nr_interpolate_coeffs[24] = 0.022324808965607446f;
+    ctx->nr_interpolate_coeffs[25] = 0.047436525317202147f;
+    ctx->nr_interpolate_coeffs[26] = -0.006597041050034579f;
+    ctx->nr_interpolate_coeffs[27] = -0.031094910247864812f;
+    ctx->nr_interpolate_coeffs[28] = -475.4964584295063900E-6f;
+    ctx->nr_interpolate_coeffs[29] = 0.020101326014980946f;
+    ctx->nr_interpolate_coeffs[30] = 0.003357357660531775f;
+    ctx->nr_interpolate_coeffs[31] = -0.012365795129023015f;
+    ctx->nr_interpolate_coeffs[32] = -0.003960820803871866f;
+    ctx->nr_interpolate_coeffs[33] = 0.007032840952358404f;
+    ctx->nr_interpolate_coeffs[34] = 0.003388797052024843f;
+    ctx->nr_interpolate_coeffs[35] = -0.003572560455091757f;
+    ctx->nr_interpolate_coeffs[36] = -0.002357633129357554f;
+    ctx->nr_interpolate_coeffs[37] = 0.001533845835568487f;
+    ctx->nr_interpolate_coeffs[38] = 0.001320676868426568f;
+    ctx->nr_interpolate_coeffs[39] = -495.0757586677611930E-6f;
+
+    // Initialize biquad passthrough
+    ctx->biquad_passthrough[0] = 1.0f;
+    ctx->biquad_passthrough[1] = 0.0f;
+    ctx->biquad_passthrough[2] = 0.0f;
+    ctx->biquad_passthrough[3] = 0.0f;
+    ctx->biquad_passthrough[4] = 0.0f;
+
+    // Initialize magnification coefficients
+    ctx->mag_coeffs[0] = NULL;
+    ctx->mag_coeffs[1] = (float32_t*)(const float32_t[]){
+        // 2x magnify - index 1
+        // 12kHz, sample rate 48k, 60dB stopband, elliptic
+        // a1 and coeffs[A2] negated! order: coeffs[B0], coeffs[B1], coeffs[B2], a1, coeffs[A2]
+        // Iowa Hills IIR Filter Designer, DD4WH Aug 16th 2016
+        0.228454526413293696f,
+        0.077639329099949764f,
+        0.228454526413293696f,
+        0.635534925142242080f,
+        -0.170083307068779194f,
+
+        0.436788292542003964f,
+        0.232307972937606161f,
+        0.436788292542003964f,
+        0.365885230717786780f,
+        -0.471769788739400842f,
+
+        0.535974654742658707f,
+        0.557035600464780845f,
+        0.535974654742658707f,
+        0.125740787233286133f,
+        -0.754725697183384336f,
+
+        0.501116342273565607f,
+        0.914877831284765408f,
+        0.501116342273565607f,
+        0.013862536615004284f,
+        -0.930973052446900984f
+    };
+    ctx->mag_coeffs[2] = (float32_t*)(const float32_t[]){
+        // 4x magnify - index 2
+        // 6kHz, sample rate 48k, 60dB stopband, elliptic
+        0.182208761527446556f,
+        -0.222492493114674145f,
+        0.182208761527446556f,
+        1.326111070880959810f,
+        -0.468036100821178802f,
+
+        0.337123762652097259f,
+        -0.366352718812586853f,
+        0.337123762652097259f,
+        1.337053579516321200f,
+        -0.644948386007929031f,
+
+        0.336163175380826074f,
+        -0.199246162162897811f,
+        0.336163175380826074f,
+        1.354952684569386670f,
+        -0.828032873168141115f,
+
+        0.178588201750411041f,
+        0.207271695028067304f,
+        0.178588201750411041f,
+        1.386486967455699220f,
+        -0.950935065984588657f
+    };
+    ctx->mag_coeffs[3] = (float32_t*)(const float32_t[]){
+        // 8x magnify - index 3
+        // 3kHz, sample rate 48k, 60dB stopband, elliptic
+        0.185643392652478922f,
+        -0.332064345389014803f,
+        0.185643392652478922f,
+        1.654637402827731090f,
+        -0.693859842743674182f,
+
+        0.327519300813245984f,
+        -0.571358085216950418f,
+        0.327519300813245984f,
+        1.715375037176782860f,
+        -0.799055553586324407f,
+
+        0.283656142708241688f,
+        -0.441088976843048652f,
+        0.283656142708241688f,
+        1.778230635987093860f,
+        -0.904453944560528522f,
+
+        0.079685368654848945f,
+        -0.011231810140649204f,
+        0.079685368654848945f,
+        1.825046003243238070f,
+        -0.973184930412286708f
+    };
+    ctx->mag_coeffs[4] = (float32_t*)(const float32_t[]){
+        // 16x magnify - index 4
+        // 1k5, sample rate 48k, 60dB stopband, elliptic
+        0.194769868656866380f,
+        -0.379098413160710079f,
+        0.194769868656866380f,
+        1.824436402073870810f,
+        -0.834877726226893380f,
+
+        0.333973874901496770f,
+        -0.646106479315673776f,
+        0.333973874901496770f,
+        1.871892825636887640f,
+        -0.893734096124207178f,
+
+        0.272903880596429671f,
+        -0.513507745397738469f,
+        0.272903880596429671f,
+        1.918161772571113750f,
+        -0.950461788366234739f,
+
+        0.053535383722369843f,
+        -0.069683422367188122f,
+        0.053535383722369843f,
+        1.948900719896301760f,
+        -0.986288064973853129f
+    };
+    ctx->mag_coeffs[5] = (float32_t*)(const float32_t[]){
+        // 32x magnify - index 5
+        // 750Hz, sample rate 48k, 60dB stopband, elliptic
+        0.201507402588557594f,
+        -0.400273615727755550f,
+        0.201507402588557594f,
+        1.910767558906650840f,
+        -0.913508748356010480f,
+
+        0.340295203367131205f,
+        -0.674930558961690075f,
+        0.340295203367131205f,
+        1.939398230905991390f,
+        -0.945058078678563840f,
+
+        0.271859921641011359f,
+        -0.535453706265515361f,
+        0.271859921641011359f,
+        1.966439529620203740f,
+        -0.974705666636711099f,
+
+        0.047026497485465592f,
+        -0.084562104085501480f,
+        0.047026497485465592f,
+        1.983564238653704900f,
+        -0.993055129539134551f
+    };
+
+    // Initialize FreeDV coefficients
+    ctx->freedv_coeffs[0] = (float32_t*)(const float32_t[]){
+        1,0,0,0,0,  1,0,0,0,0 // passthru
+    };
+
+    // Initialize biquad instances
+    for (int i = 0; i < NUM_AUDIO_CHANNELS; i++)
+    {
+        ctx->iir_biquad_1[i].numStages = 4;
+        ctx->iir_biquad_1[i].pState = ctx->iir_biquad_1_state[i];
+        
+        ctx->iir_biquad_2[i].numStages = 1;
+        ctx->iir_biquad_2[i].pState = ctx->iir_biquad_2_state[i];
+    }
+    
+    ctx->iir_biquad_zoom_fft_i.numStages = 4;
+    ctx->iir_biquad_zoom_fft_i.pState = ctx->iir_biquad_zoom_fft_i_state;
+    
+    ctx->iir_biquad_zoom_fft_q.numStages = 4;
+    ctx->iir_biquad_zoom_fft_q.pState = ctx->iir_biquad_zoom_fft_q_state;
+    
+    ctx->iir_biquad_freedv_i.numStages = 2;
+    ctx->iir_biquad_freedv_i.pState = ctx->iir_biquad_freedv_i_state;
+    
+    ctx->iir_biquad_freedv_q.numStages = 2;
+    ctx->iir_biquad_freedv_q.pState = ctx->iir_biquad_freedv_q_state;
+}
+
+// Re-define backward-compatible aliases for use in remaining code
+#define DECIMATE_ZOOM_FFT_I g_audio_driver_ctx.decimate_zoom_fft_i
+#define DECIMATE_ZOOM_FFT_Q g_audio_driver_ctx.decimate_zoom_fft_q
+#define INTERPOLATE_RX g_audio_driver_ctx.interpolate_rx
+#define DECIMATE_NR g_audio_driver_ctx.decimate_nr
+#define INTERPOLATE_NR g_audio_driver_ctx.interpolate_nr
+#define IIR_PreFilter g_audio_driver_ctx.iir_pre_filter
+#define IIR_AntiAlias g_audio_driver_ctx.iir_anti_alias
+#define IIR_biquad_1 g_audio_driver_ctx.iir_biquad_1
+#define IIR_biquad_2 g_audio_driver_ctx.iir_biquad_2
+#define IIR_biquad_Zoom_FFT_I g_audio_driver_ctx.iir_biquad_zoom_fft_i
+#define IIR_biquad_Zoom_FFT_Q g_audio_driver_ctx.iir_biquad_zoom_fft_q
+#define IIR_biquad_FreeDV_I g_audio_driver_ctx.iir_biquad_freedv_i
+#define IIR_biquad_FreeDV_Q g_audio_driver_ctx.iir_biquad_freedv_q
+#define IIR_Squelch_HPF g_audio_driver_ctx.iir_squelch_hpf
+#define Fir_FreeDV_Rx_Hilbert_I g_audio_driver_ctx.fir_freedv_rx_hilbert_i
+#define Fir_FreeDV_Rx_Hilbert_Q g_audio_driver_ctx.fir_freedv_rx_hilbert_q
+#define NR_decimate_coeffs g_audio_driver_ctx.nr_decimate_coeffs
+#define NR_interpolate_coeffs g_audio_driver_ctx.nr_interpolate_coeffs
+#define mag_coeffs g_audio_driver_ctx.mag_coeffs
+#define FreeDV_coeffs g_audio_driver_ctx.freedv_coeffs
+#define biquad_passthrough g_audio_driver_ctx.biquad_passthrough
+#define decimZoomFFTIState g_audio_driver_ctx.decim_zoom_fft_i_state
+#define decimZoomFFTQState g_audio_driver_ctx.decim_zoom_fft_q_state
+#define interpState g_audio_driver_ctx.interp_rx_state
+#define decimNRState g_audio_driver_ctx.decim_nr_state
+#define interplNRState g_audio_driver_ctx.interp_nr_state
+#define iir_rx_state g_audio_driver_ctx.iir_rx_state
+#define iir_aa_state g_audio_driver_ctx.iir_aa_state
+#define iir_squelch_rx_state g_audio_driver_ctx.iir_squelch_rx_state
+#define Fir_FreeDV_Rx_Hilbert_State_I g_audio_driver_ctx.fir_freedv_rx_hilbert_state_i
+#define Fir_FreeDV_Rx_Hilbert_State_Q g_audio_driver_ctx.fir_freedv_rx_hilbert_state_q
+
 static void AudioDriver_Dsp_Init(volatile dsp_params_t* dsp_p)
 {
+
+    AudioDriver_InitContext(&g_audio_driver_ctx);
+
+    dsp_p->active_toggle    = 0xff;                 // used to hold the button G2 "toggle" setting.
 
     dsp_p->active_toggle    = 0xff;                 // used to hold the button G2 "toggle" setting.
 
@@ -604,10 +669,7 @@ static void AudioDriver_Dsp_Init(volatile dsp_params_t* dsp_p)
 
 #define FIR_RX_HILBERT_STATE_SIZE (IQ_RX_NUM_TAPS_MAX + IQ_RX_BLOCK_SIZE)
 #ifndef USE_SIMPLE_FREEDV_FILTERS
-static float32_t    __MCHF_SPECIALMEM Fir_FreeDV_Rx_Hilbert_State_I[FIR_RX_HILBERT_STATE_SIZE];
-static float32_t    __MCHF_SPECIALMEM Fir_FreeDV_Rx_Hilbert_State_Q[FIR_RX_HILBERT_STATE_SIZE];
-static arm_fir_instance_f32    Fir_FreeDV_Rx_Hilbert_I;
-static arm_fir_instance_f32    Fir_FreeDV_Rx_Hilbert_Q;
+
 #endif
 
 static void AudioDriver_FreeDV_Rx_Init()
@@ -651,7 +713,6 @@ static void RxProcessor_Init()
     // this filter instance is also used for Convolution !
     arm_fir_interpolate_init_f32(&INTERPOLATE_NR, 2, NR_INTERPOLATE_NO_TAPS, NR_interpolate_coeffs, interplNRState, FIR_RXAUDIO_BLOCK_SIZE);
     // should be a very light lowpass @2k7
-
 
 #ifdef USE_LEAKY_LMS
     AudioDriver_LeakyLmsNr_Init(); // RX
@@ -753,8 +814,6 @@ static void AudioDriver_SetRxIqCorrection()
     adb.iq_corr.teta3_old = 0.0;
 }
 
-
-
 /*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  * Cascaded biquad (notch, peak, lowShelf, highShelf) [DD4WH, april 2016]
  ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
@@ -777,8 +836,6 @@ static void AudioDriver_SetRxIqCorrection()
 //
 // we also have to divide every coefficient by a0 !
 // y[n] = coeffs[B0]/a0 * x[n] + coeffs[B1]/a0 * x[n-1] + coeffs[B2]/a0 * x[n-2] - coeffs[A1]/a0 * y[n-1] - coeffs[A2]/a0 * y[n-2]
-static const float32_t biquad_passthrough[] = { 1, 0, 0, 0, 0 };
-
 
 /**
  * @brief Filter Init used for processing audio for RX and TX
@@ -857,7 +914,6 @@ static void AudioDriver_Spectrum_Set()
     // for 0 the mag_coeffs will a NULL  ptr, since the filter is not going to be used in this  mode!
     IIR_biquad_Zoom_FFT_I.pCoeffs = mag_coeffs[sd.magnify];
     IIR_biquad_Zoom_FFT_Q.pCoeffs = mag_coeffs[sd.magnify];
-
 
     // Set up ZOOM FFT FIR decimation filters
     // switch right FIR decimation filter depending on sd.magnify
@@ -949,7 +1005,6 @@ void AudioDriver_SetProcessingChain(uint8_t dmod_mode, bool reset_dsp_nr)
     // initialize the goertzel filter used to detect CW signals at a given frequency in the audio stream
     CwDecode_Filter_Set();
 
-
     /*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
      * End of coefficient calculation and setting for cascaded biquad
      ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
@@ -977,7 +1032,6 @@ void AudioDriver_SetProcessingChain(uint8_t dmod_mode, bool reset_dsp_nr)
     }
     // AUTO NOTCH INIT END
 #endif
-
 
 // NEW SPECTRAL NOISE REDUCTION
     // convert user setting of noise reduction to alpha NR parameter
@@ -1041,11 +1095,6 @@ void AudioDriver_SetProcessingChain(uint8_t dmod_mode, bool reset_dsp_nr)
     if (ts.dsp.inhibit) { ts.dsp.inhibit--; }
 
 }
-
-
-
-
-
 
 #ifdef USE_FREEDV
 /**
@@ -1118,7 +1167,6 @@ static bool AudioDriver_RxProcessorFreeDV (iq_buffer_t* iq_buf_p, float32_t * co
         }
     }
 
-
     // if we run out  of buffers lately
     // we wait for availability of at least 2 buffers
     // so that in theory we have uninterrupted flow of audio
@@ -1141,7 +1189,6 @@ static bool AudioDriver_RxProcessorFreeDV (iq_buffer_t* iq_buf_p, float32_t * co
         // filtering, the filter does not know that and multiplies with zero 5 out of six times --> very inefficient)
         // BUT: we cannot use the ARM function, because decimation factor (6) has to be an integer divide of
         // block size (which is 32 in our case --> 32 / 6 = non-integer!)
-
 
         for (int j=0; j < blockSize; j++) //upsampling with integrated interpolation-filter for M=6
             // avoiding multiplications by zero within the arm_iir_filter
@@ -1211,7 +1258,6 @@ static void AudioDriver_RxProcessor_Bpsk(float32_t * const src, int16_t blockSiz
     }
 }
 
-
 // FM Demodulator parameters
 #define FM_DEMOD_COEFF1     PI/4            // Factors used in arctan approximation used in FM demodulator
 #define FM_DEMOD_COEFF2     PI*0.75
@@ -1229,14 +1275,11 @@ static void AudioDriver_RxProcessor_Bpsk(float32_t * const src, int16_t blockSiz
 #define FM_SQUELCH_HYSTERESIS   3           // Hysteresis for FM squelch
 #define FM_SQUELCH_PROC_DECIMATION  ((uint32_t)(1/FM_RX_SQL_SMOOTHING))     // Number of times we go through the FM demod algorithm before we do a squelch calculation
 
-
-
 #define FM_TONE_DETECT_ALPHA    0.9                     // setting for IIR filtering of ratiometric result from frequency-differential tone detection
 
 #define FM_SUBAUDIBLE_TONE_DET_THRESHOLD    1.75        // threshold of "smoothed" output of Goertzel, above which a tone is considered to be "provisionally" detected pending debounce
 #define FM_SUBAUDIBLE_DEBOUNCE_MAX          5           // maximum "detect" count in debounce
 #define FM_SUBAUDIBLE_TONE_DEBOUNCE_THRESHOLD   2       // number of debounce counts at/above which a tone detection is considered valid
-
 
 typedef struct
 {
@@ -1347,8 +1390,6 @@ demod_fm_data_t fm_data;
 			scaled_sql_avg = 22 - scaled_sql_avg;
 			// "invert" the noise power so that high number now corresponds with
 			// quieter signal:  "scaled_sql_avg" may now be compared with squelch setting
-
-
 
 			// Now evaluate noise power with respect to squelch setting
 			if (ts.fm_sql_threshold == 0)	 	// is squelch set to zero?
@@ -1487,8 +1528,6 @@ static void AudioDriver_NotchFilter(int16_t blockSize, float32_t *notchbuffer)
     //
 }
 #endif
-
-
 
 static void AudioDriver_Mix(float32_t* src, float32_t* dst, float32_t scaling, const uint16_t blockSize)
 {
@@ -1754,7 +1793,6 @@ static void AudioDriver_DemodSAM(float32_t* i_buffer, float32_t* q_buffer, float
             float32_t ai, bi, aq, bq;
             float32_t Sin, Cos;
 
-
             sincosf(sam_data.phs,&Sin,&Cos);
             ai = Cos * i_buffer[i];
             bi = Sin * i_buffer[i];
@@ -1826,7 +1864,6 @@ static void AudioDriver_DemodSAM(float32_t* i_buffer, float32_t* q_buffer, float
             {
                 audio[0] = corr[0];
             }
-
 
             // "fade leveler", taken from Warren Pratts WDSP / HPSDR, 2016
             // http://svn.tapr.org/repos_sdr_hpsdr/trunk/W5WC/PowerSDR_HPSDR_mRX_PS/Source/wdsp/
@@ -2040,7 +2077,6 @@ static void AudioDriver_RxHandleIqCorrection(float32_t* i_buffer, float32_t* q_b
 
 }
 
-
 /**
  * This function is the interrupt side interface of the Noise Reduction
  * @param blockSizeDecim
@@ -2141,7 +2177,6 @@ static void AudioDriver_RxProcessorNoiseReduction(uint16_t blockSizeDecim, float
             memset(NR_dec_buffer,0,sizeof(NR_dec_buffer));
         }
 
-
         // interpolation of a_buffer from 6ksps to 12ksps!
         // from NR_dec_buffer --> a_buffer
         // but only, if we have decimated to 6ksps, otherwise just copy the samples into a_buffer
@@ -2209,7 +2244,6 @@ static void RxProcessor_DemodAudioPostprocessing(float32_t (*a_buffer)[AUDIO_BLO
     // now process the samples and perform the receiver AGC function
     AudioAgc_RunAgcWdsp(blockSizeDecim, a_buffer, use_stereo);
 
-
     // DSP noise reduction using LMS (Least Mean Squared) algorithm
     // This is the post-filter, post-AGC instance
 #if defined(USE_LEAKY_LMS)
@@ -2239,7 +2273,6 @@ static void RxProcessor_DemodAudioPostprocessing(float32_t (*a_buffer)[AUDIO_BLO
             (ts.filters_p->sample_rate_dec == RX_DECIMATION_RATE_12KHZ) ?
             POST_AGC_GAIN_SCALING_DECIMATE_4 : POST_AGC_GAIN_SCALING_DECIMATE_2;
 
-
     // Scale audio according to AGC setting, demodulation mode and required fixed levels and scaling
     const float32_t scale_gain = post_agc_gain_scaling *
             ((dmod_mode == DEMOD_AM || dmod_mode == DEMOD_SAM) ?
@@ -2257,7 +2290,6 @@ static void RxProcessor_DemodAudioPostprocessing(float32_t (*a_buffer)[AUDIO_BLO
         arm_biquad_cascade_df1_f32 (&IIR_biquad_1[1], a_buffer[1],a_buffer[1], blockSizeDecim);
     }
 #endif
-
 
     // all of these modems only work with 12 khz Samplerate
     // TODO: User needs feedback if the modem is not activated due to wrong decimation rate
@@ -2316,7 +2348,6 @@ static void RxProcessor_DemodAudioPostprocessing(float32_t (*a_buffer)[AUDIO_BLO
 
 }
 
-
 /**
  * Gets IQ data as input, runs the rx processing on the input signal, leaves audio data in DMA buffer
  *
@@ -2346,7 +2377,6 @@ static void AudioDriver_RxProcessor(IqSample_t * const srcCodec, AudioSample_t *
 #endif
 
     IqSample_t srcUSB[blockSize];
-
 
     IqSample_t * const src = (rx_iq_source == RX_IQ_DIG || rx_iq_source == RX_IQ_DIGIQ) ? srcUSB : srcCodec;
     // If source is digital usb in, pull from USB buffer, discard codec iq and
@@ -2412,7 +2442,6 @@ static void AudioDriver_RxProcessor(IqSample_t * const srcCodec, AudioSample_t *
         // Spectrum display sample collect for magnify == 0
         AudioDriver_SpectrumNoZoomProcessSamples(&adb.iq_buf, blockSize);
 
-
         if(iq_freq_mode)            // is receive frequency conversion to be done?
         {
             FreqShift(adb.iq_buf.i_buffer, adb.iq_buf.q_buffer, blockSize, AudioDriver_GetTranslateFreq());
@@ -2420,7 +2449,6 @@ static void AudioDriver_RxProcessor(IqSample_t * const srcCodec, AudioSample_t *
 
         // at this point we have phase corrected IQ @ IQ_SAMPLE_RATE, with our RX frequency in the center (i.e. at 0 Hertz Shift)
         // in adb.iq_buf.i_buffer, adb.iq_buf.q_buffer
-
 
         // Spectrum display sample collect for magnify != 0
 
@@ -2448,7 +2476,6 @@ static void AudioDriver_RxProcessor(IqSample_t * const srcCodec, AudioSample_t *
 
             // in some case we decimate the IQ before passing to demodulator, in some don't
             // in any case, we do audio filtering on decimated data
-
 
             // ------------------------
             // In SSB and CW - Do 0-90 degree Phase-added Hilbert Transform
@@ -2510,7 +2537,6 @@ static void AudioDriver_RxProcessor(IqSample_t * const srcCodec, AudioSample_t *
                 // all USB modes are demodulated the same way, we handed the special case DEMOD_SAM / SAM-U earlier
                 arm_add_f32(adb.iq_buf.i_buffer, adb.iq_buf.q_buffer, adb.a_buffer[0], blockSizeIQ);   // sum of I and Q - USB
             }
-
 
             // at this point we have our demodulated audio signal in adb.a_buffer[0]
             // it may or may not need decimation before we go on with filtering the
@@ -2764,5 +2790,4 @@ void AudioDriver_I2SCallback(AudioSample_t *audio, IqSample_t *iq, AudioSample_t
     SCB->ICSR |= SCB_ICSR_PENDSVSET_Msk;
 #endif
 }
-
 
