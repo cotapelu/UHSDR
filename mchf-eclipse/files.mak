@@ -35,6 +35,7 @@ drivers/ui/encoder/ui_rotary.c \
 drivers/ui/radio_management.c \
 drivers/ui/ui_configuration.c \
 drivers/ui/ui_driver.c \
+drivers/ui/ui_spectrum_ctrl.c \
 drivers/ui/ui_driver_utils.c \
 drivers/ui/ui_driver_touch.c \
 drivers/ui/ui_driver_power.c \

@@ -636,17 +636,6 @@ void UiDriver_DebugInfo_DisplayEnable(bool enable)
 
 }
 
-void UiDriver_SpectrumChangeLayoutParameters()
-{
-	UiSpectrum_WaterfallClearData();
-	AudioDriver_SetProcessingChain(ts.dmod_mode, false);
-
-
-	if (ts.menu_mode == false)
-	{
-		UiSpectrum_Init();      // init spectrum scope
-	}
-}
 
 
 
@@ -1642,15 +1631,6 @@ static void UiDriver_CreateFunctionButtons(bool full_repaint)
 
 	// Button F5
 	UiDriver_FButton_F5Tune();
-}
-
-void UiDriver_SetSpectrumMode(SpectrumMode_t mode)
-{
-    ts.flags1 = (ts.flags1 & ~(FLAGS1_SCOPE_ENABLED | FLAGS1_WFALL_ENABLED)) |(mode << 7);
-}
-SpectrumMode_t UiDriver_GetSpectrumMode()
-{
-    return (ts.flags1 & (FLAGS1_SCOPE_ENABLED | FLAGS1_WFALL_ENABLED))  >> 7;
 }
 
 //

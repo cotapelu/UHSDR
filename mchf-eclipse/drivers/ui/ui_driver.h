@@ -169,6 +169,8 @@ typedef enum
     SPECTRUM_DUAL = 3
 } SpectrumMode_t;
 
+#include "ui_spectrum_ctrl.h"  /* T31.1: spectrum control API */
+
 typedef struct
 {
 	uint8_t dmod_mode;
@@ -188,7 +190,6 @@ void    UiDriver_DrawFButtonLabel(uint8_t button_num, const char* label, uint32_
 void 	UiDriver_DisplayFreqStepSize(void);
 void 	UiDriver_DisplayDemodMode(void);
 void	UiDriver_LcdBlankingStartTimer(void);
-void    UiDriver_SpectrumChangeLayoutParameters(void);
 
 void UiDriver_DebugInfo_DisplayEnable(bool enable);
 
@@ -215,8 +216,6 @@ void UiDriver_TextMsgDisplay(void);
 void UiDriver_TextMsgClear(void);
 void UiDriver_DisplayFButton_F1MenuExit(void);
 
-void UiDriver_SetSpectrumMode(SpectrumMode_t mode);
-SpectrumMode_t UiDriver_GetSpectrumMode(void);
 
 //some exports for layout definitions
 void UiAction_ChangeLowerMeterUp(void);

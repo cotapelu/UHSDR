@@ -212,6 +212,11 @@
 > Revisit only after State Encapsulation (Phase 30) is complete.
 
 - [ ] **T31.1** `ui_driver.c` → split into `ui_radio.c`, `ui_menu.c`, `ui_spectrum_ctrl.c`
+  - Extracted spectrum control API to `ui_spectrum_ctrl.c/h` (T31.1 step 1)
+  - Moved: `UiDriver_SpectrumChangeLayoutParameters`, `UiDriver_SetSpectrumMode`, `UiDriver_GetSpectrumMode`
+  - Added `ui_spectrum_ctrl.c` to `files.mak`; `ui_driver.h` includes new header for backward compatibility
+  - Gate: `make f4-mchf` passes; `make test` passes (16/16)
+  - Remaining: menu actions, radio/VFO functions, encoder display
 - [ ] **T31.2** `audio_driver.c` → split into `audio_rx.c`, `audio_tx.c`, `audio_codec.c`
 - [ ] **T31.3** `ui_lcd_hy28.c` → split into `ui_lcd_hy28_draw.c`, `ui_lcd_hy28_touch.c`
 
