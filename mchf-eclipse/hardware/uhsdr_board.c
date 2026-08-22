@@ -44,8 +44,17 @@
 #include "uhsdr_keypad.h"
 #include "osc_si5351a.h"
 
-// Transceiver state public structure
+// Transceiver state public structure — single owner, zero-init BSS
 __IO __MCHF_SPECIALMEM TransceiverState ts;
+
+/*
+ * Ownership notes (T30.4):
+ * - `ts` is the canonical global state for the entire transceiver.
+ * - Defined here, declared in `uhsdr_board.h`.
+ * - Memory section: `.ccm` on F4 (via `__MCHF_SPECIALMEM`), `.ram` on F7/H7.
+ * - Accessed from 41 files; avoid adding new fields without reviewing all writers.
+ * - ISR writers: keep writes atomic or use `__IO` volatile for flags read by ISR.
+ */
 
 
 static void Board_Led_Init(void)

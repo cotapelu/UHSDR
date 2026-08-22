@@ -192,7 +192,12 @@
   - Created global `g_ui_driver_ctx` with `UiDriver_InitContext()` zero-init
   - File-scope mutable statics reduced by 7 variables
   - Gate: `make f4-mchf` passes (432089 text, 96036 bss)
-- [ ] **T30.4** Document remaining global state ownership (`TransceiverState ts` — single owner)
+- [x] **T30.4** Document remaining global state ownership (`TransceiverState ts` — single owner)
+  - Added Doxygen-style ownership comment in `uhsdr_board.h` extern declaration
+  - Added implementation notes in `uhsdr_board.c` definition
+  - Documents access rules: main-loop RW, ISR read-mostly, atomic writes only
+  - Documents size (~4 KB, 462 lines), memory placement, and future encapsulation target
+  - Gate: `make f4-mchf` passes; documentation compiles cleanly
 
 ### Phase 31: Large File Splits (Deferred — low priority)
 

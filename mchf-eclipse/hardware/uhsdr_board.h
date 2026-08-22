@@ -707,6 +707,25 @@ typedef struct TransceiverState
 
 } TransceiverState;
 
+/**
+ * @brief Global transceiver state — single-owner pattern (T30.4).
+ *
+ * Ownership & lifecycle:
+ * - Defined in `hardware/uhsdr_board.c` as `__IO __MCHF_SPECIALMEM TransceiverState ts;`
+ * - Declared here for universal access via `extern`
+ * - Initialized to zero by C runtime (BSS); `Board_Init()` may set defaults
+ *
+ * Access rules:
+ * - **Main loop / cooperative tasks**: read-write access to most fields
+ * - **ISR / DMA callbacks**: read-mostly; avoid writes unless atomic/uint8_t
+ * - **Persistence**: EEPROM/flash save/load via `ui_configuration.c`
+ *
+ * Size: ~4 KB (462 lines, includes VFO, audio, menu, CAT, spectrum state).
+ * Referenced from 41 source files (~2 176 `ts.` accesses).
+ *
+ * Future encapsulation target (Phase 30+): split into VFO, Audio, Menu, RF
+ * sub-state structs accessed via typed getters/setters to reduce coupling.
+ */
 /* T23.4: guard against silent struct layout drift across translation units */
 _Static_assert(sizeof(TransceiverState) > 0, "TransceiverState must be a complete type");
 extern __IO TransceiverState ts;
