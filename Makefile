@@ -487,10 +487,28 @@ size-summary:
 	  echo "  MISSING — run 'make bootloader' first"; \
 	fi
 
+# stack-report: parse LTO .su files and show top-10 deepest call stacks in product code
+# Requires prior build with LTO (default release builds).
+stack-report:
+	@echo "=== UHSDR Stack Usage Report (product code, top 10) ==="
+	@echo ""
+	@if ls mchf-eclipse/*.su >/dev/null 2>&1; then \
+	  echo "Sorting by stack depth (bytes), product code only..."; \
+	  grep -hE '^(drivers|hardware|misc|src)/' mchf-eclipse/*.su 2>/dev/null | \
+	    sed 's/\t/:/g' | \
+	    sort -t: -k4 -nr | \
+	    head -10 | \
+	    awk -F: '{printf "  %4s  %s:%s  %s\n", $$4, $$1, $$2, $$5}'; \
+	  echo ""; \
+	  echo "Legend: stack_bytes  file:line  function"; \
+	else \
+	  echo "  MISSING — .su files not found. Rebuild with LTO (default) first."; \
+	fi
+
 
 .PHONY: all help firmware bootloader clean clean-firmware clean-bootloader clean-libs info \
 	f4-mchf f4-ovi40 f7-mchf f7-ovi40 h7-mchf h7-ovi40 \
 	debug-f4 debug-f7 debug-h7 \
 	config list-targets check-toolchain \
 	ci-build-all ci-bootloaders both \
-	doctor check size-summary
+	doctor check size-summary stack-report

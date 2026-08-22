@@ -74,8 +74,34 @@
 #define SPLIT_INACTIVE_COLOUR           	Grey        // colour of "SPLIT" indicator when NOT active
 
 
-
 static void     UiDriver_CreateMainFreqDisplay();
+
+/* Forward declaration for context struct */
+typedef struct MeterState_s MeterState;
+
+/* -------------------------------------------------------------------------
+ * UiDriver context — encapsulates file-scope mutable state (T30.3)
+ * ------------------------------------------------------------------------- */
+typedef struct UiDriver_Context_s
+{
+    char    ui_txt_msg_buffer[ui_txt_msg_buffer_size];
+    int     ui_txt_msg_idx;
+    bool    ui_txt_msg_update;
+    uint16_t startUpScreen_nextLineY;
+    bool    startUpError;
+    uint16_t fw_version_number_major;
+    uint16_t fw_version_number_release;
+    uint16_t fw_version_number_minor;
+} UiDriver_Context_t;
+
+static UiDriver_Context_t g_ui_driver_ctx;
+
+static void UiDriver_InitContext(void)
+{
+    memset(&g_ui_driver_ctx, 0, sizeof(g_ui_driver_ctx));
+}
+
+
 
 static void     UiDriver_CreateMeters();
 static void     UiDriver_DeleteMeters();
@@ -440,10 +466,6 @@ static void   UiDriver_LcdBlankingProcessTimer()
 	}
 }
 
-static char ui_txt_msg_buffer[ui_txt_msg_buffer_size];
-
-static int ui_txt_msg_idx= 0;
-static bool ui_txt_msg_update = false;
 
 
 void UiDriver_TextMsgClear()
@@ -451,32 +473,32 @@ void UiDriver_TextMsgClear()
 	uint32_t fillcnt;
 	for(fillcnt=0; fillcnt<ts.Layout->TextMsg_buffer_max;fillcnt++)
 	{
-		ui_txt_msg_buffer[fillcnt]=' ';
+		g_ui_driver_ctx.ui_txt_msg_buffer[fillcnt]=' ';
 	}
-	ui_txt_msg_buffer[fillcnt]='\0';
+	g_ui_driver_ctx.ui_txt_msg_buffer[fillcnt]='\0';
 
 	// FIXME there is more affective way to clear space on the screen.
-    UiLcdHy28_PrintText(ts.Layout->TextMsgLine.x,ts.Layout->TextMsgLine.y, ui_txt_msg_buffer,Yellow,Black,ts.Layout->TextMsg_font);
-    ui_txt_msg_idx = 0;
-    ui_txt_msg_update = true;
+    UiLcdHy28_PrintText(ts.Layout->TextMsgLine.x,ts.Layout->TextMsgLine.y, g_ui_driver_ctx.ui_txt_msg_buffer,Yellow,Black,ts.Layout->TextMsg_font);
+    g_ui_driver_ctx.ui_txt_msg_idx = 0;
+    g_ui_driver_ctx.ui_txt_msg_update = true;
 }
 
 void UiDriver_TextMsgDisplay()
 {
-    if (ui_txt_msg_update == true)
+    if (g_ui_driver_ctx.ui_txt_msg_update == true)
     {
-        ui_txt_msg_update = false;
-        if(ui_txt_msg_idx==0)
+        g_ui_driver_ctx.ui_txt_msg_update = false;
+        if(g_ui_driver_ctx.ui_txt_msg_idx==0)
         {
         	uint32_t fillcnt;
         	for(fillcnt=0; fillcnt<ts.Layout->TextMsg_buffer_max;fillcnt++)
         	{
-        		ui_txt_msg_buffer[fillcnt]=' ';
+        		g_ui_driver_ctx.ui_txt_msg_buffer[fillcnt]=' ';
         	}
-        	ui_txt_msg_buffer[fillcnt]='\0';
+        	g_ui_driver_ctx.ui_txt_msg_buffer[fillcnt]='\0';
         }
 
-        UiLcdHy28_PrintText(ts.Layout->TextMsgLine.x,ts.Layout->TextMsgLine.y, ui_txt_msg_buffer,Yellow,Black,ts.Layout->TextMsg_font);
+        UiLcdHy28_PrintText(ts.Layout->TextMsgLine.x,ts.Layout->TextMsgLine.y, g_ui_driver_ctx.ui_txt_msg_buffer,Yellow,Black,ts.Layout->TextMsg_font);
     }
 }
 
@@ -484,24 +506,24 @@ void UiDriver_TextMsgPutChar(char ch)
 {
     if (ch=='\n' || ch == '\r')
     {
-        ui_txt_msg_idx=0;
-    	ui_txt_msg_buffer[ui_txt_msg_idx] = '\0';
+        g_ui_driver_ctx.ui_txt_msg_idx=0;
+    	g_ui_driver_ctx.ui_txt_msg_buffer[g_ui_driver_ctx.ui_txt_msg_idx] = '\0';
     }
-    else if (ui_txt_msg_idx < (ts.Layout->TextMsg_buffer_max))
+    else if (g_ui_driver_ctx.ui_txt_msg_idx < (ts.Layout->TextMsg_buffer_max))
     {
-        ui_txt_msg_idx++;
-    	ui_txt_msg_buffer[ui_txt_msg_idx] = '\0'; // set the line end before we add the character prevents unterminated strings
-        ui_txt_msg_buffer[ui_txt_msg_idx-1]=ch; //fill from left to right
+        g_ui_driver_ctx.ui_txt_msg_idx++;
+    	g_ui_driver_ctx.ui_txt_msg_buffer[g_ui_driver_ctx.ui_txt_msg_idx] = '\0'; // set the line end before we add the character prevents unterminated strings
+        g_ui_driver_ctx.ui_txt_msg_buffer[g_ui_driver_ctx.ui_txt_msg_idx-1]=ch; //fill from left to right
     }
     else
     {
         for (int shift_count = 0;shift_count < (ts.Layout->TextMsg_buffer_max-1);shift_count++)
         {
-            ui_txt_msg_buffer[shift_count]=ui_txt_msg_buffer[shift_count+1];
+            g_ui_driver_ctx.ui_txt_msg_buffer[shift_count]=g_ui_driver_ctx.ui_txt_msg_buffer[shift_count+1];
         }
-        ui_txt_msg_buffer[ts.Layout->TextMsg_buffer_max-1]=ch;
+        g_ui_driver_ctx.ui_txt_msg_buffer[ts.Layout->TextMsg_buffer_max-1]=ch;
     }
-    ui_txt_msg_update = true;
+    g_ui_driver_ctx.ui_txt_msg_update = true;
 }
 
 void UiDriver_TextMsgPutSign(const char *s)
@@ -732,9 +754,12 @@ static void UiDriver_DspModeMaskInit()
     }
 }
 
+static void UiDriver_InitContext(void);
 
 void UiDriver_Init()
 {
+	UiDriver_InitContext();
+
     // set the encoders to their default values
     ts.enc_one_mode     = ENC_ONE_MODE_AUDIO_GAIN;
     ts.enc_two_mode     = ENC_TWO_MODE_RF_GAIN;
@@ -1989,8 +2014,8 @@ typedef struct MeterState_s
 	uint8_t last;
 	uint8_t last_warn;
 } MeterState;
-
 static MeterState meters[METER_NUM];
+
 
 /**
  * Displays a horizontal meter bar as dash segments.
@@ -5047,8 +5072,6 @@ static void UiDriver_KeyTestScreen()
 
 
 
-static uint16_t startUpScreen_nextLineY;
-static bool startUpError = false;
 
 /**
  * @brief use this method to report initialization problems on splash screen, may only be used during splash screen presence (!)
@@ -5061,14 +5084,11 @@ void UiDriver_StartupScreen_LogIfProblem(bool isProblem, const char* txt)
 {
 	if (isProblem)
 	{
-		startUpScreen_nextLineY = UiLcdHy28_PrintTextCentered(ts.Layout->StartUpScreen_START.x,startUpScreen_nextLineY,320,txt,Black,Red3,0);
-		startUpError = true;
+		g_ui_driver_ctx.startUpScreen_nextLineY = UiLcdHy28_PrintTextCentered(ts.Layout->StartUpScreen_START.x,g_ui_driver_ctx.startUpScreen_nextLineY,320,txt,Black,Red3,0);
+		g_ui_driver_ctx.startUpError = true;
 	}
 }
 
-static uint16_t fw_version_number_major = 0;    // save new F/W version
-static uint16_t fw_version_number_release = 0;
-static uint16_t fw_version_number_minor = 0;
 
 /**
  * @returns true if the firmware version is different from version in loaded configuration settings.
@@ -5076,11 +5096,11 @@ static uint16_t fw_version_number_minor = 0;
 static bool UiDriver_FirmwareVersionCheck()
 {
 
-	fw_version_number_major = atoi(UHSDR_VER_MAJOR);    // save new F/W version
-	fw_version_number_release = atoi(UHSDR_VER_RELEASE);
-	fw_version_number_minor = atoi(UHSDR_VER_MINOR);
+	g_ui_driver_ctx.fw_version_number_major = atoi(UHSDR_VER_MAJOR);    // save new F/W version
+	g_ui_driver_ctx.fw_version_number_release = atoi(UHSDR_VER_RELEASE);
+	g_ui_driver_ctx.fw_version_number_minor = atoi(UHSDR_VER_MINOR);
 
-	return ((ts.version_number_major != fw_version_number_major) || (ts.version_number_release != fw_version_number_release) || (ts.version_number_minor != fw_version_number_minor));        // Yes - check for new version
+	return ((ts.version_number_major != g_ui_driver_ctx.fw_version_number_major) || (ts.version_number_release != g_ui_driver_ctx.fw_version_number_release) || (ts.version_number_minor != g_ui_driver_ctx.fw_version_number_minor));        // Yes - check for new version
 }
 /**
  * @brief basically does nothing but settiSng the firmware number of configuration to number of running fw
@@ -5090,9 +5110,9 @@ static void UiDriver_FirmwareVersionUpdateConfig()
 
 	if (UiDriver_FirmwareVersionCheck())
 	{
-		ts.version_number_major = fw_version_number_major;    // save new F/W version
-		ts.version_number_release = fw_version_number_release;
-		ts.version_number_minor = fw_version_number_minor;
+		ts.version_number_major = g_ui_driver_ctx.fw_version_number_major;    // save new F/W version
+		ts.version_number_release = g_ui_driver_ctx.fw_version_number_release;
+		ts.version_number_minor = g_ui_driver_ctx.fw_version_number_minor;
 
 	}
 }
@@ -5126,7 +5146,7 @@ void UiDriver_StartUpScreenInit()
 	nextY = UiLcdHy28_PrintTextCentered(ts.Layout->StartUpScreen_START.x, nextY + 3, 320, "Firmware License: " UHSDR_LICENCE "\n" UHSDR_REPO, White, Black, 0);
 
 	// show important error status
-	startUpScreen_nextLineY = nextY + 8; // reset y coord to first line of error messages
+	g_ui_driver_ctx.startUpScreen_nextLineY = nextY + 8; // reset y coord to first line of error messages
 
 	UiLcdHy28_BacklightEnable(true);
 
@@ -5179,13 +5199,13 @@ void UiDriver_StartUpScreenFinish()
 	{
 		hold_time = 10000; // 10s
 		txp = "Firmware change detected!\nPlease review settings!";
-		startUpScreen_nextLineY = UiLcdHy28_PrintTextCentered(ts.Layout->StartUpScreen_START.x,startUpScreen_nextLineY + 10,320,txp,White,Black,0);
+		g_ui_driver_ctx.startUpScreen_nextLineY = UiLcdHy28_PrintTextCentered(ts.Layout->StartUpScreen_START.x,g_ui_driver_ctx.startUpScreen_nextLineY + 10,320,txp,White,Black,0);
 
 		UiDriver_FirmwareVersionUpdateConfig();
 	}
 
 
-	if(startUpError == true)
+	if(g_ui_driver_ctx.startUpError == true)
 	{
 		hold_time = 15000; // 15s
 		//hold_time = 3000; // 3s
@@ -5201,7 +5221,7 @@ void UiDriver_StartUpScreenFinish()
 		fg_clr = Green;
 	}
 
-	UiLcdHy28_PrintTextCentered(ts.Layout->StartUpScreen_START.x,startUpScreen_nextLineY + 10,320,txp,fg_clr,clr,0);
+	UiLcdHy28_PrintTextCentered(ts.Layout->StartUpScreen_START.x,g_ui_driver_ctx.startUpScreen_nextLineY + 10,320,txp,fg_clr,clr,0);
 
 	HAL_Delay(hold_time);
 

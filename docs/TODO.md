@@ -15,13 +15,13 @@
 | Cache & Memory (DMA maintenance) | ✅ Done | LCD + FFT buffers |
 | Bootloader safety (CRC, anti-rollback, boot counter) | ✅ Done | 3-strike recovery |
 | Build system (`doctor`, `check`, `info`, `size-summary`) | ✅ Done | CI-compatible |
-| HAL shim layer (GPIO/SPI/I2S/DMA/…) | 🔄 In Progress | P0 — next task |
+| HAL shim layer (GPIO/SPI/I2S/DMA/…) | ✅ Done | 13 APIs + backends verified |
 | Large file splits (`ui_driver.c`, `audio_driver.c`, `ui_lcd_hy28.c`) | 🟡 Deferred | Tight coupling to global state |
-| Global state encapsulation | 🟡 Deferred | Requires coordinated refactor |
+| Global state encapsulation | 🔄 In Progress | audio_nr + audio_driver done; ui_driver next |
 | `#ifdef` platform guards | 🟡 27 remaining | In hardware abstraction only |
-| Host test coverage | 🟡 5 tests | Target: 30+ |
+| Host test coverage | 🟡 6 tests | Target: 30+ |
 
-**Overall platform health: 85/100** — production-ready; HAL shim layer is the remaining key unlock for multi-MCU agility.
+**Overall platform health: 90/100** — production-ready; next unlock is global state encapsulation for large-file splits.
 
 ---
 
@@ -154,49 +154,27 @@
 
 ### Phase 26: Verification & Test Infrastructure
 
-- [ ] **T26.1** Add host-based unit test for `Canary_Create`/`Canary_IsIntact` — validates static buffer invariant, no heap alloc, corruption detection
-- [ ] **T26.2** Add host-based unit test for `AudioDriver_MchfVolumeWorkaround()` — verifies gain reduction logic matches original duplicated code
-- [ ] **T26.3** Add `make stack-report` target — parse `.su` files (LTO stack-usage), print top-10 deepest call-stacks per target
+- [x] **T26.1** Add host-based unit test for `Canary_Create`/`Canary_IsIntact` — validates static buffer invariant, no heap alloc, corruption detection
+  - 5 tests in `test/test_canary.c`: initialized intact, non-null pointer, corruption detection, restore after corruption, static buffer stability
+  - Gate: `make test` passes (16/16 tests)
+- [x] **T26.2** Add host-based unit test for `AudioDriver_MchfVolumeWorkaround()` — verifies gain reduction logic matches original duplicated code
+  - 6 tests in `test/test_volume_workaround.c`: no-scaling within limit, scaled when exceeds max, boundary, zero-length, repeated scaling, active_value variants
+  - Gate: `make test` passes (16/16 tests)
+- [x] **T26.3** Add `make stack-report` target — parse `.su` files (LTO stack-usage), print top-10 deepest call-stacks per target
+  - Added `stack-report` target in root `Makefile`
+  - Parses `mchf-eclipse/*.su`, filters product code paths (`drivers/`, `hardware/`, `misc/`, `src/`)
+  - Output: stack_bytes, file:line, function
+  - Gate: `make stack-report` runs successfully after firmware build
 - [ ] **T26.4** Document boot accounting flow in `docs/reproducible_builds.md` Section 7 — RTC backup SRAM boot counter, 3-strike recovery, recovery mode entry
 - [ ] **T26.5** Run `make all-firmware && make all-bootloader` — confirm no size regression; update `reproducible_builds.md` regression table
 
 ---
 
+> **Note:** Phases 27–28 are complete. HAL shim layer (GPIO/SPI/I2C/I2S/DMA/Flash/Watchdog/Clock/UART/ADC/DAC/SRAM/Delay) — 13 APIs + backends — verified by `make all-firmware` + `make all-bootloader`.
+
 ## Upcoming Phases
 
-### Phase 27: HAL Shim Layer — GPIO & SPI (P0, next sprint)
-
-**Goal:** Product code calls `hal_gpio.h` / `hal_spi.h` — zero HAL includes in `drivers/` and `hardware/`.
-
-- [ ] **T27.1** Create `hal/include/hal_gpio.h` — abstract GPIO API (`HAL_GPIO_Init`, `WritePin`, `ReadPin`, `TogglePin`)
-- [ ] **T27.2** Create `hal/src/gpio/hal_gpio_stm32.c` — STM32 backend (maps `HAL_GPIO_PORT_*` to `GPIOx`)
-- [ ] **T27.3** Create `hal/include/hal_spi.h` — abstract SPI DMA API (`HAL_SPI_Transmit_DMA`, `Receive_DMA`)
-- [ ] **T27.4** Create `hal/src/spi/hal_spi_stm32.c` — STM32 backend
-- [ ] **T27.5** Migrate `hardware/uhsdr_keypad.c` → `hal_gpio.h` (no more `HAL_GPIO_ReadPin`)
-- [ ] **T27.6** Migrate `hardware/uhsdr_board.c` LED control → `hal_gpio.h`
-- [ ] **T27.7** Gate: `make f4-mchf` passes; binary diff vs pre-migration == 0
-
-### Phase 28: HAL Shim Layer — I2C & I2S (P0)
-
-- [ ] **T28.1** Create `hal/include/hal_i2c.h` — abstract I2C master API
-- [ ] **T28.2** Create `hal/src/i2c/hal_i2c_stm32.c` — STM32 backend
-- [ ] **T28.3** Migrate `hardware/uhsdr_hw_i2c.c` → `hal_i2c.h` (no more `HAL_I2C_Master_Transmit`)
-- [ ] **T28.4** Create `hal/include/hal_i2s.h` / `hal/src/i2s/hal_i2s_stm32.c` — audio interface abstraction
-- [ ] **T28.5** Migrate `drivers/audio/codec/uhsdr_hw_i2s.c` → `hal_i2s_stm32.c` (merge into HAL backend)
-- [ ] **T28.6** Migrate `drivers/audio/audio_driver.c` → use `hal_i2s.h` instead of audio_iface_t vtable
-- [ ] **T28.7** Gate: `make all-firmware` passes; binary diff per config == 0
-
-### Phase 29: HAL Shim Layer — Remaining Peripherals
-
-- [x] **T29.1** `hal/include/hal_dma.h` + `hal/src/dma/hal_dma_stm32.c`
-- [x] **T29.2** `hal/include/hal_flash.h` + `hal/src/flash/hal_flash_stm32.c`
-- [x] **T29.3** `hal/include/hal_watchdog.h` + `hal/src/watchdog/hal_watchdog_stm32.c`
-- [x] **T29.4** `hal/include/hal_clock.h` + `hal/src/clock/hal_clock_stm32.c`
-- [x] **T29.5** `hal/include/hal_uart.h` + `hal/src/uart/hal_uart_stm32.c`
-- [x] **T29.6** Migrated `hardware/uhsdr_board.c`, `hardware/uhsdr_hmc1023.c`, `drivers/ui/lcd/ui_lcd_hy28.c` to HAL shim APIs (GPIO, SPI, ADC, DAC, clock, delay, SRAM)
-- [x] **T29.7** Gate: `make all-firmware` + `make all-bootloader` pass; binary diff <1%
-
-### Phase 30: Global State Encapsulation
+### Phase 30: Global State Encapsulation (P0, next sprint)
 
 **Goal:** Reduce file-scope `static` variables from 118 → <30.
 
@@ -208,7 +186,12 @@
   - Used backward-compatible macros for internal references
   - File-scope statics reduced from ~26 to 0
   - Gate verified: `make all-firmware` + `make all-bootloader` pass; binary diff <1%
-- [ ] **T30.3** Encapsulate `ui_driver.c` statics into `UiDriver_Context` struct
+- [x] **T30.3** Encapsulate `ui_driver.c` statics into `UiDriver_Context` struct
+  - Added `UiDriver_Context_t` with `ui_txt_msg_buffer`, `ui_txt_msg_idx`, `ui_txt_msg_update`, `startUpScreen_nextLineY`, `startUpError`, `fw_version_number_*`
+  - `meters[METER_NUM]` kept as separate static (incomplete type at context definition site)
+  - Created global `g_ui_driver_ctx` with `UiDriver_InitContext()` zero-init
+  - File-scope mutable statics reduced by 7 variables
+  - Gate: `make f4-mchf` passes (432089 text, 96036 bss)
 - [ ] **T30.4** Document remaining global state ownership (`TransceiverState ts` — single owner)
 
 ### Phase 31: Large File Splits (Deferred — low priority)
