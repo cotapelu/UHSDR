@@ -165,8 +165,15 @@
   - Parses `mchf-eclipse/*.su`, filters product code paths (`drivers/`, `hardware/`, `misc/`, `src/`)
   - Output: stack_bytes, file:line, function
   - Gate: `make stack-report` runs successfully after firmware build
-- [ ] **T26.4** Document boot accounting flow in `docs/reproducible_builds.md` Section 7 — RTC backup SRAM boot counter, 3-strike recovery, recovery mode entry
-- [ ] **T26.5** Run `make all-firmware && make all-bootloader` — confirm no size regression; update `reproducible_builds.md` regression table
+- [x] **T26.4** Document boot accounting flow in `docs/reproducible_builds.md` Section 7 — RTC backup SRAM boot counter, 3-strike recovery, recovery mode entry
+  - Section 7 already documents SRAM2_BASE layout, boot reason codes, 3-strike counter, CRC persistence, cache maintenance, recovery mode
+  - Verified documentation matches implementation in `bootloader/` and `uhsdr_board.c`
+- [x] **T26.5** Run `make all-firmware && make all-bootloader` — confirm no size regression; update `reproducible_builds.md` regression table
+  - All 4 firmware combos + 3 bootloader combos build successfully
+  - Updated Section 10 regression table (2026-08-22)
+  - Flash regression: f4 -0.08%, f4-small -0.11%, f7 -0.25%, h7 -0.26% (all <1%)
+  - Bootloader flash regression: <1% for all targets
+  - Data/BSS shift due to T30.3: static initializers moved to zero-init context struct (BSS)
 
 ---
 

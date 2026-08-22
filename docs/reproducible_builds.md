@@ -247,16 +247,16 @@ On F7, `COMMAND_ResetMCU()` performs `SCB_CleanDCache()` before `NVIC_SystemRese
 
 ---
 
-## 10. Regression Size Table (2026-08-21)
+## 10. Regression Size Table (2026-08-22)
 
 | Config | text | data | bss | flash (text+data) | total dec |
 |---|---|---|---|---|---|
-| `f4-mchf` firmware | 431921 | 2472 | 93656 | 434393 | 528049 |
-| `f4-small` firmware | 286153 | 2312 | 92104 | 288465 | 380569 |
-| `f7-ovi40` firmware | 482049 | 3184 | 104296 | 485233 | 589529 |
-| `h7-ovi40` firmware | 491521 | 3180 | 104688 | 494701 | 599389 |
-| `f4-mchf` bootloader | 12256 | 8 | 2472 | 12264 | 14736 |
-| `f7-ovi40` bootloader | 13216 | 8 | 2488 | 13224 | 15712 |
-| `h7-ovi40` bootloader | 14276 | 8 | 2544 | 14284 | 16828 |
+| `f4-mchf` firmware | 432089 | 1968 | 96036 | 434057 | 530093 |
+| `f4-small` firmware | 286233 | 1904 | 94532 | 288137 | 382669 |
+| `f7-ovi40` firmware | 481361 | 2656 | 104936 | 484017 | 588953 |
+| `h7-ovi40` firmware | 490769 | 2652 | 105312 | 493421 | 598733 |
+| `f4-mchf` bootloader | 12360 | 8 | 2472 | 12368 | 14840 |
+| `f7-ovi40` bootloader | 13320 | 8 | 2488 | 13328 | 15816 |
+| `h7-ovi40` bootloader | 14372 | 8 | 2544 | 14380 | 16924 |
 
 > Full table populated by running `make all-firmware && make all-bootloader && make size-summary`.
