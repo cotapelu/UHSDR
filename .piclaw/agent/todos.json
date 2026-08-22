@@ -3,47 +3,22 @@
   "phases": [
     {
       "id": "phase-1",
-      "name": "Phase 29",
+      "name": "Global State Encapsulation",
       "tasks": [
         {
           "id": "task-1",
-          "content": "Create hal/include/hal_dma.h + hal/src/dma/hal_dma_stm32.c",
+          "content": "Encapsulate ui_driver.c statics into UiDriver_Context (T30.3)",
           "status": "in_progress"
         },
         {
           "id": "task-2",
-          "content": "Create hal/include/hal_flash.h + hal/src/flash/hal_flash_stm32.c",
-          "status": "pending"
-        },
-        {
-          "id": "task-3",
-          "content": "Create hal/include/hal_watchdog.h + hal/src/watchdog/hal_watchdog_stm32.c",
-          "status": "pending"
-        },
-        {
-          "id": "task-4",
-          "content": "Create hal/include/hal_clock.h + hal/src/clock/hal_clock_stm32.c",
-          "status": "pending"
-        },
-        {
-          "id": "task-5",
-          "content": "Create hal/include/hal_uart.h + hal/src/uart/hal_uart_stm32.c",
-          "status": "pending"
-        },
-        {
-          "id": "task-6",
-          "content": "Migrate hardware/uhsdr_board.c, uhsdr_hmc1023.c, drivers/ui/lcd/ui_lcd_hy28.c → new HAL APIs",
-          "status": "pending"
-        },
-        {
-          "id": "task-7",
-          "content": "Gate: make all-firmware + make all-bootloader pass; 0 vendor HAL includes in product code",
+          "content": "Document remaining global state ownership (T30.4)",
           "status": "pending"
         }
       ]
     }
   ],
-  "nextTaskId": 8,
+  "nextTaskId": 3,
   "nextPhaseId": 2,
-  "updatedAt": "2026-08-21T12:09:38.574Z"
+  "updatedAt": "2026-08-22T04:28:53.138Z"
 }
