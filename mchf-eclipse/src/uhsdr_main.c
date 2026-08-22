@@ -23,7 +23,9 @@
 
 // serial EEPROM driver
 #include "uhsdr_hw_i2c.h"
-#include "uhsdr_hw_i2s.h"
+#include "hal_i2s.h"
+#include "hal_watchdog.h"
+#include "hal_clock.h"
 #include "uhsdr_hmc1023.h"
 
 // Audio Driver
@@ -64,7 +66,7 @@ static void Board_WatchdogInit(void)
 #if defined(CORTEX_M7)
     hiwdg.Init.Window = 4095;
 #endif
-    HAL_IWDG_Init(&hiwdg);
+    hal_watchdog_init(&hiwdg);
 }
 
 // Keyboard Driver
@@ -466,7 +468,7 @@ int mchfMain(void)
         // Kick watchdog every 1s (sysclock runs at 100Hz)
         if (ts.sysclock - last_watchdog_kick >= WATCHDOG_KICK_TICKS)
         {
-            HAL_IWDG_Refresh(&hiwdg);
+            hal_watchdog_refresh(&hiwdg);
             last_watchdog_kick = ts.sysclock;
         }
 

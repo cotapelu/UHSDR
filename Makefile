@@ -176,14 +176,14 @@ both: firmware bootloader
 # Build ALL firmware combinations (5 configs)
 all-firmware:
 	@echo "Building ALL firmware combinations..."
-	@$(MAKE) -C $(BUILD_DIR) -f Makefile clean-firmware
+	@$(MAKE) -C $(BUILD_DIR) -f Makefile BUILDFOR=F4 clean-firmware
 	@mkdir -p build
 	@$(MAKE) f4-mchf && cp mchf-eclipse/fw-mchf.bin build/fw-mchf_f4-mchf.bin && cp mchf-eclipse/fw-mchf.dfu build/fw-mchf_f4-mchf.dfu
-	@$(MAKE) -C $(BUILD_DIR) -f Makefile clean-firmware
+	@$(MAKE) -C $(BUILD_DIR) -f Makefile BUILDFOR=F4-512KB clean-firmware
 	@$(MAKE) f4-small && cp mchf-eclipse/fw-mchf.bin build/fw-mchf_f4-small.bin && cp mchf-eclipse/fw-mchf.dfu build/fw-mchf_f4-small.dfu
-	@$(MAKE) -C $(BUILD_DIR) -f Makefile clean-firmware
+	@$(MAKE) -C $(BUILD_DIR) -f Makefile BUILDFOR=F7 clean-firmware
 	@$(MAKE) f7-ovi40 && cp mchf-eclipse/fw-mchf.bin build/fw-mchf_f7-ovi40.bin && cp mchf-eclipse/fw-mchf.dfu build/fw-mchf_f7-ovi40.dfu
-	@$(MAKE) -C $(BUILD_DIR) -f Makefile clean-firmware
+	@$(MAKE) -C $(BUILD_DIR) -f Makefile BUILDFOR=H7 clean-firmware
 	@$(MAKE) h7-ovi40 && cp mchf-eclipse/fw-mchf.bin build/fw-mchf_h7-ovi40.bin && cp mchf-eclipse/fw-mchf.dfu build/fw-mchf_h7-ovi40.dfu
 	@echo "ALL firmware builds completed!"
 	@ls -la build/fw-mchf_*.bin 2>/dev/null || true

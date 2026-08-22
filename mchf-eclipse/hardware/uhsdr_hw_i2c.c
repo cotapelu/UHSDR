@@ -15,86 +15,39 @@
 // Common
 #include "uhsdr_board.h"
 #include "uhsdr_hw_i2c.h"
-#include "i2c.h"
+#include "hal_i2c.h"
 
-uint16_t UhsdrHw_I2C_DeviceReady(I2C_HandleTypeDef* hi2c, uchar I2CAddr)
+uint16_t UhsdrHw_I2C_DeviceReady(hal_i2c_handle_t handle, uchar I2CAddr)
 {
-	return HAL_I2C_IsDeviceReady(hi2c, I2CAddr,100,100);
+    return hal_i2c_is_device_ready(handle, I2CAddr, 100, 100) == HAL_STATUS_OK ? 0 : 0xFF00;
 }
 
-uint16_t UhsdrHw_I2C_WriteRegister(I2C_HandleTypeDef* hi2c, uchar I2CAddr,uint16_t addr,uint16_t addr_size, uchar RegisterValue)
+uint16_t UhsdrHw_I2C_WriteRegister(hal_i2c_handle_t handle, uchar I2CAddr, uint16_t addr, uint16_t addr_size, uchar RegisterValue)
 {
-    HAL_StatusTypeDef i2cRet = HAL_I2C_Mem_Write(hi2c,I2CAddr,addr,addr_size,&RegisterValue,1,100);
-
-    return  i2cRet != HAL_OK?0xFF00:0;
+    return hal_i2c_mem_write(handle, I2CAddr, addr, addr_size, &RegisterValue, 1, 100) == HAL_STATUS_OK ? 0 : 0xFF00;
 }
 
-uint16_t UhsdrHw_I2C_WriteBlock(I2C_HandleTypeDef* hi2c, uchar I2CAddr, uint16_t addr, uint16_t addr_size, const uint8_t* data, uint32_t size)
+uint16_t UhsdrHw_I2C_WriteBlock(hal_i2c_handle_t handle, uchar I2CAddr, uint16_t addr, uint16_t addr_size, const uint8_t* data, uint32_t size)
 {
-    HAL_StatusTypeDef i2cRet = HAL_I2C_Mem_Write(hi2c,I2CAddr,addr,addr_size,(uint8_t*)data,size,100);
-
-    return  i2cRet != HAL_OK?0xFF00:0;
+    return hal_i2c_mem_write(handle, I2CAddr, addr, addr_size, data, size, 100) == HAL_STATUS_OK ? 0 : 0xFF00;
 }
 
-uint16_t UhsdrHw_I2C_ReadRegister(I2C_HandleTypeDef* hi2c, uchar I2CAddr, uint16_t addr, uint16_t addr_size, uint8_t *RegisterValue)
+uint16_t UhsdrHw_I2C_ReadRegister(hal_i2c_handle_t handle, uchar I2CAddr, uint16_t addr, uint16_t addr_size, uint8_t *RegisterValue)
 {
-    HAL_StatusTypeDef i2cRet = HAL_I2C_Mem_Read(hi2c,I2CAddr,addr,addr_size,RegisterValue,1,100);
-
-    return  i2cRet != HAL_OK?0xFF00:0;
+    return hal_i2c_mem_read(handle, I2CAddr, addr, addr_size, RegisterValue, 1, 100) == HAL_STATUS_OK ? 0 : 0xFF00;
 }
 
-uint16_t UhsdrHw_I2C_ReadBlock(I2C_HandleTypeDef* hi2c, uchar I2CAddr,uint16_t addr, uint16_t addr_size, uint8_t *data, uint32_t size)
+uint16_t UhsdrHw_I2C_ReadBlock(hal_i2c_handle_t handle, uchar I2CAddr, uint16_t addr, uint16_t addr_size, uint8_t *data, uint32_t size)
 {
-
-    HAL_StatusTypeDef i2cRet = HAL_I2C_Mem_Read(hi2c,I2CAddr,addr,addr_size,data,size,100);
-
-    return  i2cRet != HAL_OK?0xFF00:0;
+    return hal_i2c_mem_read(handle, I2CAddr, addr, addr_size, data, size, 100) == HAL_STATUS_OK ? 0 : 0xFF00;
 }
 /**
  * @brief init I2C
  * @param speed in Hertz !!!
  */
-void UhsdrHw_I2C_ChangeSpeed(I2C_HandleTypeDef* hi2c)
+void UhsdrHw_I2C_ChangeSpeed(hal_i2c_handle_t handle)
 {
-    /// FIXME: Support for more than I2C1 und I2C2
-    uint8_t speedIdx;
-
-    if (hi2c->Instance == I2C1)
-    {
-        speedIdx = I2C_BUS_1;
-    }
-    else
-    {
-        speedIdx = I2C_BUS_2;
-    }
-
-    HAL_I2C_DeInit(hi2c);
-#ifdef STM32F4
-    hi2c->Init.ClockSpeed = ts.i2c_speed[speedIdx] * I2C_BUS_SPEED_MULT;
-#else
-    {
-        uint32_t timing = 0;
-        uint32_t speed_hz = (uint32_t)ts.i2c_speed[speedIdx] * I2C_BUS_SPEED_MULT;
-        if (speed_hz >= 400000)
-        {
-            timing = 0x20404768;
-        }
-        else if (speed_hz >= 100000)
-        {
-#if defined(STM32H7)
-            timing = 0x10C0ECFF;
-#else
-            timing = 0x00303D5B;
-#endif
-        }
-        else
-        {
-            timing = 0x10C0ECFF;
-        }
-        hi2c->Init.Timing = timing;
-    }
-#endif
-    HAL_I2C_Init(hi2c);
+    hal_i2c_change_speed(handle, ts.i2c_speed[0]);
 }
 
 

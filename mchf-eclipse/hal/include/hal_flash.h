@@ -6,18 +6,26 @@
  **                                                                                 **
  **---------------------------------------------------------------------------------**
  **                                                                                 **
- **  File name:     uhsdr_hw_i2s.h                                                 **
- **  Description:   Audio interface abstraction (backward compatibility)            **
- **                 Product code should include hal_i2s.h directly.                **
+ **  File name:     hal_flash.h                                                      **
+ **  Description:   Abstract flash API for STM32 HAL shim layer                     **
+ **                 Product code includes this header; NO vendor HAL includes.      **
  **  Last Modified: 2026-08-21                                                      **
  **  Licence:       GNU GPLv3                                                      **
  ************************************************************************************/
 
-#ifndef __MCHF_HW_I2S_H
-#define __MCHF_HW_I2S_H
+#ifndef __HAL_FLASH_H
+#define __HAL_FLASH_H
 
-#include "uhsdr_board_config.h"
-#include "hal_i2s.h"
+#include "hal_common.h"
 
-#endif
+/* -------------------------------------------------------------------------
+ * Abstract flash API
+ * ------------------------------------------------------------------------- */
+hal_status_t hal_flash_unlock(void);
+hal_status_t hal_flash_lock(void);
+hal_status_t hal_flash_program_word(uint32_t address, uint32_t data);
+hal_status_t hal_flash_ob_unlock(void);
+hal_status_t hal_flash_ob_lock(void);
+hal_status_t hal_flash_ob_launch(void);
 
+#endif /* __HAL_FLASH_H */

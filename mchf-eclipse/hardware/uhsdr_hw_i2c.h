@@ -15,6 +15,7 @@
 #ifndef __MCHF_HW_I2C_H
 #define __MCHF_HW_I2C_H
 
+#include "hal_i2c.h"
 #include "i2c.h"
 
 #define I2C_BUS_SPEED_MULT                      20000 // 20kHz is multiplier for config var
@@ -24,15 +25,15 @@
 
 // Generic Functions for Handling I2C Busses in MCHF
 
-uint16_t UhsdrHw_I2C_WriteRegister(I2C_HandleTypeDef* i2c, uchar I2CAddr,uint16_t addr,uint16_t addr_size, uchar RegisterValue);
-uint16_t UhsdrHw_I2C_WriteBlock(I2C_HandleTypeDef* i2c, uchar I2CAddr, uint16_t addr, uint16_t addr_size, const uint8_t* data, uint32_t size);
-uint16_t UhsdrHw_I2C_ReadRegister(I2C_HandleTypeDef* i2c, uchar I2CAddr, uint16_t addr, uint16_t addr_size, uint8_t *RegisterValue);
-uint16_t UhsdrHw_I2C_ReadBlock(I2C_HandleTypeDef* i2c, uchar I2CAddr,uint16_t addr, uint16_t addr_size, uint8_t *data, uint32_t size);
+uint16_t UhsdrHw_I2C_WriteRegister(hal_i2c_handle_t i2c, uchar I2CAddr, uint16_t addr, uint16_t addr_size, uchar RegisterValue);
+uint16_t UhsdrHw_I2C_WriteBlock(hal_i2c_handle_t i2c, uchar I2CAddr, uint16_t addr, uint16_t addr_size, const uint8_t* data, uint32_t size);
+uint16_t UhsdrHw_I2C_ReadRegister(hal_i2c_handle_t i2c, uchar I2CAddr, uint16_t addr, uint16_t addr_size, uint8_t *RegisterValue);
+uint16_t UhsdrHw_I2C_ReadBlock(hal_i2c_handle_t i2c, uchar I2CAddr, uint16_t addr, uint16_t addr_size, uint8_t *data, uint32_t size);
 
-uint16_t UhsdrHw_I2C_DeviceReady(I2C_HandleTypeDef* hi2c, uchar I2CAddr);
+uint16_t UhsdrHw_I2C_DeviceReady(hal_i2c_handle_t handle, uchar I2CAddr);
 
 // Special init and wrapper functions for I2C Bus 1
-void UhsdrHw_I2C_ChangeSpeed(I2C_HandleTypeDef* hi2c);
+void UhsdrHw_I2C_ChangeSpeed(hal_i2c_handle_t handle);
 
 // Flags do not really need a timeout according to my testing.
 #define MCHF_I2C_FLAG_TIMEOUT                ((uint32_t)1)

@@ -6,18 +6,27 @@
  **                                                                                 **
  **---------------------------------------------------------------------------------**
  **                                                                                 **
- **  File name:     uhsdr_hw_i2s.h                                                 **
- **  Description:   Audio interface abstraction (backward compatibility)            **
- **                 Product code should include hal_i2s.h directly.                **
+ **  File name:     hal_sram.h                                                       **
+ **  Description:   Abstract SRAM API for STM32 HAL shim layer                      **
+ **                 Product code includes this header; NO vendor HAL includes.      **
  **  Last Modified: 2026-08-21                                                      **
  **  Licence:       GNU GPLv3                                                      **
  ************************************************************************************/
 
-#ifndef __MCHF_HW_I2S_H
-#define __MCHF_HW_I2S_H
+#ifndef __HAL_SRAM_H
+#define __HAL_SRAM_H
 
-#include "uhsdr_board_config.h"
-#include "hal_i2s.h"
+#include "hal_common.h"
 
-#endif
+/* -------------------------------------------------------------------------
+ * Opaque SRAM handle (maps to SRAM_HandleTypeDef* in backend)
+ * ------------------------------------------------------------------------- */
+typedef void* hal_sram_handle_t;
 
+/* -------------------------------------------------------------------------
+ * Abstract SRAM API
+ * ------------------------------------------------------------------------- */
+hal_status_t hal_sram_init(hal_sram_handle_t handle);
+hal_status_t hal_sram_deinit(hal_sram_handle_t handle);
+
+#endif /* __HAL_SRAM_H */

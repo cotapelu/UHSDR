@@ -6,18 +6,21 @@
  **                                                                                 **
  **---------------------------------------------------------------------------------**
  **                                                                                 **
- **  File name:     uhsdr_hw_i2s.h                                                 **
- **  Description:   Audio interface abstraction (backward compatibility)            **
- **                 Product code should include hal_i2s.h directly.                **
+ **  File name:     hal_delay.h                                                      **
+ **  Description:   Abstract delay API for STM32 HAL shim layer                     **
+ **                 Product code includes this header; NO vendor HAL includes.      **
  **  Last Modified: 2026-08-21                                                      **
  **  Licence:       GNU GPLv3                                                      **
  ************************************************************************************/
 
-#ifndef __MCHF_HW_I2S_H
-#define __MCHF_HW_I2S_H
+#ifndef __HAL_DELAY_H
+#define __HAL_DELAY_H
 
-#include "uhsdr_board_config.h"
-#include "hal_i2s.h"
+#include "hal_common.h"
 
-#endif
+/* -------------------------------------------------------------------------
+ * Abstract delay API
+ * ------------------------------------------------------------------------- */
+void hal_delay_ms(uint32_t ms);
 
+#endif /* __HAL_DELAY_H */

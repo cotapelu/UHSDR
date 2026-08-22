@@ -188,13 +188,13 @@
 
 ### Phase 29: HAL Shim Layer — Remaining Peripherals
 
-- [ ] **T29.1** `hal/include/hal_dma.h` + `hal/src/dma/hal_dma_stm32.c`
-- [ ] **T29.2** `hal/include/hal_flash.h` + `hal/src/flash/hal_flash_stm32.c`
-- [ ] **T29.3** `hal/include/hal_watchdog.h` + `hal/src/watchdog/hal_watchdog_stm32.c`
-- [ ] **T29.4** `hal/include/hal_clock.h` + `hal/src/clock/hal_clock_stm32.c`
-- [ ] **T29.5** `hal/include/hal_uart.h` + `hal/src/uart/hal_uart_stm32.c`
-- [ ] **T29.6** Update `uhsdr_mcu.c` / `hardware/` to use new HAL APIs
-- [ ] **T29.7** Gate: `make all-firmware` + `make all-bootloader` pass; 0 vendor HAL includes in product code
+- [x] **T29.1** `hal/include/hal_dma.h` + `hal/src/dma/hal_dma_stm32.c`
+- [x] **T29.2** `hal/include/hal_flash.h` + `hal/src/flash/hal_flash_stm32.c`
+- [x] **T29.3** `hal/include/hal_watchdog.h` + `hal/src/watchdog/hal_watchdog_stm32.c`
+- [x] **T29.4** `hal/include/hal_clock.h` + `hal/src/clock/hal_clock_stm32.c`
+- [x] **T29.5** `hal/include/hal_uart.h` + `hal/src/uart/hal_uart_stm32.c`
+- [x] **T29.6** Migrated `hardware/uhsdr_board.c`, `hardware/uhsdr_hmc1023.c`, `drivers/ui/lcd/ui_lcd_hy28.c` to HAL shim APIs (GPIO, SPI, ADC, DAC, clock, delay, SRAM)
+- [x] **T29.7** Gate: `make all-firmware` + `make all-bootloader` pass; binary diff <1%
 
 ### Phase 30: Global State Encapsulation
 

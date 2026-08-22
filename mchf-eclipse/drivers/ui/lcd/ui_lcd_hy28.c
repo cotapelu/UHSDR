@@ -37,15 +37,19 @@
 
 #warning Both USE_DISPLAY_PAR and USE_SPI_DISPLAY are disabled, no display driver will be available!
 
+#include "hal_spi.h"
 #include "spi.h"
+#include "hal_gpio.h"
+#include "hal_delay.h"
+#include "hal_sram.h"
 
 
     #ifdef UI_BRD_OVI40
         #include "fmc.h"
-        #define MEM_Init() MX_FMC_Init()
+        #define MEM_Init() hal_sram_init(&hsram1)
     #else
         #include "fsmc.h"
-        #define MEM_Init() MX_FSMC_Init()
+        #define MEM_Init() hal_sram_init(&hsram1)
     #endif
 
 
@@ -583,28 +587,28 @@ static inline bool UiLcdHy28_SpiDisplayUsed()
 
 void UiLcdHy28_BacklightInit()
 {
-    GPIO_InitTypeDef  GPIO_InitStructure;
+    hal_gpio_config_t  GPIO_InitStructure;
 
     // Set as output
-    GPIO_InitStructure.Pin = LCD_BACKLIGHT;
-    GPIO_InitStructure.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStructure.Pull = GPIO_NOPULL;
-    GPIO_InitStructure.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(LCD_BACKLIGHT_PIO, &GPIO_InitStructure);
+    GPIO_InitStructure.pin = LCD_BACKLIGHT;
+    GPIO_InitStructure.mode = HAL_GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStructure.pull = HAL_GPIO_PULL_NONE;
+    GPIO_InitStructure.speed = HAL_GPIO_SPEED_LOW;
+    hal_gpio_init(LCD_BACKLIGHT_PIO, &GPIO_InitStructure);
 
     // Backlight off
-    GPIO_ResetBits(LCD_BACKLIGHT_PIO, LCD_BACKLIGHT);
+    hal_gpio_write_pin(LCD_BACKLIGHT_PIO, LCD_BACKLIGHT, HAL_GPIO_PIN_RESET);
 }
 
 void UiLcdHy28_BacklightEnable(bool on)
 {
     if (on)
     {
-        GPIO_SetBits(LCD_BACKLIGHT_PIO, LCD_BACKLIGHT);
+        hal_gpio_write_pin(LCD_BACKLIGHT_PIO, LCD_BACKLIGHT, HAL_GPIO_PIN_SET);
     }
     else
     {
-        GPIO_ResetBits(LCD_BACKLIGHT_PIO, LCD_BACKLIGHT);
+        hal_gpio_write_pin(LCD_BACKLIGHT_PIO, LCD_BACKLIGHT, HAL_GPIO_PIN_RESET);
     }
 }
 
@@ -624,7 +628,7 @@ void UiLcdHy28_SpiInit(bool hispeed, mchf_display_types_t display_type)
 
         hspiDisplay.Init.BaudRatePrescaler = lcd_spi_prescaler;
 
-        if (HAL_SPI_Init(&hspiDisplay) != HAL_OK)
+        if (hal_spi_init(&hspiDisplay) != HAL_STATUS_OK)
         {
             Error_Handler();
         }
@@ -632,45 +636,45 @@ void UiLcdHy28_SpiInit(bool hispeed, mchf_display_types_t display_type)
 
     // Enable the SPI periph
     // the main init is already done earlier, we need this if we want to use our own code to access SPI
-    __HAL_SPI_ENABLE(&hspiDisplay);
+    hal_spi_enable(&hspiDisplay);
 }
 
 void UiLcdHy28_GpioInit(mchf_display_types_t display_type)
 {
 
-    GPIO_InitTypeDef GPIO_InitStructure;
+    hal_gpio_config_t GPIO_InitStructure;
     // Common misc pins settings
-    GPIO_InitStructure.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStructure.Speed = GPIO_SPEED_FREQ_HIGH;
-    GPIO_InitStructure.Pull = GPIO_NOPULL;
+    GPIO_InitStructure.mode = HAL_GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStructure.speed = HAL_GPIO_SPEED_HIGH;
+    GPIO_InitStructure.pull = HAL_GPIO_PULL_NONE;
 
 
     if (mchf_display.lcd_cs_pio != NULL)
     {
         // Configure GPIO PIN for Chip select
-        GPIO_InitStructure.Pin = mchf_display.lcd_cs;
-        HAL_GPIO_Init(mchf_display.lcd_cs_pio, &GPIO_InitStructure);
+        GPIO_InitStructure.pin = mchf_display.lcd_cs;
+        hal_gpio_init(mchf_display.lcd_cs_pio, &GPIO_InitStructure);
 
         // Deselect : Chip Select high
-        GPIO_SetBits(mchf_display.lcd_cs_pio, mchf_display.lcd_cs);
+        hal_gpio_write_pin(mchf_display.lcd_cs_pio, mchf_display.lcd_cs, HAL_GPIO_PIN_SET);
     }
     // Configure GPIO PIN for Reset
-    GPIO_InitStructure.Pin = LCD_RESET;
-    HAL_GPIO_Init(LCD_RESET_PIO, &GPIO_InitStructure);
+    GPIO_InitStructure.pin = LCD_RESET;
+    hal_gpio_init(LCD_RESET_PIO, &GPIO_InitStructure);
 
     // TODO: Function Gets Display Type (!) not controller as parameter
     if (display_type == DISPLAY_RPI_SPI)
     {
 
         // Configure GPIO PIN for RS
-        GPIO_InitStructure.Pin = LCD_RS;
-        HAL_GPIO_Init(LCD_RS_PIO, &GPIO_InitStructure);
+        GPIO_InitStructure.pin = LCD_RS;
+        hal_gpio_init(LCD_RS_PIO, &GPIO_InitStructure);
     }
 
 #ifdef TimeDebug
     //Configure GPIO pin for routine time optimization (for scope probe)
-    GPIO_InitStructure.Pin = MARKER;
-    HAL_GPIO_Init(MARKER_PIO, &GPIO_InitStructure);
+    GPIO_InitStructure.pin = MARKER;
+    hal_gpio_init(MARKER_PIO, &GPIO_InitStructure);
 #endif
 
 }
@@ -695,7 +699,7 @@ void UiLcdHy28_SpiDmaStart(uint8_t* buffer, uint32_t size)
     // and finally we can move that into an interrupt, of course.
     if (size > 0)  {
         UiLcdHy28_SpiDmaStop();
-        HAL_SPI_Transmit_DMA(&hspiDisplay,buffer,size);
+        hal_spi_transmit_dma(&hspiDisplay,buffer,size);
     }
 }
 
@@ -705,29 +709,29 @@ void UiLcdHy28_SpiDeInit()
     // __HAL_SPI_DISABLE(&hspiDisplay);
     // HAL_SPI_DeInit(&hspiDisplay);
 
-    GPIO_InitTypeDef GPIO_InitStructure;
+    hal_gpio_config_t GPIO_InitStructure;
 
     // Set as inputs
-    GPIO_InitStructure.Mode		= GPIO_MODE_INPUT;
-    GPIO_InitStructure.Speed	= GPIO_SPEED_FREQ_LOW;
-    GPIO_InitStructure.Pull		= GPIO_NOPULL;
+    GPIO_InitStructure.mode		= HAL_GPIO_MODE_INPUT;
+    GPIO_InitStructure.speed	= HAL_GPIO_SPEED_LOW;
+    GPIO_InitStructure.pull		= HAL_GPIO_PULL_NONE;
 
     if (mchf_display.lcd_cs_pio != NULL)
     {
         // Deconfigure GPIO PIN for Chip select
-        GPIO_InitStructure.Pin		= mchf_display.lcd_cs;
-        HAL_GPIO_Init(mchf_display.lcd_cs_pio, &GPIO_InitStructure);
+        GPIO_InitStructure.pin		= mchf_display.lcd_cs;
+        hal_gpio_init(mchf_display.lcd_cs_pio, &GPIO_InitStructure);
     }
 }
 
 inline static void UiLcdHy28_SpiLcdCsDisable()
 {
-    GPIO_SetBits(mchf_display.lcd_cs_pio, mchf_display.lcd_cs);
+    hal_gpio_write_pin(mchf_display.lcd_cs_pio, mchf_display.lcd_cs, HAL_GPIO_PIN_SET);
 }
 
 inline static void UiLcdHy28_SpiLcdCsEnable()
 {
-    GPIO_ResetBits(mchf_display.lcd_cs_pio, mchf_display.lcd_cs);
+    hal_gpio_write_pin(mchf_display.lcd_cs_pio, mchf_display.lcd_cs, HAL_GPIO_PIN_RESET);
 }
 
 static void UiLcdHy28_ParallelInit()
@@ -739,28 +743,28 @@ static void UiLcdHy28_ParallelInit()
 
 static void UiLcdHy28_ParallelDeInit()
 {
-    HAL_SRAM_DeInit(&hsram1);
+    hal_sram_deinit(&hsram1);
 
 }
 
 static void UiLcdHy28_Reset()
 {
     // Reset
-    GPIO_SetBits(LCD_RESET_PIO, LCD_RESET);
-    HAL_Delay(1);
+    hal_gpio_write_pin(LCD_RESET_PIO, LCD_RESET, HAL_GPIO_PIN_SET);
+    hal_delay_ms(1);
 
-    GPIO_ResetBits(LCD_RESET_PIO, LCD_RESET);
-    HAL_Delay(1);
+    hal_gpio_write_pin(LCD_RESET_PIO, LCD_RESET, HAL_GPIO_PIN_SET);
+    hal_delay_ms(1);
 
-    GPIO_SetBits(LCD_RESET_PIO, LCD_RESET);
-    HAL_Delay(300);
+    hal_gpio_write_pin(LCD_RESET_PIO, LCD_RESET, HAL_GPIO_PIN_SET);
+    hal_delay_ms(300);
 }
 
 static inline void UiLcdHy28_SpiSendByte(uint8_t byte)
 {
 
     uint8_t dummy;
-    HAL_SPI_TransmitReceive(&hspi2, &byte, &dummy,1,SPI_TIMEOUT);
+    hal_spi_transmit_receive(&hspi2, &byte, &dummy,1,SPI_TIMEOUT);
 }
 /*
 static inline void UiLcdHy28_SpiSendByteFast(uint8_t byte)
@@ -778,8 +782,8 @@ static inline void UiLcdHy28_SpiFinishTransfer()
 {
 #ifdef STM32H7
     // we cannot use this with HAL, the "normal" HAL Transmit does check the flags AND resets them (ARGH)
-    while (__HAL_SPI_GET_FLAG(&hspiDisplay, SPI_SR_EOT) == 0 || __HAL_SPI_GET_FLAG(&hspiDisplay, SPI_SR_EOT) == 0 ) { asm("nop"); }
-    while (__HAL_SPI_GET_FLAG(&hspiDisplay, SPI_FLAG_RXWNE) != 0 || __HAL_SPI_GET_FLAG(&hspiDisplay, SPI_SR_RXPLVL) != 0 )
+    while ((hspiDisplay.Instance->SR & SPI_SR_EOT) == 0) { asm("nop"); }
+    while ((hspiDisplay.Instance->SR & (SPI_SR_RXWNE | SPI_SR_RXPLVL)) != 0)
     {
         spi_dr_dummy = SPI_DISPLAY->RXDR;
     }
@@ -796,7 +800,7 @@ static inline void UiLcdHy28_SpiFinishTransfer()
 static void UiLcdHy28_LcdSpiFinishTransfer()
 {
     UiLcdHy28_SpiFinishTransfer();
-    GPIO_SetBits(mchf_display.lcd_cs_pio, mchf_display.lcd_cs);
+    hal_gpio_write_pin(mchf_display.lcd_cs_pio, mchf_display.lcd_cs, HAL_GPIO_PIN_SET);
 }
 
 uint8_t UiLcdHy28_SpiReadByte()
@@ -805,7 +809,7 @@ uint8_t UiLcdHy28_SpiReadByte()
     uint8_t retval = 0;
 
     /* Send a Transmit a dummy byte and Receive Byte through the SPI peripheral */
-    HAL_SPI_TransmitReceive(&hspi2, &dummy,&retval,1,SPI_TIMEOUT);
+    hal_spi_transmit_receive(&hspi2, &dummy,&retval,1,SPI_TIMEOUT);
 
     return retval;
 }
@@ -815,7 +819,7 @@ uint8_t UiLcdHy28_SpiReadByteFast()
     uint8_t retval = 0;
 
     uint8_t dummy = 0;
-    HAL_SPI_TransmitReceive(&hspi2, &dummy, &retval,1,SPI_TIMEOUT);
+    hal_spi_transmit_receive(&hspi2, &dummy, &retval,1,SPI_TIMEOUT);
     return retval;
 }
 
@@ -1980,11 +1984,11 @@ static uint16_t UiLcdHy28_ReadDisplayId_ILI9486()
 
 static inline void UiLcdHy28_WriteDataSpiStart_Prepare_ILI9486()
 {
-    GPIO_SetBits(LCD_RS_PIO, LCD_RS);
+    hal_gpio_write_pin(LCD_RS_PIO, LCD_RS, HAL_GPIO_PIN_SET);
 }
 void UiLcdHy28_WriteIndexSpi_Prepare_ILI9486()
 {
-    GPIO_ResetBits(LCD_RS_PIO, LCD_RS);
+    hal_gpio_write_pin(LCD_RS_PIO, LCD_RS, HAL_GPIO_PIN_RESET);
 }
 
 static void UiLcdHy28_SetCursorA_ILI9486( unsigned short Xpos, unsigned short Ypos )
@@ -2071,7 +2075,7 @@ static void UiLcdHy28_SendRegisters(const RegisterValueSetInfo_t* reg_info)
         switch(reg_info->addr[idx].reg)
         {
         case REGVAL_DELAY:
-            HAL_Delay(reg_info->addr[idx].val);
+            hal_delay_ms(reg_info->addr[idx].val);
             break;
         case REGVAL_DATA:
             UiLcdHy28_WriteData(reg_info->addr[idx].val);
@@ -2436,10 +2440,10 @@ void UiLcdHy28_TouchscreenDetectPress()
 {
     if (mchf_touchscreen.present)
     {
-        if(!HAL_GPIO_ReadPin(TP_IRQ_PIO,TP_IRQ) && mchf_touchscreen.state != TP_DATASETS_PROCESSED)    // fetch touchscreen data if not already processed
+        if(!hal_gpio_read_pin(TP_IRQ_PIO,TP_IRQ) && mchf_touchscreen.state != TP_DATASETS_PROCESSED)    // fetch touchscreen data if not already processed
             UiLcdHy28_TouchscreenReadCoordinates();
 
-        if(HAL_GPIO_ReadPin(TP_IRQ_PIO,TP_IRQ) && mchf_touchscreen.state == TP_DATASETS_PROCESSED)     // clear statemachine when data is processed
+        if(hal_gpio_read_pin(TP_IRQ_PIO,TP_IRQ) && mchf_touchscreen.state == TP_DATASETS_PROCESSED)     // clear statemachine when data is processed
         {
             mchf_touchscreen.state = TP_DATASETS_NONE;
 
@@ -2475,13 +2479,13 @@ static inline void UiLcdHy28_TouchscreenStartSpiTransfer()
         UiLcdHy28_FinishWaitBulkWrite();
     }
     UiLcdHy28_SetSpiPrescaler(SPI_PRESCALE_TS_DEFAULT);
-    GPIO_ResetBits(TP_CS_PIO, TP_CS);
+    hal_gpio_write_pin(TP_CS_PIO, TP_CS, HAL_GPIO_PIN_RESET);
 }
 
 static inline void UiLcdHy28_TouchscreenFinishSpiTransfer()
 {
     UiLcdHy28_SpiFinishTransfer();
-    GPIO_SetBits(TP_CS_PIO, TP_CS);
+    hal_gpio_write_pin(TP_CS_PIO, TP_CS, HAL_GPIO_PIN_RESET);
     // we only have to care about other transfers if the SPI is
     // use by the display as well
     if (UiLcdHy28_SpiDisplayUsed())
@@ -2525,7 +2529,7 @@ static void UiLcdHy28_TouchscreenReadData(uint16_t* x_p,uint16_t* y_p)
 
     UiLcdHy28_TouchscreenStartSpiTransfer();
 
-    HAL_SPI_TransmitReceive(&hspi2, (uint8_t*)xpt2046_command, xpt_response,XPT2046_COMMAND_LEN,SPI_TIMEOUT);
+    hal_spi_transmit_receive(&hspi2, (uint8_t*)xpt2046_command, xpt_response,XPT2046_COMMAND_LEN,SPI_TIMEOUT);
 
     UiLcdHy28_TouchscreenFinishSpiTransfer();
 

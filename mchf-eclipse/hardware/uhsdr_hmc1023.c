@@ -10,6 +10,9 @@
  ************************************************************************************/
 #include "uhsdr_board.h"
 #include "uhsdr_hmc1023.h"
+#include "hal_spi.h"
+#include "hal_gpio.h"
+#include "spi.h"
 
 HMC1023_t hmc1023;
 
@@ -18,8 +21,6 @@ HMC1023_t hmc1023;
 #define HMC1023_CS_PIN GPIO_PIN_9
 #define HMC1023_CS_PORT GPIOG
 #define hspiHmc1023 (hspi6)
-
-#include <spi.h>
 
 #define HMC1023_REG3_FINE_LIMIT  (11)
 
@@ -56,11 +57,11 @@ static void hmc1023_ll_spi_tx(bool is_tx)
 {
 
   hspiHmc1023.Init.CLKPhase = is_tx == true? SPI_PHASE_1EDGE : SPI_PHASE_2EDGE;
-  if (HAL_SPI_Init(&hspi6) != HAL_OK)
+  if (hal_spi_init(&hspi6) != HAL_STATUS_OK)
   {
     Error_Handler();
   }
-  __HAL_SPI_ENABLE(&hspi6);
+  hal_spi_enable(&hspi6);
 }
 
 /**
@@ -71,11 +72,11 @@ static void hmc1023_ll_cs(bool on)
 {
     if (on)
     {
-        GPIO_ResetBits(HMC1023_CS_PORT,HMC1023_CS_PIN);
+        hal_gpio_write_pin(HMC1023_CS_PORT, HMC1023_CS_PIN, HAL_GPIO_PIN_RESET);
     }
     else
     {
-        GPIO_SetBits(HMC1023_CS_PORT,HMC1023_CS_PIN);
+        hal_gpio_write_pin(HMC1023_CS_PORT, HMC1023_CS_PIN, HAL_GPIO_PIN_SET);
     }
 }
 
@@ -96,7 +97,7 @@ static uint32_t hmc1023_ll_write(uint32_t regaddr, uint32_t value)
     tx_data[3] = 0x5 | (regaddr << 3); // chip id & register to write;
 
     hmc1023_ll_cs(true);
-    if (HAL_SPI_Transmit(&hspi6,tx_data,4,100) == HAL_OK)
+    if (hal_spi_transmit(&hspi6, tx_data, 4, 100) == HAL_STATUS_OK)
     {
         retval = HMC1023_OK;
     }
@@ -113,7 +114,7 @@ static uint32_t hmc1023_ll_read(uint32_t regaddr)
 
     uint32_t retval = HMC1023_ERROR;
     // write register address to read to register 0
-    if (hmc1023_ll_write(0,regaddr) == HAL_OK)
+    if (hmc1023_ll_write(0,regaddr) == HAL_STATUS_OK)
     {
         uint8_t tx_data[4] = { 0, 0, 0, 0};
         uint8_t rx_data[4];
@@ -124,7 +125,7 @@ static uint32_t hmc1023_ll_read(uint32_t regaddr)
 
         // now all tx_data is zero and we try to read using
         // the rx spi config
-        if (HAL_SPI_TransmitReceive(&hspi6,tx_data,rx_data, 4,100) == HAL_OK)
+        if (hal_spi_transmit_receive(&hspi6, tx_data, rx_data, 4, 100) == HAL_STATUS_OK)
         {
             if (( rx_data[3] & 0x07) == 5)  // we found the correct "chip id"
             {
@@ -262,16 +263,15 @@ void hmc1023_init()
 {
 
     // TODO: Move to HAL Config
-    /*Configure GPIO pin Output Level */
-    HAL_GPIO_WritePin(HMC1023_CS_PORT, HMC1023_CS_PIN, GPIO_PIN_SET);
+    hal_gpio_write_pin(HMC1023_CS_PORT, HMC1023_CS_PIN, HAL_GPIO_PIN_SET);
 
-    GPIO_InitTypeDef GPIO_InitStruct;
+    hal_gpio_config_t cfg;
     /*Configure GPIO pins : PFPin PFPin PFPin */
-    GPIO_InitStruct.Pin = HMC1023_CS_PIN;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(HMC1023_CS_PORT, &GPIO_InitStruct);
+    cfg.pin = HMC1023_CS_PIN;
+    cfg.mode = HAL_GPIO_MODE_OUTPUT_PP;
+    cfg.pull = HAL_GPIO_PULL_NONE;
+    cfg.speed = HAL_GPIO_SPEED_LOW;
+    hal_gpio_init(HMC1023_CS_PORT, &cfg);
 
     // setup SPI with correct data
     hspiHmc1023.Init.Mode = SPI_MODE_MASTER;

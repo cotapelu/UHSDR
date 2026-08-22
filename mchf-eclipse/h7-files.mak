@@ -3,6 +3,17 @@ basesw/ovi40-h7/Src/startup_stm32h743xx.S \
 basesw/ovi40-h7/Src/system_stm32h7xx.c \
 hal/src/gpio/hal_gpio_stm32.c \
 hal/src/spi/hal_spi_stm32.c \
+hal/src/i2c/hal_i2c_stm32.c \
+hal/src/i2s/hal_i2s_stm32.c \
+hal/src/dma/hal_dma_stm32.c \
+hal/src/flash/hal_flash_stm32.c \
+hal/src/watchdog/hal_watchdog_stm32.c \
+hal/src/clock/hal_clock_stm32.c \
+hal/src/uart/hal_uart_stm32.c \
+hal/src/dac/hal_dac_stm32.c \
+hal/src/adc/hal_adc_stm32.c \
+hal/src/delay/hal_delay_stm32.c \
+hal/src/sram/hal_sram_stm32.c \
 basesw/ovi40-h7/Src/stm32h7xx_it.c \
 basesw/ovi40-h7/Src/adc.c \
 basesw/ovi40-h7/Src/dac.c \

@@ -6,18 +6,27 @@
  **                                                                                 **
  **---------------------------------------------------------------------------------**
  **                                                                                 **
- **  File name:     uhsdr_hw_i2s.h                                                 **
- **  Description:   Audio interface abstraction (backward compatibility)            **
- **                 Product code should include hal_i2s.h directly.                **
+ **  File name:     hal_watchdog.h                                                   **
+ **  Description:   Abstract watchdog API for STM32 HAL shim layer                  **
+ **                 Product code includes this header; NO vendor HAL includes.      **
  **  Last Modified: 2026-08-21                                                      **
  **  Licence:       GNU GPLv3                                                      **
  ************************************************************************************/
 
-#ifndef __MCHF_HW_I2S_H
-#define __MCHF_HW_I2S_H
+#ifndef __HAL_WATCHDOG_H
+#define __HAL_WATCHDOG_H
 
-#include "uhsdr_board_config.h"
-#include "hal_i2s.h"
+#include "hal_common.h"
 
-#endif
+/* -------------------------------------------------------------------------
+ * Opaque watchdog handle (maps to IWDG_HandleTypeDef* in backend)
+ * ------------------------------------------------------------------------- */
+typedef void* hal_watchdog_handle_t;
 
+/* -------------------------------------------------------------------------
+ * Abstract watchdog API
+ * ------------------------------------------------------------------------- */
+hal_status_t hal_watchdog_init(hal_watchdog_handle_t handle);
+hal_status_t hal_watchdog_refresh(hal_watchdog_handle_t handle);
+
+#endif /* __HAL_WATCHDOG_H */

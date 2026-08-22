@@ -23,6 +23,9 @@
 
 #include "ui_driver.h"
 #include "hal_gpio.h"
+#include "hal_dac.h"
+#include "hal_adc.h"
+#include "hal_clock.h"
 
 #include "ui_rotary.h"
 
@@ -34,6 +37,9 @@
 #include "uhsdr_flash.h"
 #include "adc.h"
 #include "dac.h"
+#include "hal_adc.h"
+#include "hal_dac.h"
+#include "hal_clock.h"
 
 #include "uhsdr_keypad.h"
 #include "osc_si5351a.h"
@@ -66,7 +72,7 @@ static void mchf_board_debug_init(void)
     // as well which renders it unusable
     #error "Debug Build No Longer Supported, needs alternative way of communication"
     USART_InitTypeDef USART_InitStructure;
-    GPIO_InitTypeDef GPIO_InitStructure;
+    hal_gpio_config_t cfg;
 
     USART_InitStructure.USART_BaudRate = 921600;//230400;
     USART_InitStructure.USART_WordLength = USART_WordLength_8b;
@@ -106,28 +112,28 @@ static void mchf_board_debug_init(void)
 
 static void Board_TxRxCntrPin_Init(void)
 {
-    GPIO_InitTypeDef GPIO_InitStructure;
+    hal_gpio_config_t cfg;
 
 
-    GPIO_InitStructure.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStructure.Pull = GPIO_PULLDOWN;
-    GPIO_InitStructure.Speed = GPIO_SPEED_FREQ_LOW;
+    cfg.mode = HAL_GPIO_MODE_OUTPUT_PP;
+    cfg.pull = HAL_GPIO_PULL_DOWN;
+    cfg.speed = HAL_GPIO_SPEED_LOW;
 
     // RX/TX control pin init
-    GPIO_InitStructure.Pin = TXRX_CNTR;
-    HAL_GPIO_Init(TXRX_CNTR_PIO, &GPIO_InitStructure);
+    cfg.pin = TXRX_CNTR;
+    hal_gpio_init(TXRX_CNTR_PIO, &cfg);
 }
 
 static void Board_Dac_Init(void)
 {
 
 #ifdef UI_BRD_OVI40
-    HAL_DAC_Start(&hdac,DAC_CHANNEL_1);
-    HAL_DAC_SetValue(&hdac,DAC_CHANNEL_1,DAC_ALIGN_8B_R,0);
+    hal_dac_start(&hdac, DAC_CHANNEL_1);
+    hal_dac_set_value(&hdac, DAC_CHANNEL_1, DAC_ALIGN_8B_R, 0);
     // AUDIO PA volume zero
 #endif
-    HAL_DAC_Start(&hdac,DAC_CHANNEL_2);
-    HAL_DAC_SetValue(&hdac,DAC_CHANNEL_2,DAC_ALIGN_8B_R,0);
+    hal_dac_start(&hdac, DAC_CHANNEL_2);
+    hal_dac_set_value(&hdac, DAC_CHANNEL_2, DAC_ALIGN_8B_R, 0);
 
 }
 
@@ -135,24 +141,24 @@ static void Board_Dac_Init(void)
 static void Board_Adc_Init(void)
 {
     // ADC init for Input Voltage readings
-    HAL_ADC_Start(&hadc1);
+    hal_adc_start(&hadc1);
     // ADC init for antenna forward power readings
-    HAL_ADC_Start(&hadc2);
+    hal_adc_start(&hadc2);
     // ADC init for antenna return power readings
-    HAL_ADC_Start(&hadc3);
+    hal_adc_start(&hadc3);
 }
 
 
 static void Board_PowerDown_Init(void)
 {
-    GPIO_InitTypeDef GPIO_InitStructure;
+    hal_gpio_config_t cfg;
 
-    GPIO_InitStructure.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStructure.Pull = GPIO_NOPULL;
-    GPIO_InitStructure.Speed = GPIO_SPEED_FREQ_LOW;
+    cfg.mode = HAL_GPIO_MODE_OUTPUT_PP;
+    cfg.pull = HAL_GPIO_PULL_NONE;
+    cfg.speed = HAL_GPIO_SPEED_LOW;
 
-    GPIO_InitStructure.Pin = POWER_DOWN;
-    HAL_GPIO_Init(POWER_DOWN_PIO, &GPIO_InitStructure);
+    cfg.pin = POWER_DOWN;
+    hal_gpio_init(POWER_DOWN_PIO, &cfg);
 
     // Set initial state - low to enable main regulator
     GPIO_ResetBits(POWER_DOWN_PIO,POWER_DOWN);
@@ -174,14 +180,14 @@ static void Board_BandCntr_Init(void)
 {
 #ifdef UI_BRD_MCHF
     // FIXME: USE HAL Init here as well, this handles also the multiple Ports case
-    GPIO_InitTypeDef GPIO_InitStructure;
+    hal_gpio_config_t cfg;
 
-    GPIO_InitStructure.Mode 	= GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStructure.Pull 	= GPIO_NOPULL;
-    GPIO_InitStructure.Speed 	= GPIO_SPEED_LOW;
+    cfg.mode = HAL_GPIO_MODE_OUTPUT_PP;
+    cfg.pull = HAL_GPIO_PULL_NONE;
+    cfg.speed = HAL_GPIO_SPEED_LOW;
 
-    GPIO_InitStructure.Pin = BAND0|BAND1|BAND2;
-    HAL_GPIO_Init(BAND0_PIO, &GPIO_InitStructure);
+    cfg.pin = BAND0|BAND1|BAND2;
+    hal_gpio_init(BAND0_PIO, &cfg);
 #endif
     // Set initial state - low (20m band)
     GPIO_ResetBits(BAND0_PIO,BAND0);
@@ -193,19 +199,19 @@ static void Board_BandCntr_Init(void)
 
 static void Board_Touchscreen_Init()
 {
-    GPIO_InitTypeDef GPIO_InitStructure;
+    hal_gpio_config_t cfg;
 
-    GPIO_InitStructure.Mode 	= GPIO_MODE_INPUT;
-    GPIO_InitStructure.Pull 	= GPIO_PULLUP;
-    GPIO_InitStructure.Speed 	= GPIO_SPEED_FREQ_VERY_HIGH;
+    cfg.mode = HAL_GPIO_MODE_INPUT;
+    cfg.pull = HAL_GPIO_PULL_UP;
+    cfg.speed = HAL_GPIO_SPEED_VERY_HIGH;
 
-    GPIO_InitStructure.Pin = TP_IRQ;
-    HAL_GPIO_Init(TP_IRQ_PIO, &GPIO_InitStructure);
+    cfg.pin = TP_IRQ;
+    hal_gpio_init(TP_IRQ_PIO, &cfg);
 
-    GPIO_InitStructure.Mode 	= GPIO_MODE_OUTPUT_PP;
+    cfg.mode = HAL_GPIO_MODE_OUTPUT_PP;
 
-    GPIO_InitStructure.Pin = TP_CS;
-    HAL_GPIO_Init(TP_CS_PIO, &GPIO_InitStructure);
+    cfg.pin = TP_CS;
+    hal_gpio_init(TP_CS_PIO, &cfg);
 
     GPIO_SetBits(TP_CS_PIO, TP_CS);
 }
@@ -319,23 +325,23 @@ void Board_Powerdown()
     // simply setting the OUTPUT to high did not do the trick here
     // worked on F4, though.
 
-    GPIO_InitTypeDef GPIO_InitStructure;
+    hal_gpio_config_t cfg;
 
-    GPIO_InitStructure.Mode = GPIO_MODE_INPUT;
-    GPIO_InitStructure.Pull = GPIO_PULLUP;
-    GPIO_InitStructure.Speed = GPIO_SPEED_FREQ_LOW;
+    cfg.mode = HAL_GPIO_MODE_INPUT;
+    cfg.pull = HAL_GPIO_PULL_UP;
+    cfg.speed = HAL_GPIO_SPEED_LOW;
 
-    GPIO_InitStructure.Pin = POWER_DOWN;
-    HAL_GPIO_Init(POWER_DOWN_PIO, &GPIO_InitStructure);
+    cfg.pin = POWER_DOWN;
+    hal_gpio_init(POWER_DOWN_PIO, &cfg);
 
     // disable all interrupts
     __disable_irq();
 
     // disable systick irq
-    HAL_SuspendTick();
+    hal_suspend_tick();
 
     // set clocks to default state
-    HAL_RCC_DeInit();
+    hal_clock_deinit();
 
     // clear Interrupt Enable Register & Interrupt Pending Register
     const size_t icer_count = sizeof(NVIC->ICER)/sizeof(NVIC->ICER[0]);
@@ -701,7 +707,7 @@ void Board_SetPaBiasValue(uint16_t bias)
 {
     // Set DAC Channel 1 DHR12L register
     // DAC_SetChannel2Data(DAC_Align_8b_R,bias);
-    HAL_DAC_SetValue(&hdac, DAC_CHANNEL_2, DAC_ALIGN_8B_R, bias);
+    hal_dac_set_value(&hdac, DAC_CHANNEL_2, DAC_ALIGN_8B_R, bias);
 
 }
 

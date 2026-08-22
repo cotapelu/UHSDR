@@ -16,7 +16,6 @@
 
 #include "arm_math.h"
 //#include "softdds.h"
-#include "uhsdr_hw_i2s.h"
 #include "uhsdr_board.h"
 #include "codec.h"
 #include "audio_driver.h"

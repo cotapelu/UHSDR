@@ -145,7 +145,6 @@ drivers/audio/cw/uhsdr_digi_buffer.c \
 drivers/audio/cw/cw_gen.c \
 drivers/audio/cw/cw_decoder.c \
 drivers/audio/codec/codec.c \
-drivers/audio/codec/uhsdr_hw_i2s.c \
 drivers/audio/audio_agc.c \
 drivers/audio/audio_driver.c \
 drivers/audio/audio_driver_filters.c \

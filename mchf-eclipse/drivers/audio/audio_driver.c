@@ -35,7 +35,7 @@
 #include "usbd_audio_if.h"
 #include "ui_spectrum.h"
 #include "filters.h"
-#include "uhsdr_hw_i2s.h"
+#include "hal_i2s.h"
 #include "rtty.h"
 #include "psk.h"
 #include "cw_decoder.h"

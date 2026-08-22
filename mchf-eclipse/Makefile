@@ -357,8 +357,10 @@ $(TRX_ID).version:
 
 # cleaning rule
 clean-firmware:  
-	# remove the firmware executables, map, dmp and all object files (.o) (except libs object files)
+	# remove the firmware executables, map, dmp and all object files (.o)
 	$(RM) $(call FixPath,$(OBJS))	
+	$(RM) $(call FixPath,$(HAL_OBJS))
+	$(RM) $(call FixPath,$(DSPLIB_OBJS))
 	$(RM) $(call FixPath,$(FIRMWARE).elf)
 	$(RM) $(call FixPath,$(FIRMWARE).dfu)
 	$(RM) $(call FixPath,$(FIRMWARE).bin)

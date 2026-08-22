@@ -2,6 +2,12 @@
 BL_HAL_SRC := \
 basesw/ovi40/Src/startup_stm32f767xx.S \
 basesw/ovi40/Src/system_stm32f7xx.c \
+hal/src/gpio/hal_gpio_stm32.c \
+hal/src/spi/hal_spi_stm32.c \
+hal/src/delay/hal_delay_stm32.c \
+hal/src/sram/hal_sram_stm32.c \
+hal/src/flash/hal_flash_stm32.c \
+hal/src/clock/hal_clock_stm32.c \
 basesw/ovi40/Src/adc.c \
 basesw/ovi40/Src/dac.c \
 basesw/ovi40/Src/dma.c \

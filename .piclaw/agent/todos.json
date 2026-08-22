@@ -3,37 +3,47 @@
   "phases": [
     {
       "id": "phase-1",
-      "name": "Phase 26",
+      "name": "Phase 29",
       "tasks": [
         {
           "id": "task-1",
-          "content": "Add host-based unit test for Canary_Create/IsIntact",
-          "status": "completed"
-        },
-        {
-          "id": "task-2",
-          "content": "Add host-based unit test for AudioDriver_MchfVolumeWorkaround",
-          "status": "completed"
-        },
-        {
-          "id": "task-3",
-          "content": "Add make stack-report target",
-          "status": "completed"
-        },
-        {
-          "id": "task-4",
-          "content": "Document boot accounting flow in reproducible_builds.md",
+          "content": "Create hal/include/hal_dma.h + hal/src/dma/hal_dma_stm32.c",
           "status": "in_progress"
         },
         {
+          "id": "task-2",
+          "content": "Create hal/include/hal_flash.h + hal/src/flash/hal_flash_stm32.c",
+          "status": "pending"
+        },
+        {
+          "id": "task-3",
+          "content": "Create hal/include/hal_watchdog.h + hal/src/watchdog/hal_watchdog_stm32.c",
+          "status": "pending"
+        },
+        {
+          "id": "task-4",
+          "content": "Create hal/include/hal_clock.h + hal/src/clock/hal_clock_stm32.c",
+          "status": "pending"
+        },
+        {
           "id": "task-5",
-          "content": "Run make all-firmware && make all-bootloader, confirm no size regression",
+          "content": "Create hal/include/hal_uart.h + hal/src/uart/hal_uart_stm32.c",
+          "status": "pending"
+        },
+        {
+          "id": "task-6",
+          "content": "Migrate hardware/uhsdr_board.c, uhsdr_hmc1023.c, drivers/ui/lcd/ui_lcd_hy28.c → new HAL APIs",
+          "status": "pending"
+        },
+        {
+          "id": "task-7",
+          "content": "Gate: make all-firmware + make all-bootloader pass; 0 vendor HAL includes in product code",
           "status": "pending"
         }
       ]
     }
   ],
-  "nextTaskId": 6,
+  "nextTaskId": 8,
   "nextPhaseId": 2,
-  "updatedAt": "2026-08-21T09:54:46.114Z"
+  "updatedAt": "2026-08-21T12:09:38.574Z"
 }

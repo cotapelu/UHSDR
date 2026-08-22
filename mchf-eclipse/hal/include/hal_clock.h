@@ -6,18 +6,23 @@
  **                                                                                 **
  **---------------------------------------------------------------------------------**
  **                                                                                 **
- **  File name:     uhsdr_hw_i2s.h                                                 **
- **  Description:   Audio interface abstraction (backward compatibility)            **
- **                 Product code should include hal_i2s.h directly.                **
+ **  File name:     hal_clock.h                                                      **
+ **  Description:   Abstract clock API for STM32 HAL shim layer                     **
+ **                 Product code includes this header; NO vendor HAL includes.      **
  **  Last Modified: 2026-08-21                                                      **
  **  Licence:       GNU GPLv3                                                      **
  ************************************************************************************/
 
-#ifndef __MCHF_HW_I2S_H
-#define __MCHF_HW_I2S_H
+#ifndef __HAL_CLOCK_H
+#define __HAL_CLOCK_H
 
-#include "uhsdr_board_config.h"
-#include "hal_i2s.h"
+#include "hal_common.h"
 
-#endif
+/* -------------------------------------------------------------------------
+ * Abstract clock API
+ * ------------------------------------------------------------------------- */
+hal_status_t hal_clock_deinit(void);
+hal_status_t hal_suspend_tick(void);
+hal_status_t hal_resume_tick(void);
 
+#endif /* __HAL_CLOCK_H */
