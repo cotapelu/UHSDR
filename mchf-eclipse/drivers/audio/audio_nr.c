@@ -67,6 +67,20 @@ void AudioNr_InitContext(AudioNr_Context_t* ctx)
     ctx->nr2.width = 4;
     ctx->nr2.power_threshold = 0.40;
     ctx->nr2.asnr = 30;
+
+    // Initialize notch biquad coefficients to passthrough
+    for (int stage = 0; stage < 4; stage++)
+    {
+        ctx->notch_biquad_coeffs[stage * 5 + 0] = 1.0f;
+        ctx->notch_biquad_coeffs[stage * 5 + 1] = 0.0f;
+        ctx->notch_biquad_coeffs[stage * 5 + 2] = 0.0f;
+        ctx->notch_biquad_coeffs[stage * 5 + 3] = 0.0f;
+        ctx->notch_biquad_coeffs[stage * 5 + 4] = 0.0f;
+    }
+    for (int i = 0; i < 4 * 4; i++)
+    {
+        ctx->notch_biquad_state[i] = 0.0f;
+    }
 }
 
 void NR_Init()
@@ -74,26 +88,7 @@ void NR_Init()
     AudioNr_InitContext(AudioNr_GetDefaultContext());
 }
 
-// biquad IIR filter with a maximum of four notch filters
-// pre-filled with passthrough coefficients
-static arm_biquad_casd_df1_inst_f32 NR_notch_biquad =
-{
-        .numStages = 4,
-        .pCoeffs = (float32_t *)(float32_t [])
-        {
-            1,0,0,0,0,  1,0,0,0,0,  1,0,0,0,0,  1,0,0,0,0
-        }, // 4 x 5 = 20 coefficients
-
-        .pState = (float32_t *)(float32_t [])
-        {
-            0,0,0,0,   0,0,0,0,   0,0,0,0,   0,0,0,0
-        } // 4 x 4 = 16 state variables
-};
-
-static const float32_t biquad_passthrough[] = { 1, 0, 0, 0, 0 };
-
-static float32_t NR_notch_coeffs[5];
-
+// biquad IIR filter coefficients and state are now stored in AudioNr_Context_t
 
 void AudioNR_SetBiquadCoeffs(float32_t* coeffsTo,const float32_t* coeffsFrom, float scaling)
 {
@@ -127,18 +122,20 @@ void AudioNr_CalculateAutoNotch(float32_t coeffs[6], uint8_t notch1_bin, bool no
 
 void AudioNr_ActivateAutoNotch(uint8_t notch1_bin, bool notch1_active)
 {
-	if(notch1_active)
-	{	// set coeffs to new notch frequency
-		AudioNr_CalculateAutoNotch(NR_notch_coeffs, notch1_bin, notch1_active, 100, 12000);
-		AudioNR_SetBiquadCoeffs(&NR_notch_biquad.pCoeffs[0], NR_notch_coeffs, NR_notch_coeffs[3]); // first biquad
-	}
-	else
+    float32_t coeffs[6];
+    if(notch1_active)
+    {   // set coeffs to new notch frequency
+        AudioNr_CalculateAutoNotch(coeffs, notch1_bin, notch1_active, 100, 12000);
+        AudioNR_SetBiquadCoeffs(&g_audio_nr_ctx.notch_biquad_coeffs[0], coeffs, coeffs[3]); // first biquad
+    }
+    else
 
-	{	// set coeffs to passthrough = NO notch
-		AudioNR_SetBiquadCoeffs(&NR_notch_biquad.pCoeffs[0], biquad_passthrough, 1.0); // first biquad --> passthrough coeffs
-	}
-	// second biquad
-//	AudioNR_SetBiquadCoeffs(&NR_notch_biquad.pCoeffs[5], NR_notch_coeffs, NR_notch_coeffs[0],1.0); // second biquad
+    {   // set coeffs to passthrough = NO notch
+        static const float32_t passthrough[] = { 1, 0, 0, 0, 0 };
+        AudioNR_SetBiquadCoeffs(&g_audio_nr_ctx.notch_biquad_coeffs[0], passthrough, 1.0); // first biquad --> passthrough coeffs
+    }
+    // second biquad
+//  AudioNR_SetBiquadCoeffs(&g_audio_nr_ctx.notch_biquad_coeffs[5], coeffs, coeffs[0],1.0); // second biquad
 }
 #endif
 

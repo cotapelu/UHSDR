@@ -200,7 +200,7 @@
 
 **Goal:** Reduce file-scope `static` variables from 118 → <30.
 
-- [ ] **T30.1** Encapsulate `audio_nr.c` statics into `AudioNr_Context` struct
+- [x] **T30.1** Encapsulate `audio_nr.c` statics into `AudioNr_Context` struct
 - [ ] **T30.2** Encapsulate `audio_driver.c` statics into `AudioDriver_Context` struct
 - [ ] **T30.3** Encapsulate `ui_driver.c` statics into `UiDriver_Context` struct
 - [ ] **T30.4** Document remaining global state ownership (`TransceiverState ts` — single owner)

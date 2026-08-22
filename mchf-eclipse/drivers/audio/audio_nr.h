@@ -138,6 +138,8 @@ typedef struct
     int32_t in_head, in_tail, out_head, out_tail;
     NR_Buffer* in_buffers[NR_BUFFER_FIFO_SIZE];
     NR_Buffer* out_buffers[NR_BUFFER_FIFO_SIZE];
+    float32_t notch_biquad_coeffs[4 * 5];  // 4 stages, 5 coefficients each
+    float32_t notch_biquad_state[4 * 4];   // 4 stages, 4 state variables each
 } AudioNr_Context_t;
 
 // Default global context instance
