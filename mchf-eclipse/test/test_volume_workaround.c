@@ -144,6 +144,39 @@ static void test_volume_active_value_less_than_one(void)
     TEST_ASSERT(arrays_equal_f32(buf, expected, 2, 1e-6f));
 }
 
+/* T26.2.7: active_value > 1.0 increases amplitude */
+static void test_volume_active_value_greater_than_one(void)
+{
+    float32_t buf[] = {1.0f, 2.0f};
+    float32_t expected[] = {2.0f, 4.0f};
+
+    AudioDriver_MchfVolumeWorkaround(buf, 2, 25.0f, 2.0f, 20.0f);
+
+    TEST_ASSERT(arrays_equal_f32(buf, expected, 2, 1e-6f));
+}
+
+/* T26.2.8: negative buffer values scaled correctly */
+static void test_volume_negative_buffer_values(void)
+{
+    float32_t buf[] = {-1.0f, -2.0f, 3.0f};
+    float32_t expected[] = {-0.5f, -1.0f, 1.5f};
+
+    AudioDriver_MchfVolumeWorkaround(buf, 3, 25.0f, 0.5f, 20.0f);
+
+    TEST_ASSERT(arrays_equal_f32(buf, expected, 3, 1e-6f));
+}
+
+/* T26.2.9: zero buffer values remain zero after scaling */
+static void test_volume_zero_buffer_values(void)
+{
+    float32_t buf[] = {0.0f, 0.0f, 0.0f};
+    float32_t expected[] = {0.0f, 0.0f, 0.0f};
+
+    AudioDriver_MchfVolumeWorkaround(buf, 3, 25.0f, 0.5f, 20.0f);
+
+    TEST_ASSERT(arrays_equal_f32(buf, expected, 3, 1e-6f));
+}
+
 /* -------------------------------------------------------------------------
  * Test runner
  * ------------------------------------------------------------------------- */

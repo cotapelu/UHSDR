@@ -48,6 +48,8 @@ int test_main(void)
     TEST_REGISTER(test_calc_bandpass_high_freq);
     TEST_REGISTER(test_calc_high_shelf_extreme_gain);
     TEST_REGISTER(test_calc_low_shelf_extreme_gain);
+    TEST_REGISTER(test_calc_high_shelf_zero_gain);
+    TEST_REGISTER(test_calc_low_shelf_zero_gain);
     printf("\n");
 
     /* Canary tests (T26.1) */
@@ -67,6 +69,9 @@ int test_main(void)
     TEST_REGISTER(test_volume_zero_length_buffer);
     TEST_REGISTER(test_volume_repeated_scaling);
     TEST_REGISTER(test_volume_active_value_less_than_one);
+    TEST_REGISTER(test_volume_active_value_greater_than_one);
+    TEST_REGISTER(test_volume_negative_buffer_values);
+    TEST_REGISTER(test_volume_zero_buffer_values);
     printf("\n");
 
     printf("=====================\n");

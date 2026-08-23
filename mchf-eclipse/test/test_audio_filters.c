@@ -241,5 +241,33 @@ static void test_calc_low_shelf_extreme_gain(void)
     }
 }
 
+/* Test: High shelf with zero gain produces flat response coefficients */
+static void test_calc_high_shelf_zero_gain(void)
+{
+    float32_t coeffs[5];
+
+    AudioDriver_CalcHighShelf(coeffs, 1000.0f, 1.0f, 0.0f, 48000.0f);
+
+    for (int i = 0; i < 5; i++)
+    {
+        TEST_ASSERT(!isnan(coeffs[i]));
+        TEST_ASSERT(!isinf(coeffs[i]));
+    }
+}
+
+/* Test: Low shelf with zero gain produces flat response coefficients */
+static void test_calc_low_shelf_zero_gain(void)
+{
+    float32_t coeffs[5];
+
+    AudioDriver_CalcLowShelf(coeffs, 1000.0f, 1.0f, 0.0f, 48000.0f);
+
+    for (int i = 0; i < 5; i++)
+    {
+        TEST_ASSERT(!isnan(coeffs[i]));
+        TEST_ASSERT(!isinf(coeffs[i]));
+    }
+}
+
 /* Test runner entry point */
 /* Tests are registered in test.c to avoid multiple test_main definitions */
