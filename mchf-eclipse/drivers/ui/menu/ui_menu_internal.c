@@ -740,7 +740,7 @@ void UiMenu_RenderChangeItem(int16_t pot_diff)
     UiMenu_RenderMenu(MENU_PROCESS_VALUE_CHANGE);      // Update that menu item
 }
 
-void UiMenu_RenderLastScreen()
+void UiMenu_RenderLastScreen(void)
 {
     while (menu[ts.Layout->MENUSIZE-1].entryItem != NULL && UiMenu_NextMenuEntry(menu[ts.Layout->MENUSIZE-1].entryItem) != NULL )
     {
@@ -749,13 +749,13 @@ void UiMenu_RenderLastScreen()
     UiMenu_RenderMenu(MENU_RENDER_ONLY);
 }
 
-void UiMenu_RenderFirstScreen()
+void UiMenu_RenderFirstScreen(void)
 {
     init_done = false;
     UiMenu_RenderMenu(MENU_RENDER_ONLY);
 }
 
-bool UiMenu_RenderNextScreen()
+bool UiMenu_RenderNextScreen(void)
 {
     bool retval = UiMenu_DisplayMoveSlotsForward(ts.Layout->MENUSIZE);
     if (retval)
@@ -765,7 +765,7 @@ bool UiMenu_RenderNextScreen()
     return retval;
 }
 
-bool UiMenu_RenderPrevScreen()
+bool UiMenu_RenderPrevScreen(void)
 {
     bool retval = UiMenu_DisplayMoveSlotsBackwards(ts.Layout->MENUSIZE);
     if (retval)

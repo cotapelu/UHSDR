@@ -5891,7 +5891,7 @@ bool UiDriver_Process_WFscope_RatioChange()
 
 static const keyaction_descr_t keyactions_normal[] =
 {
-		{ TOUCHSCREEN_ACTIVE, 	UiDriver_HandleTouchScreenShortPress,       UiDriver_HandleTouchScreenLongPress },
+		{ TOUCHSCREEN_ACTIVE, 	(void (*)(void))UiDriver_HandleTouchScreenShortPress,       (void (*)(void))UiDriver_HandleTouchScreenLongPress },
 		{ BUTTON_F1_PRESSED, 	UiAction_ToggleMenuMode, 					UiAction_SaveConfigurationToMemory },
 		{ BUTTON_F2_PRESSED, 	UiAction_ChangeLowerMeterDownOrSnap, 		UiAction_ChangeLowerMeterUp },
 		{ BUTTON_F3_PRESSED, 	UiAction_ToggleSplitModeOrToggleMemMode, 	UiAction_ToggleVfoMem },

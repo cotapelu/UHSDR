@@ -2455,7 +2455,7 @@ void UiLcdHy28_TouchscreenDetectPress()
  * @brief tells you that touchscreen coordinates are ready for processing and marks them as processed
  * @returns true if coordinates for processing are available and have been marked as processed, false otherwise
  */
-bool UiLcdHy28_TouchscreenHasProcessableCoordinates()
+bool UiLcdHy28_TouchscreenHasProcessableCoordinates(void)
 {
 	bool retval = false;
     UiLcdHy28_TouchscreenReadCoordinates();

@@ -165,7 +165,7 @@ void UiDriver_TouchscreenCalibrationRun()
     }
 }
 
-bool UiDriver_TouchscreenCalibration()
+bool UiDriver_TouchscreenCalibration(void)
 {
 	bool retval = false;
 	uint16_t MAX_X=ts.Layout->Size.x; uint16_t MAX_Y=ts.Layout->Size.y;

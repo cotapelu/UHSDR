@@ -26,13 +26,13 @@
 #include "uhsdr_keypad.h"
 #include "radio_management.h"
 
-void UiDriver_CreateVoltageDisplay()
+void UiDriver_CreateVoltageDisplay(void)
 {
 	// Create voltage
 	UiLcdHy28_PrintTextCentered (ts.Layout->PWR_IND.x,ts.Layout->PWR_IND.y,ts.Layout->LEFTBOXES_IND.w,   "--.- V",  COL_PWR_IND,Black,0);
 }
 
-bool UiDriver_SaveConfiguration()
+bool UiDriver_SaveConfiguration(void)
 {
 	bool savedConfiguration = true;
 
@@ -119,7 +119,7 @@ void UiDriver_PowerDownCleanup(bool saveConfiguration)
 /*
  * @brief Display external voltage
  */
-void UiDriver_DisplayVoltage()
+void UiDriver_DisplayVoltage(void)
 {
 	uint32_t low_power_threshold = ((ts.low_power_config & LOW_POWER_THRESHOLD_MASK) + LOW_POWER_THRESHOLD_OFFSET) * 10;
 	// did we detect a voltage change?
@@ -160,7 +160,7 @@ void UiDriver_DisplayVoltage()
  * @brief Measures Voltage and controls undervoltage detection
  * @returns true if display update is required, false if not
  */
-bool UiDriver_HandleVoltage()
+bool UiDriver_HandleVoltage(void)
 {
 	bool retval = false;
 	// if this is set to true, we should update the display because something relevant for the user happened.
@@ -267,7 +267,7 @@ void UiDriver_DisplayTemperature(int temp)
 //* Output Parameters   :
 //* Functions called    :
 //*----------------------------------------------------------------------------
-void UiDriver_HandleLoTemperature()
+void UiDriver_HandleLoTemperature(void)
 {
 	if (SoftTcxo_HandleLoTemperatureDrift())
 	{
@@ -284,7 +284,7 @@ void UiDriver_HandleLoTemperature()
 //* Output Parameters   :
 //* Functions called    :
 //*----------------------------------------------------------------------------
-bool UiDriver_LoadSavedConfigurationAtStartup()
+bool UiDriver_LoadSavedConfigurationAtStartup(void)
 {
 
 	bool retval = false;
@@ -391,7 +391,7 @@ bool UiDriver_LoadSavedConfigurationAtStartup()
 	return retval;
 }
 
-void UiDriver_CreateTemperatureDisplay()
+void UiDriver_CreateTemperatureDisplay(void)
 {
 	const char *label, *txt;
 	uint32_t label_color, txt_color;
@@ -448,7 +448,7 @@ void UiDriver_Power2String(char* txt, size_t txt_len,uint32_t power_mW)
         snprintf(txt,txt_len,"%ldW",power_mW/1000);
     }
 }
-void UiDriver_DrawPowerMeterLabels()
+void UiDriver_DrawPowerMeterLabels(void)
 {
 
     const uint16_t y_pos = (ts.Layout->SM_IND.y + 5);
@@ -515,7 +515,7 @@ void UiDriver_DrawPowerMeterLabels()
 
 }
 
-void UiDriver_DisplayPowerLevel()
+void UiDriver_DisplayPowerLevel(void)
 {
     uint16_t fg_clr = White;
     char txt[5];

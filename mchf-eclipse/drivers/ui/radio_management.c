@@ -458,7 +458,7 @@ static bool RadioManagement_SetBandPowerFactor(const BandInfo* band, int32_t pow
  *
  * @return true if the selected modulation mode permits the use of a side tone
  */
-bool RadioManagement_UsesTxSidetone()
+bool RadioManagement_UsesTxSidetone(void)
 {
     return ts.dmod_mode == DEMOD_CW || is_demod_rtty() || is_demod_psk() || (ts.tune && !ts.iq_freq_mode);
 }
@@ -908,7 +908,7 @@ static __IO bool  radioManagement_SwitchTxRx_running;
  * This function should only return true if it is absolutely safe to switch between Tx and Rx in an interrupt. Better safe than sorry.
  * @return true if we can switch because no code is running in a critical section
  */
-bool RadioManagement_SwitchTxRx_Possible()
+bool RadioManagement_SwitchTxRx_Possible(void)
 {
     // we check all resources which may be locked by a user mode (non-interrupt activity)
     return RadioManagement_TxRxSwitching_IsEnabled() && osc->readyForIrqCall() && Codec_ReadyForIrqCall() && radioManagement_SwitchTxRx_running == false;
@@ -1105,7 +1105,7 @@ void RadioManagement_SwitchTxRx(uint8_t txrx_mode, bool tune_mode)
 /*
  * @returns: false -> use USB, true -> use LSB
  */
-bool RadioManagement_CalculateCWSidebandMode()
+bool RadioManagement_CalculateCWSidebandMode(void)
 {
     bool retval = false;
     switch(RadioManagement_CWConfigValueToModeEntry(ts.cw_offset_mode)->sideband_mode)
@@ -1710,7 +1710,7 @@ static void RadioManagement_PowerFromADCValue(float inval, float sensor_null, fl
  * @brief Measures and calculates TX Power Output and SWR, has to be called regularly
  * @returns true if new values have been calculated
  */
-bool RadioManagement_UpdatePowerAndVSWR()
+bool RadioManagement_UpdatePowerAndVSWR(void)
 {
 
     uint16_t  val_p,val_s = 0;
@@ -1942,7 +1942,7 @@ void RadioManagement_ToggleVfoAB()
 /**
  * @returns true == fm deviation 5khz, false == fm deviation = 2.5khz
  */
-bool RadioManagement_FmDevIs5khz()
+bool RadioManagement_FmDevIs5khz(void)
 {
     return (ts.flags2 & FLAGS2_FM_MODE_DEVIATION_5KHZ) != 0;
 }
@@ -1967,7 +1967,7 @@ bool RadioManagement_TxPermitted()
     return ts.dmod_mode != DEMOD_SAM && RadioManagement_IsTxDisabled();
 }
 
-bool RadioManagement_Transverter_IsEnabled()
+bool RadioManagement_Transverter_IsEnabled(void)
 {
     return (ts.xverter_mode & 0xf) > 0;
     }

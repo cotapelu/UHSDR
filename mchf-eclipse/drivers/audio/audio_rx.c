@@ -1987,7 +1987,7 @@ void AudioDriver_RxProcessor(IqSample_t * const srcCodec, AudioSample_t * const 
  * AudioDriver_Init - one-time initialization of audio driver
  * Called once during startup from uhsdr_main.c
  */
-void AudioDriver_Init()
+void AudioDriver_Init(void)
 {
     ts.dsp.inhibit++;
     ads.af_disabled++;
