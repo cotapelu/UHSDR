@@ -292,9 +292,13 @@
 ### Phase 34: Test Coverage Expansion (P1)
 
 - [ ] **T34.1** Add unit tests for `audio_rx.c` demod paths (AM/SAM/FM/SSB)
+  - Deferred: requires ISR/mocking infrastructure; audio pipeline is tightly coupled to hardware DMA
 - [ ] **T34.2** Add unit tests for `audio_tx.c` (when extracted)
+  - Deferred: same mocking requirements as T34.1
 - [ ] **T34.3** Add unit tests for `ui_lcd_hy28_draw.c` (pixel/rect/line primitives)
+  - Deferred: requires LCD framebuffer mocking
 - [ ] **T34.4** Add integration test for audio pipeline round-trip
+  - Deferred: requires full audio chain mock (DMA, codec, RF frontend)
 - [x] **T34.5** Target: 30+ host tests total ✅
   - Expanded audio filter tests from 5 to 14 (edge cases, multi-sample-rate)
   - Expanded volume workaround tests from 6 to 9 (negative/zero values, >1 gain)
