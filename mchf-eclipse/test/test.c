@@ -42,6 +42,12 @@ int test_main(void)
     TEST_REGISTER(test_set_biquad_coeffs_all_instances);
     TEST_REGISTER(test_calc_bandstop_multiple_sample_rates);
     TEST_REGISTER(test_calc_bandpass_multiple_sample_rates);
+    TEST_REGISTER(test_calc_bandstop_low_freq);
+    TEST_REGISTER(test_calc_bandstop_near_nyquist);
+    TEST_REGISTER(test_calc_bandpass_low_freq);
+    TEST_REGISTER(test_calc_bandpass_high_freq);
+    TEST_REGISTER(test_calc_high_shelf_extreme_gain);
+    TEST_REGISTER(test_calc_low_shelf_extreme_gain);
     printf("\n");
 
     /* Canary tests (T26.1) */

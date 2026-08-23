@@ -157,5 +157,89 @@ static void test_calc_bandpass_multiple_sample_rates(void)
     }
 }
 
+/* Test: Bandstop at very low frequency produces stable coefficients */
+static void test_calc_bandstop_low_freq(void)
+{
+    float32_t coeffs[5];
+
+    AudioDriver_CalcBandstop(coeffs, 10.0f, 48000.0f);
+
+    for (int i = 0; i < 5; i++)
+    {
+        TEST_ASSERT(!isnan(coeffs[i]));
+        TEST_ASSERT(!isinf(coeffs[i]));
+    }
+}
+
+/* Test: Bandstop near Nyquist produces stable coefficients */
+static void test_calc_bandstop_near_nyquist(void)
+{
+    float32_t coeffs[5];
+
+    AudioDriver_CalcBandstop(coeffs, 20000.0f, 48000.0f);
+
+    for (int i = 0; i < 5; i++)
+    {
+        TEST_ASSERT(!isnan(coeffs[i]));
+        TEST_ASSERT(!isinf(coeffs[i]));
+    }
+}
+
+/* Test: Bandpass at very low frequency produces stable coefficients */
+static void test_calc_bandpass_low_freq(void)
+{
+    float32_t coeffs[5];
+
+    AudioDriver_CalcBandpass(coeffs, 10.0f, 48000.0f);
+
+    for (int i = 0; i < 5; i++)
+    {
+        TEST_ASSERT(!isnan(coeffs[i]));
+        TEST_ASSERT(!isinf(coeffs[i]));
+    }
+}
+
+/* Test: Bandpass at high frequency (below Nyquist) produces stable coefficients */
+static void test_calc_bandpass_high_freq(void)
+{
+    float32_t coeffs[5];
+
+    AudioDriver_CalcBandpass(coeffs, 20000.0f, 48000.0f);
+
+    for (int i = 0; i < 5; i++)
+    {
+        TEST_ASSERT(!isnan(coeffs[i]));
+        TEST_ASSERT(!isinf(coeffs[i]));
+    }
+}
+
+/* Test: High shelf with extreme positive gain produces stable coefficients */
+static void test_calc_high_shelf_extreme_gain(void)
+{
+    float32_t coeffs[5];
+
+    AudioDriver_CalcHighShelf(coeffs, 1000.0f, 1.0f, 10.0f, 48000.0f);
+
+    for (int i = 0; i < 5; i++)
+    {
+        TEST_ASSERT(!isnan(coeffs[i]));
+        TEST_ASSERT(!isinf(coeffs[i]));
+    }
+}
+
+/* Test: Low shelf with extreme negative gain produces stable coefficients */
+static void test_calc_low_shelf_extreme_gain(void)
+{
+    float32_t coeffs[5];
+
+    AudioDriver_CalcLowShelf(coeffs, 1000.0f, 1.0f, -10.0f, 48000.0f);
+
+    for (int i = 0; i < 5; i++)
+    {
+        TEST_ASSERT(!isnan(coeffs[i]));
+        TEST_ASSERT(!isinf(coeffs[i]));
+    }
+}
+
 /* Test runner entry point */
 /* Tests are registered in test.c to avoid multiple test_main definitions */
