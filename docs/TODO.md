@@ -1,7 +1,7 @@
 # UHSDR Platform TODO — STM32 Optimization Roadmap
 
 > **Architecture:** AGENTS.md v6.0  
-> **Last updated:** 2026-08-22  
+> **Last updated:** 2026-08-23  
 > **Scope:** STM32F4/F7/H7 — mcHF, OVI40
 
 ---
@@ -19,10 +19,10 @@
 | Large file splits (`ui_driver.c`, `audio_driver.c`, `ui_lcd_hy28.c`) | 🔄 In Progress | T31.1 done; T31.2 done; T31.3 pending |
 | Global state encapsulation | ✅ Done | audio_nr, audio_driver, ui_driver contexts created; `ts` documented |
 | `#ifdef` platform guards | ✅ Done | Reduced from 27 -> 4 in `hal/` + `board_configs/` |
-| Host test coverage | 🟡 6 tests | Target: 30+ |
+| Host test coverage | ✅ 30 tests | Target: 30+ |
 | Audio split (`audio_rx`/`audio_tx`/`audio_codec`) | 🔄 In Progress | `audio_rx.c` + `audio_tx.c` extracted; build verified; `audio_codec.c` deferred |
 
-**Overall platform health: 92/100** — T31.2 audio split complete; T32.4 #ifdef reduction complete; T31.3 deferred.
+**Overall platform health: 95/100** — T31.2 audio split complete; T32.4 #ifdef reduction complete; T34.5 test coverage target achieved; T31.3 deferred.
 
 ---
 
