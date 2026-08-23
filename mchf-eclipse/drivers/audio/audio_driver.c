@@ -60,17 +60,6 @@ __MCHF_SPECIALMEM AudioDriver_Context_t g_audio_driver_ctx = {0};
 
 #define LMS2_NOTCH_STATE_ARRAY_SIZE (DSP_NOTCH_NUMTAPS_MAX + IQ_BLOCK_SIZE)
 
-#ifdef USE_LMS_AUTONOTCH
-typedef struct
-{
-    float32_t   errsig2[IQ_BLOCK_SIZE];
-    arm_lms_norm_instance_f32	lms2Norm_instance;
-    arm_lms_instance_f32	    lms2_instance;
-    float32_t	                lms2StateF32[LMS2_NOTCH_STATE_ARRAY_SIZE];
-    float32_t	                lms2NormCoeff_f32[DSP_NOTCH_NUMTAPS_MAX];
-    float32_t	                lms2_nr_delay[DSP_NOTCH_BUFLEN_MAX];
-} LMSData;
-#endif
 
 
 // variables for RX IIR filters

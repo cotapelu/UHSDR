@@ -76,8 +76,24 @@
 
 static void     UiDriver_CreateMainFreqDisplay();
 
-/* Forward declaration for context struct */
-typedef struct MeterState_s MeterState;
+/* -------------------------------------------------------------------------
+ * Meter state (moved before context for encapsulation)
+ * ------------------------------------------------------------------------- */
+typedef struct MeterState_s
+{
+	uint8_t last;
+	uint8_t last_warn;
+} MeterState;
+
+/* -------------------------------------------------------------------------
+ * Meter indices
+ * ------------------------------------------------------------------------- */
+enum
+{
+	METER_TOP = 0,
+	METER_BTM,
+	METER_NUM
+};
 
 /* -------------------------------------------------------------------------
  * UiDriver context — encapsulates file-scope mutable state (T30.3)
@@ -92,6 +108,7 @@ typedef struct UiDriver_Context_s
     uint16_t fw_version_number_major;
     uint16_t fw_version_number_release;
     uint16_t fw_version_number_minor;
+    MeterState meters[METER_NUM];
 } UiDriver_Context_t;
 
 static UiDriver_Context_t g_ui_driver_ctx;
@@ -141,7 +158,6 @@ static void     UiDriver_DisplayMemoryLabel();
 
 
 static void 	UiDriver_DisplayModulationType();
-static void 	UiDriver_DisplayPowerLevel();
 
 static void 	UiDriver_HandleSMeter();
 static void 	UiDriver_HandleTXMeters();
@@ -1734,72 +1750,6 @@ static void UiDriver_DeleteSMeterLabels()
 }
 
 
-static void UiDriver_DrawPowerMeterLabels()
-{
-
-    const uint16_t y_pos = (ts.Layout->SM_IND.y + 5);
-    const uint16_t x_pos = (ts.Layout->SM_IND.x + 18);
-
-    const int32_t maxW = ((mchf_pa.max_power > 5000) ? mchf_pa.max_power : 5000)  / 1000;
-
-    // get the pwr increment in next integer number of 0.5W steps
-    const float32_t PWR_INCR = (maxW % 5 == 0)? (maxW/10.0) : (maxW/5+1)/2.0  ; //.
-
-	// Leading text
-
-	UiLcdHy28_PrintText(x_pos - 12 , y_pos,"P" , White, Black, 4);
-	UiLcdHy28_PrintText(x_pos + 167, y_pos," W", White, Black, 4);
-
-	// Draw middle line
-	UiLcdHy28_DrawStraightLineDouble(x_pos, y_pos + 15, 170, LCD_DIR_HORIZONTAL, White);
-
-	// Draw s markers on middle white line
-	for(int i = 0; i < 12; i++)
-	{
-
-		uint16_t pwr_val = i * PWR_INCR;
-
-        char    num[4];
-
-		if(pwr_val < 10)
-		{
-			num[0] = pwr_val + 0x30;
-			num[1] = 0;
-		}
-		else if (pwr_val < 100)
-		{
-			num[0] = pwr_val/10 + 0x30;
-			num[1] = pwr_val%10 + 0x30;
-			num[2] = 0;
-		}
-        else if (pwr_val < 1000)
-        {
-            num[0] = pwr_val/100 + 0x30;
-            num[1] = (pwr_val%100)/10 + 0x30;
-            num[2] = pwr_val%10 + 0x30;
-            num[3] = 0;
-        }
-		else
-		{
-		    num[0] = 0; // no value display for larger values
-		}
-		const int dw = UiLcdHy28_TextWidth(num,4);
-
-		// Only every second value is displayed as number,
-		// even indicies are used
-		if(i%2 == 0)
-		{
-			UiLcdHy28_PrintText((x_pos - dw/2 + i*15), y_pos, num, White,Black,4);
-		}
-
-		// Lines, even indicies are shorter to make room for numbers
-		uint8_t v_s= (i%2 != 0)? 3 : 5;
-
-		UiLcdHy28_DrawStraightLineDouble((x_pos + i*15),(y_pos + 15) - v_s, v_s, LCD_DIR_VERTICAL, White);
-	}
-
-
-}
 static void UiDriver_DrawSMeterLabels()
 {
 	uchar   i,v_s;
@@ -1982,21 +1932,6 @@ static void UiDriver_CreateMeters()
 //* Functions called    :
 //*----------------------------------------------------------------------------
 #define SMETER_MAX_LEVEL 33
-
-enum
-{
-	METER_TOP = 0,
-	METER_BTM,
-	METER_NUM
-};
-typedef struct MeterState_s
-{
-	uint8_t last;
-	uint8_t last_warn;
-} MeterState;
-static MeterState meters[METER_NUM];
-
-
 /**
  * Displays a horizontal meter bar as dash segments.
  *
@@ -2021,35 +1956,35 @@ static void UiDriver_UpdateMeter(uchar val, uchar warn, uint32_t color_norm, uin
 		warn = SMETER_MAX_LEVEL+1;    // never warn if warn == 0
 	}
 
-	if(warn != meters[meterId].last_warn)
+	if(warn != g_ui_driver_ctx.meters[meterId].last_warn)
 	{
-		if (warn < meters[meterId].last_warn)
+		if (warn < g_ui_driver_ctx.meters[meterId].last_warn)
 		{
 			from_warn = warn;
 		}
 		else
 		{
-			from_warn = meters[meterId].last_warn;
+			from_warn = g_ui_driver_ctx.meters[meterId].last_warn;
 		}
 	}
 
 
-	if(val != meters[meterId].last || from_warn != 255)
+	if(val != g_ui_driver_ctx.meters[meterId].last || from_warn != 255)
 	{
 	    uint8_t from, to;
 
 		// decide if we need to draw more boxes or delete some
-		if (val > meters[meterId].last)
+		if (val > g_ui_driver_ctx.meters[meterId].last)
 		{
 			// we will draw more active boxes
-			from = meters[meterId].last;
+			from = g_ui_driver_ctx.meters[meterId].last;
 			to = val+1;
 
 		}
 		else
 		{
 			from = val;
-			to   = meters[meterId].last+1;
+			to   = g_ui_driver_ctx.meters[meterId].last+1;
 		}
 		if (from_warn < from)
 		{
@@ -2088,8 +2023,8 @@ static void UiDriver_UpdateMeter(uchar val, uchar warn, uint32_t color_norm, uin
 			UiLcdHy28_DrawStraightLineTriple(((ts.Layout->SM_IND.x + 18) + i*(v_s + 2)),(ypos - v_s),v_s,LCD_DIR_VERTICAL,col);
 		}
 
-		meters[meterId].last = val;
-		meters[meterId].last_warn = warn;
+		g_ui_driver_ctx.meters[meterId].last = val;
+		g_ui_driver_ctx.meters[meterId].last_warn = warn;
 	}
 }
 
@@ -4317,54 +4252,7 @@ static void UiDriver_DisplayModulationType()
  * @param txt_len length of txt array
  * @param power_mW power value, if 0 result is "FULL"
  */
-void UiDriver_Power2String(char* txt, size_t txt_len,uint32_t power_mW)
-{
-    if (power_mW == 0 )
-    {
-        snprintf(txt,txt_len,"FULL");
-    }
-    else if (power_mW < 100)
-    {
-        snprintf(txt,txt_len,"%ldmW",power_mW);
-    }
-    else if (power_mW < 1000)
-    {
-        snprintf(txt,txt_len,"0.%ldW",power_mW/100);
-    }
-    else
-    {
-        snprintf(txt,txt_len,"%ldW",power_mW/1000);
-    }
-}
 
-static void UiDriver_DisplayPowerLevel()
-{
-    uint16_t fg_clr = White;
-    char txt[5];
-
-    UiDriver_Power2String(txt,sizeof(txt),ts.power);
-
-    uint16_t bg_clr = Blue; // normal operation
-
-    if (RadioManagement_IsTxDisabled() == true)
-    {
-        // we'll not transmit, power is irrelevant
-        bg_clr = Grey;
-    }
-    else if (ts.tx_power_factor == 0)
-    {
-        // no output at all will be generate with power factor 0
-        // probably not calibrated PA
-        bg_clr = Red;
-    }
-    else if (ts.power_modified == true)
-    {
-        // transmit p, power is irrelevant
-        bg_clr = Orange;
-    }
-
-	UiLcdHy28_PrintTextCentered((ts.Layout->PW_IND.x),(ts.Layout->PW_IND.y),ts.Layout->PW_IND.w,txt,fg_clr,bg_clr,0);
-}
 
 static void UiDriver_DisplayDbm()
 {
@@ -4649,43 +4537,6 @@ static void UiDriver_HandleTXMeters()
  * @param enabled set to true in order to enable actual display of temperature
  */
 #define TEMP_DATA 43
-void UiDriver_CreateTemperatureDisplay()
-{
-	const char *label, *txt;
-	uint32_t label_color, txt_color;
-
-	bool enabled = lo.sensor_present == true && RadioManagement_TcxoIsEnabled();
-
-	label = "TCXO";
-	label_color = Black;
-
-	// Top part - name and temperature display
-	UiLcdHy28_DrawEmptyRect(ts.Layout->TEMP_IND.x, ts.Layout->TEMP_IND.y,13,109,Grey);
-
-	if (enabled)
-	{
-		txt = RadioManagement_TcxoIsFahrenheit()?"*---.-F":"*---.-C";
-		txt_color = Grey;
-	}
-	else
-	{
-		if (lo.sensor_present == false)
-		{
-			txt = "SENSOR!";
-			txt_color = Red;
-		}
-		else
-		{
-			txt = "*  OFF ";
-			txt_color = Grey;
-		}
-	}
-
-	// Label
-	UiLcdHy28_PrintText((ts.Layout->TEMP_IND.x + 1), (ts.Layout->TEMP_IND.y + 1),label,label_color,Grey,0);
-	// Lock Indicator
-	UiLcdHy28_PrintText(ts.Layout->TEMP_IND.x + TEMP_DATA,(ts.Layout->TEMP_IND.y + 1), txt,txt_color,Black,0);	// show base string
-}
 
 /**
  * @brief display measured temperature and current state of TCXO

@@ -390,3 +390,156 @@ bool UiDriver_LoadSavedConfigurationAtStartup()
 
 	return retval;
 }
+
+void UiDriver_CreateTemperatureDisplay()
+{
+	const char *label, *txt;
+	uint32_t label_color, txt_color;
+
+	bool enabled = lo.sensor_present == true && RadioManagement_TcxoIsEnabled();
+
+	label = "TCXO";
+	label_color = Black;
+
+	// Top part - name and temperature display
+	UiLcdHy28_DrawEmptyRect(ts.Layout->TEMP_IND.x, ts.Layout->TEMP_IND.y,13,109,Grey);
+
+	if (enabled)
+	{
+		txt = RadioManagement_TcxoIsFahrenheit()?"*---.-F":"*---.-C";
+		txt_color = Grey;
+	}
+	else
+	{
+		if (lo.sensor_present == false)
+		{
+			txt = "SENSOR!";
+			txt_color = Red;
+		}
+		else
+		{
+			txt = "*  OFF ";
+			txt_color = Grey;
+		}
+	}
+
+	// Label
+	UiLcdHy28_PrintText((ts.Layout->TEMP_IND.x + 1), (ts.Layout->TEMP_IND.y + 1),label,label_color,Grey,0);
+	// Lock Indicator
+	UiLcdHy28_PrintText(ts.Layout->TEMP_IND.x + TEMP_DATA,(ts.Layout->TEMP_IND.y + 1), txt,txt_color,Black,0);	// show base string
+}
+
+void UiDriver_Power2String(char* txt, size_t txt_len,uint32_t power_mW)
+{
+    if (power_mW == 0 )
+    {
+        snprintf(txt,txt_len,"FULL");
+    }
+    else if (power_mW < 100)
+    {
+        snprintf(txt,txt_len,"%ldmW",power_mW);
+    }
+    else if (power_mW < 1000)
+    {
+        snprintf(txt,txt_len,"0.%ldW",power_mW/100);
+    }
+    else
+    {
+        snprintf(txt,txt_len,"%ldW",power_mW/1000);
+    }
+}
+void UiDriver_DrawPowerMeterLabels()
+{
+
+    const uint16_t y_pos = (ts.Layout->SM_IND.y + 5);
+    const uint16_t x_pos = (ts.Layout->SM_IND.x + 18);
+
+    const int32_t maxW = ((mchf_pa.max_power > 5000) ? mchf_pa.max_power : 5000)  / 1000;
+
+    // get the pwr increment in next integer number of 0.5W steps
+    const float32_t PWR_INCR = (maxW % 5 == 0)? (maxW/10.0) : (maxW/5+1)/2.0  ; //.
+
+	// Leading text
+
+	UiLcdHy28_PrintText(x_pos - 12 , y_pos,"P" , White, Black, 4);
+	UiLcdHy28_PrintText(x_pos + 167, y_pos," W", White, Black, 4);
+
+	// Draw middle line
+	UiLcdHy28_DrawStraightLineDouble(x_pos, y_pos + 15, 170, LCD_DIR_HORIZONTAL, White);
+
+	// Draw s markers on middle white line
+	for(int i = 0; i < 12; i++)
+	{
+
+		uint16_t pwr_val = i * PWR_INCR;
+
+        char    num[4];
+
+		if(pwr_val < 10)
+		{
+			num[0] = pwr_val + 0x30;
+			num[1] = 0;
+		}
+		else if (pwr_val < 100)
+		{
+			num[0] = pwr_val/10 + 0x30;
+			num[1] = pwr_val%10 + 0x30;
+			num[2] = 0;
+		}
+        else if (pwr_val < 1000)
+        {
+            num[0] = pwr_val/100 + 0x30;
+            num[1] = (pwr_val%100)/10 + 0x30;
+            num[2] = pwr_val%10 + 0x30;
+            num[3] = 0;
+        }
+		else
+		{
+		    num[0] = 0; // no value display for larger values
+		}
+		const int dw = UiLcdHy28_TextWidth(num,4);
+
+		// Only every second value is displayed as number,
+		// even indicies are used
+		if(i%2 == 0)
+		{
+			UiLcdHy28_PrintText((x_pos - dw/2 + i*15), y_pos, num, White,Black,4);
+		}
+
+		// Lines, even indicies are shorter to make room for numbers
+		uint8_t v_s= (i%2 != 0)? 3 : 5;
+
+		UiLcdHy28_DrawStraightLineDouble((x_pos + i*15),(y_pos + 15) - v_s, v_s, LCD_DIR_VERTICAL, White);
+	}
+
+
+}
+
+void UiDriver_DisplayPowerLevel()
+{
+    uint16_t fg_clr = White;
+    char txt[5];
+
+    UiDriver_Power2String(txt,sizeof(txt),ts.power);
+
+    uint16_t bg_clr = Blue; // normal operation
+
+    if (RadioManagement_IsTxDisabled() == true)
+    {
+        // we'll not transmit, power is irrelevant
+        bg_clr = Grey;
+    }
+    else if (ts.tx_power_factor == 0)
+    {
+        // no output at all will be generate with power factor 0
+        // probably not calibrated PA
+        bg_clr = Red;
+    }
+    else if (ts.power_modified == true)
+    {
+        // transmit p, power is irrelevant
+        bg_clr = Orange;
+    }
+
+	UiLcdHy28_PrintTextCentered((ts.Layout->PW_IND.x),(ts.Layout->PW_IND.y),ts.Layout->PW_IND.w,txt,fg_clr,bg_clr,0);
+}

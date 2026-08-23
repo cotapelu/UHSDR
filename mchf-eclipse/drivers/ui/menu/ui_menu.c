@@ -18,6 +18,7 @@
 #include "uhsdr_board.h"
 #include "ui_menu.h"
 #include "ui_menu_internal.h"
+#include "ui_driver_power.h"
 #include "ui_configuration.h"
 #include "config_storage.h"
 #include "serial_eeprom.h"

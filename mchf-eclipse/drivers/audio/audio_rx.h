@@ -48,8 +48,9 @@ void AudioDriver_SetRxIqCorrection(void);
 
 /**
  * @brief Set audio processing filters for current demod mode.
+ * @note Moved to audio_tx.h (T31.2 split)
  */
-void AudioDriver_SetRxTxAudioProcessingAudioFilters(uint8_t dmod_mode);
+/* void AudioDriver_SetRxTxAudioProcessingAudioFilters(uint8_t dmod_mode); */
 
 /**
  * @brief Configure spectrum display parameters.

@@ -154,7 +154,7 @@ uint32_t keyStates; // hw scan keys
 
 #ifdef UI_BRD_MCHF
 // this function invoked only on the UI_MCHF_BRD with RTC as they have different buttons layout
-inline void Keypad_SetLayoutRTC_MCHF()
+void Keypad_SetLayoutRTC_MCHF()
 {
     hwKeys.map = &bm_set_rtc[0];
 }

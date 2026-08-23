@@ -15,9 +15,26 @@
 #define __AUDIO_DRIVER_CTX_H
 
 #include "audio_driver.h"
+#include "filters.h"  /* IQ_RX_NUM_TAPS_MAX, IQ_RX_BLOCK_SIZE */
+#include "ui_configuration.h"  /* MAGNIFY_NUM */
 
 #ifdef __cplusplus
 extern "C" {
+#endif
+
+#ifdef USE_LMS_AUTONOTCH
+#define LMS2_NOTCH_STATE_ARRAY_SIZE (DSP_NOTCH_NUMTAPS_MAX + IQ_BLOCK_SIZE)
+typedef struct
+{
+    float32_t   errsig2[IQ_BLOCK_SIZE];
+    arm_lms_norm_instance_f32 lms2Norm_instance;
+    arm_lms_instance_f32      lms2_instance;
+    float32_t                 lms2StateF32[LMS2_NOTCH_STATE_ARRAY_SIZE];
+    float32_t                 lms2NormCoeff_f32[DSP_NOTCH_NUMTAPS_MAX];
+    float32_t                 lms2_nr_delay[DSP_NOTCH_BUFLEN_MAX];
+} LMSData;
+
+extern __MCHF_SPECIALMEM LMSData lmsData;
 #endif
 
 /* Context struct and macros - shared between audio_driver.c and audio_rx.c */

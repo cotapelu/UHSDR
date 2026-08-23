@@ -16,10 +16,26 @@
 #include "audio_driver.h"
 
 #include "audio_driver_ctx.h"  /* T31.2: internal context */
+#include "filters.h"  /* IQ_RX_NUM_TAPS_MAX, IQ_RX_BLOCK_SIZE */
 
 #include "uhsdr_board.h"     // for DEMOD_SAM, DEMOD_AM, DEMOD_FM, RX_AUDIO_SPKR, RX_AUDIO_DIG
 #include "codec.h"           // for CODEC_SPEAKER_MAX_VOLUME
 #include "radio_management.h" // for RadioManagement_UsesBothSidebands, RadioManagement_FmDevIs5khz
+#include "audio_nr.h"         /* NR buffer functions */
+#include "audio_agc.h"        /* AudioAgc_RunAgcWdsp */
+#include "audio_management.h" /* AudioManagement_CalcSubaudibleDetFreq, AudioManagement_KeyBeepPrepare */
+#include "cw_decoder.h"       /* CwDecode_RxProcessor */
+#include "ui_spectrum.h"      /* SpectrumDisplay sd */
+#include "uhsdr_math.h"       /* Math_sign_new */
+#include "usbd_audio_if.h"   /* USBD_AUDIO_FREQ, UsbdAudio_FillTxBuffer, UsbdAudio_PutSample */
+#include "freq_shift.h"      /* FreqShift */
+#include "fm_subaudible_tone_table.h" /* fm_subaudible_tone_table */
+#include "profiling.h"       /* profileEvent, FreeDVTXUnderrun */
+#include "rtty.h"            /* Rtty_Demodulator_ProcessSample */
+#include "psk.h"             /* Psk_Demodulator_ProcessSample */
+#include "tx_processor.h"    /* TxProcessor_Set */
+#include <assert.h>           /* assert */
+#include <stdlib.h>           /* abs */
 void AudioDriver_FM_Rx_Init(fm_conf_t* fm)
 {
     // RX
@@ -159,230 +175,6 @@ void AudioDriver_LeakyLmsNr (float32_t *in_buff, float32_t *out_buff, int buff_s
 #undef Fir_FreeDV_Rx_Hilbert_State_I
 #undef Fir_FreeDV_Rx_Hilbert_State_Q
 
-static void AudioDriver_InitContext(AudioDriver_Context_t* ctx)
-{
-    // Initialize NR decimate coefficients
-    ctx->nr_decimate_coeffs[0] = 0.099144206287089282f;
-    ctx->nr_decimate_coeffs[1] = 0.492752007869707798f;
-    ctx->nr_decimate_coeffs[2] = 0.492752007869707798f;
-    ctx->nr_decimate_coeffs[3] = 0.099144206287089282f;
-
-    // Initialize NR interpolate coefficients
-    ctx->nr_interpolate_coeffs[0] = -495.0757586677611930E-6f;
-    ctx->nr_interpolate_coeffs[1] = 0.001320676868426568f;
-    ctx->nr_interpolate_coeffs[2] = 0.001533845835568487f;
-    ctx->nr_interpolate_coeffs[3] = -0.002357633129357554f;
-    ctx->nr_interpolate_coeffs[4] = -0.003572560455091757f;
-    ctx->nr_interpolate_coeffs[5] = 0.003388797052024843f;
-    ctx->nr_interpolate_coeffs[6] = 0.007032840952358404f;
-    ctx->nr_interpolate_coeffs[7] = -0.003960820803871866f;
-    ctx->nr_interpolate_coeffs[8] = -0.012365795129023015f;
-    ctx->nr_interpolate_coeffs[9] = 0.003357357660531775f;
-    ctx->nr_interpolate_coeffs[10] = 0.020101326014980946f;
-    ctx->nr_interpolate_coeffs[11] = -475.4964584295063900E-6f;
-    ctx->nr_interpolate_coeffs[12] = -0.031094910247864812f;
-    ctx->nr_interpolate_coeffs[13] = -0.006597041050034579f;
-    ctx->nr_interpolate_coeffs[14] = 0.047436525317202147f;
-    ctx->nr_interpolate_coeffs[15] = 0.022324808965607446f;
-    ctx->nr_interpolate_coeffs[16] = -0.076541709512474090f;
-    ctx->nr_interpolate_coeffs[17] = -0.064246467306504046f;
-    ctx->nr_interpolate_coeffs[18] = 0.167750545742874818f;
-    ctx->nr_interpolate_coeffs[19] = 0.427794841657261171f;
-    ctx->nr_interpolate_coeffs[20] = 0.427794841657261171f;
-    ctx->nr_interpolate_coeffs[21] = 0.167750545742874818f;
-    ctx->nr_interpolate_coeffs[22] = -0.064246467306504046f;
-    ctx->nr_interpolate_coeffs[23] = -0.076541709512474090f;
-    ctx->nr_interpolate_coeffs[24] = 0.022324808965607446f;
-    ctx->nr_interpolate_coeffs[25] = 0.047436525317202147f;
-    ctx->nr_interpolate_coeffs[26] = -0.006597041050034579f;
-    ctx->nr_interpolate_coeffs[27] = -0.031094910247864812f;
-    ctx->nr_interpolate_coeffs[28] = -475.4964584295063900E-6f;
-    ctx->nr_interpolate_coeffs[29] = 0.020101326014980946f;
-    ctx->nr_interpolate_coeffs[30] = 0.003357357660531775f;
-    ctx->nr_interpolate_coeffs[31] = -0.012365795129023015f;
-    ctx->nr_interpolate_coeffs[32] = -0.003960820803871866f;
-    ctx->nr_interpolate_coeffs[33] = 0.007032840952358404f;
-    ctx->nr_interpolate_coeffs[34] = 0.003388797052024843f;
-    ctx->nr_interpolate_coeffs[35] = -0.003572560455091757f;
-    ctx->nr_interpolate_coeffs[36] = -0.002357633129357554f;
-    ctx->nr_interpolate_coeffs[37] = 0.001533845835568487f;
-    ctx->nr_interpolate_coeffs[38] = 0.001320676868426568f;
-    ctx->nr_interpolate_coeffs[39] = -495.0757586677611930E-6f;
-
-    // Initialize biquad passthrough
-    ctx->biquad_passthrough[0] = 1.0f;
-    ctx->biquad_passthrough[1] = 0.0f;
-    ctx->biquad_passthrough[2] = 0.0f;
-    ctx->biquad_passthrough[3] = 0.0f;
-    ctx->biquad_passthrough[4] = 0.0f;
-
-    // Initialize magnification coefficients
-    ctx->mag_coeffs[0] = NULL;
-    ctx->mag_coeffs[1] = (float32_t*)(const float32_t[]){
-        // 2x magnify - index 1
-        // 12kHz, sample rate 48k, 60dB stopband, elliptic
-        // a1 and coeffs[A2] negated! order: coeffs[B0], coeffs[B1], coeffs[B2], a1, coeffs[A2]
-        // Iowa Hills IIR Filter Designer, DD4WH Aug 16th 2016
-        0.228454526413293696f,
-        0.077639329099949764f,
-        0.228454526413293696f,
-        0.635534925142242080f,
-        -0.170083307068779194f,
-
-        0.436788292542003964f,
-        0.232307972937606161f,
-        0.436788292542003964f,
-        0.365885230717786780f,
-        -0.471769788739400842f,
-
-        0.535974654742658707f,
-        0.557035600464780845f,
-        0.535974654742658707f,
-        0.125740787233286133f,
-        -0.754725697183384336f,
-
-        0.501116342273565607f,
-        0.914877831284765408f,
-        0.501116342273565607f,
-        0.013862536615004284f,
-        -0.930973052446900984f
-    };
-    ctx->mag_coeffs[2] = (float32_t*)(const float32_t[]){
-        // 4x magnify - index 2
-        // 6kHz, sample rate 48k, 60dB stopband, elliptic
-        0.182208761527446556f,
-        -0.222492493114674145f,
-        0.182208761527446556f,
-        1.326111070880959810f,
-        -0.468036100821178802f,
-
-        0.337123762652097259f,
-        -0.366352718812586853f,
-        0.337123762652097259f,
-        1.337053579516321200f,
-        -0.644948386007929031f,
-
-        0.336163175380826074f,
-        -0.199246162162897811f,
-        0.336163175380826074f,
-        1.354952684569386670f,
-        -0.828032873168141115f,
-
-        0.178588201750411041f,
-        0.207271695028067304f,
-        0.178588201750411041f,
-        1.386486967455699220f,
-        -0.950935065984588657f
-    };
-    ctx->mag_coeffs[3] = (float32_t*)(const float32_t[]){
-        // 8x magnify - index 3
-        // 3kHz, sample rate 48k, 60dB stopband, elliptic
-        0.185643392652478922f,
-        -0.332064345389014803f,
-        0.185643392652478922f,
-        1.654637402827731090f,
-        -0.693859842743674182f,
-
-        0.327519300813245984f,
-        -0.571358085216950418f,
-        0.327519300813245984f,
-        1.715375037176782860f,
-        -0.799055553586324407f,
-
-        0.283656142708241688f,
-        -0.441088976843048652f,
-        0.283656142708241688f,
-        1.778230635987093860f,
-        -0.904453944560528522f,
-
-        0.079685368654848945f,
-        -0.011231810140649204f,
-        0.079685368654848945f,
-        1.825046003243238070f,
-        -0.973184930412286708f
-    };
-    ctx->mag_coeffs[4] = (float32_t*)(const float32_t[]){
-        // 16x magnify - index 4
-        // 1k5, sample rate 48k, 60dB stopband, elliptic
-        0.194769868656866380f,
-        -0.379098413160710079f,
-        0.194769868656866380f,
-        1.824436402073870810f,
-        -0.834877726226893380f,
-
-        0.333973874901496770f,
-        -0.646106479315673776f,
-        0.333973874901496770f,
-        1.871892825636887640f,
-        -0.893734096124207178f,
-
-        0.272903880596429671f,
-        -0.513507745397738469f,
-        0.272903880596429671f,
-        1.918161772571113750f,
-        -0.950461788366234739f,
-
-        0.053535383722369843f,
-        -0.069683422367188122f,
-        0.053535383722369843f,
-        1.948900719896301760f,
-        -0.986288064973853129f
-    };
-    ctx->mag_coeffs[5] = (float32_t*)(const float32_t[]){
-        // 32x magnify - index 5
-        // 750Hz, sample rate 48k, 60dB stopband, elliptic
-        0.201507402588557594f,
-        -0.400273615727755550f,
-        0.201507402588557594f,
-        1.910767558906650840f,
-        -0.913508748356010480f,
-
-        0.340295203367131205f,
-        -0.674930558961690075f,
-        0.340295203367131205f,
-        1.939398230905991390f,
-        -0.945058078678563840f,
-
-        0.271859921641011359f,
-        -0.535453706265515361f,
-        0.271859921641011359f,
-        1.966439529620203740f,
-        -0.974705666636711099f,
-
-        0.047026497485465592f,
-        -0.084562104085501480f,
-        0.047026497485465592f,
-        1.983564238653704900f,
-        -0.993055129539134551f
-    };
-
-    // Initialize FreeDV coefficients
-    ctx->freedv_coeffs[0] = (float32_t*)(const float32_t[]){
-        1,0,0,0,0,  1,0,0,0,0 // passthru
-    };
-
-    // Initialize biquad instances
-    for (int i = 0; i < NUM_AUDIO_CHANNELS; i++)
-    {
-        ctx->iir_biquad_1[i].numStages = 4;
-        ctx->iir_biquad_1[i].pState = ctx->iir_biquad_1_state[i];
-        
-        ctx->iir_biquad_2[i].numStages = 1;
-        ctx->iir_biquad_2[i].pState = ctx->iir_biquad_2_state[i];
-    }
-    
-    ctx->iir_biquad_zoom_fft_i.numStages = 4;
-    ctx->iir_biquad_zoom_fft_i.pState = ctx->iir_biquad_zoom_fft_i_state;
-    
-    ctx->iir_biquad_zoom_fft_q.numStages = 4;
-    ctx->iir_biquad_zoom_fft_q.pState = ctx->iir_biquad_zoom_fft_q_state;
-    
-    ctx->iir_biquad_freedv_i.numStages = 2;
-    ctx->iir_biquad_freedv_i.pState = ctx->iir_biquad_freedv_i_state;
-    
-    ctx->iir_biquad_freedv_q.numStages = 2;
-    ctx->iir_biquad_freedv_q.pState = ctx->iir_biquad_freedv_q_state;
-}
 
 // Re-define backward-compatible aliases for use in remaining code
 #define DECIMATE_ZOOM_FFT_I g_audio_driver_ctx.decimate_zoom_fft_i
@@ -417,41 +209,9 @@ static void AudioDriver_InitContext(AudioDriver_Context_t* ctx)
 #define Fir_FreeDV_Rx_Hilbert_State_I g_audio_driver_ctx.fir_freedv_rx_hilbert_state_i
 #define Fir_FreeDV_Rx_Hilbert_State_Q g_audio_driver_ctx.fir_freedv_rx_hilbert_state_q
 
-static void AudioDriver_Dsp_Init(volatile dsp_params_t* dsp_p)
-{
-
-    AudioDriver_InitContext(&g_audio_driver_ctx);
-
-    dsp_p->active_toggle    = 0xff;                 // used to hold the button G2 "toggle" setting.
-
-    dsp_p->active_toggle    = 0xff;                 // used to hold the button G2 "toggle" setting.
-
-    // Commented settings below are read from configuration store, no need to initialize them
-    // dsp_p->active       = 0;                    // TRUE if DSP noise reduction is to be enabled
-    // dsp_p->nr_strength  = 50;                   // "Strength" of DSP noise reduction (50 = medium)
-#ifdef USE_LMS_AUTONOTCH
-    // dsp_p->notch_numtaps = DSP_NOTCH_NUMTAPS_DEFAULT;       // default for number of FFT taps for notch filter
-    // dsp_p->notch_delaybuf_len = DSP_NOTCH_DELAYBUF_DEFAULT;
-    // dsp_p->notch_mu = DSP_NOTCH_MU_DEFAULT;
-#endif
-    // dsp_p->notch_frequency = 800;               // notch start frequency for manual notch filter
-    // dsp_p->peak_frequency = 750;                // peak start frequency
-    // dsp_p->nb_setting       = 0;                    // Noise Blanker setting
-
-    // dsp_p->bass_gain = 2;                       // gain of the low shelf EQ filter
-    // dsp_p->treble_gain = 0;                     // gain of the high shelf EQ filter
-    // dsp_p->tx_bass_gain = 4;                    // gain of the TX low shelf EQ filter
-    // dsp_p->tx_treble_gain = 4;                  // gain of the TX high shelf EQ filter
-}
 /**
  * One-time init of FreeDV codec's audio driver part, mostly filters
  */
-
-#define FIR_RX_HILBERT_STATE_SIZE (IQ_RX_NUM_TAPS_MAX + IQ_RX_BLOCK_SIZE)
-#ifndef USE_SIMPLE_FREEDV_FILTERS
-
-#endif
-
 void AudioDriver_FreeDV_Rx_Init()
 {
 #if defined(USE_SIMPLE_FREEDV_FILTERS)
@@ -514,34 +274,6 @@ void RxProcessor_Init()
  * Called once during startup
  *
  */
-void AudioDriver_Init()
-{
-    // Audio filter disabled
-    // although we are not have the interrupt running, some of the called code may
-    // refuse to work if dsp.inhibit and/or af_disabled is 0
-    ts.dsp.inhibit++;
-    ads.af_disabled++;
-
-    // DSP related init
-    AudioDriver_Dsp_Init(&ts.dsp); // RX/TX
-
-    // AUDIO KEY BEEPS (injected into audio output stream)
-    AudioManagement_KeyBeepPrepare();  // load/set beep frequency
-
-    // Codecs/Demod init
-    Rtty_Modem_Init(ts.samp_rate); // RX/TX
-    Psk_Modem_Init(ts.samp_rate);  // RX/TX
-
-    RxProcessor_Init();
-    TxProcessor_Init();
-
-    // Audio filter enabled
-    ads.af_disabled--;
-    ts.dsp.inhibit--;
-
-    assert(ads.af_disabled == 0);
-    assert(ts.dsp.inhibit == 0);
-}
 
 /**
  * Configures SAM PLL according to settings
@@ -620,63 +352,6 @@ void AudioDriver_SetRxIqCorrection()
 /**
  * @brief Filter Init used for processing audio for RX and TX
  */
-void AudioDriver_SetRxTxAudioProcessingAudioFilters(uint8_t dmod_mode)
-{
-    float32_t FSdec = AUDIO_SAMPLE_RATE / (ts.filters_p->sample_rate_dec != 0 ? ts.filters_p->sample_rate_dec : 1) ;
-
-    // the notch filter is in biquad 1 and works at the decimated sample rate FSdec
-
-    float32_t coeffs[5];
-    const float32_t *coeffs_ptr;
-
-    // setting the Coefficients in the notch filter instance
-    if (is_dsp_mnotch())
-    {
-        AudioDriver_CalcBandstop(coeffs, ts.dsp.notch_frequency , FSdec);
-        coeffs_ptr = coeffs;
-    }
-    else   // passthru
-    {
-        coeffs_ptr = biquad_passthrough;
-    }
-
-    AudioDriver_SetBiquadCoeffsAllInstances(IIR_biquad_1, 0, coeffs_ptr);
-
-    // this is an auto-notch-filter detected by the NR algorithm
-    // biquad 1, 4th stage
-    //    if(0) // temporarily deactivated
-    //    if((is_dsp_notch()) && (ts.filters_p->sample_rate_dec == RX_DECIMATION_RATE_12KHZ))
-
-    AudioDriver_SetBiquadCoeffsAllInstances(IIR_biquad_1, 15, biquad_passthrough);
-
-    // the peak filter is in biquad 1 and works at the decimated sample rate FSdec
-    if(is_dsp_mpeak())
-    {
-        AudioDriver_CalcBandpass(coeffs, ts.dsp.peak_frequency, FSdec);
-        coeffs_ptr = coeffs;
-    }
-    else   //passthru
-    {
-        coeffs_ptr = biquad_passthrough;
-    }
-
-    AudioDriver_SetBiquadCoeffsAllInstances(IIR_biquad_1, 5, coeffs_ptr);
-
-    // EQ shelving filters
-    //
-    // the bass filter is in biquad 1 and works at the decimated sample rate FSdec
-    //
-    // Bass / lowShelf
-    AudioDriver_CalcLowShelf(coeffs, 250, 0.7, ts.dsp.bass_gain, FSdec);
-    AudioDriver_SetBiquadCoeffsAllInstances(IIR_biquad_1, 10, coeffs);
-
-    // Treble = highShelf
-    // the treble filter is in biquad 2 and works at 48000ksps
-    AudioDriver_CalcHighShelf(coeffs, 3500, 0.9, ts.dsp.treble_gain, AUDIO_SAMPLE_RATE);
-    AudioDriver_SetBiquadCoeffsAllInstances(IIR_biquad_2, 0, coeffs);
-
-    TxProcessor_Set(dmod_mode);
-}
 
 /**
  * Sets up the spectrum filters according to the current zoom level
@@ -718,163 +393,6 @@ void AudioDriver_Spectrum_Set()
  * @param dmod_mode needs to know the demodulation mode
  * @param reset_dsp_nr whether it is supposed to reset also DSP related filters (in most cases false is to be used here)
  */
-void AudioDriver_SetProcessingChain(uint8_t dmod_mode, bool reset_dsp_nr)
-{
-    ts.dsp.inhibit++;
-    ads.af_disabled++;
-
-    // make sure we have a proper filter path for the given mode
-
-    // the commented out part made the code  only look at last used/selected filter path if the current filter path is not applicable
-    // with it commented out the filter path is ALWAYS loaded from the last used/selected memory
-    // I.e. setting the ts.filter_path anywere else in the code is useless. You have to call AudioFilter_NextApplicableFilterPath in order to
-    // select a new filter path as this sets the last used/selected memory for a demod mode.
-
-    ts.filter_path = AudioFilter_NextApplicableFilterPath(PATH_ALL_APPLICABLE|PATH_LAST_USED_IN_MODE,AudioFilter_GetFilterModeFromDemodMode(dmod_mode),ts.filter_path);
-    const FilterPathDescriptor* filters_p  = ts.filters_p = &FilterPathInfo[ts.filter_path];
-
-    // Adjust decimation rate based on selected filter
-    ads.decimation_rate = filters_p->sample_rate_dec;
-    ads.decimated_freq = IQ_SAMPLE_RATE / ads.decimation_rate;
-
-    for (int chan = 0; chan < NUM_AUDIO_CHANNELS; chan++)
-    {
-        if (ts.filters_p->pre_instance != NULL)
-        {
-            // if we turn on a filter, set the number of members to the number of elements last
-            IIR_PreFilter[chan].pkCoeffs = filters_p->pre_instance->pkCoeffs; // point to reflection coefficients
-            IIR_PreFilter[chan].pvCoeffs = filters_p->pre_instance->pvCoeffs; // point to ladder coefficients
-            IIR_PreFilter[chan].numStages = filters_p->pre_instance->numStages;        // number of stages
-        }
-        else
-        {
-            // if we turn off a filter, set the number of members to 0 first
-            IIR_PreFilter[chan].numStages = 0;        // number of stages
-            IIR_PreFilter[chan].pkCoeffs = NULL; // point to reflection coefficients
-            IIR_PreFilter[chan].pvCoeffs = NULL; // point to ladder coefficients
-        }
-
-        // Initialize IIR filter state buffer
-        arm_fill_f32(0.0,iir_rx_state[chan],IIR_RX_STATE_ARRAY_SIZE);
-        IIR_PreFilter[chan].pState = iir_rx_state[chan];					// point to state array for IIR filter
-
-        // Initialize IIR antialias filter state buffer
-        if (filters_p->iir_instance != NULL)
-        {
-            // if we turn on a filter, set the number of members to the number of elements last
-            IIR_AntiAlias[chan].pkCoeffs = filters_p->iir_instance->pkCoeffs; // point to reflection coefficients
-            IIR_AntiAlias[chan].pvCoeffs = filters_p->iir_instance->pvCoeffs; // point to ladder coefficients
-            IIR_AntiAlias[chan].numStages = filters_p->iir_instance->numStages;        // number of stages
-        }
-        else
-        {
-            // if we turn off a filter, set the number of members to 0 first
-            IIR_AntiAlias[chan].numStages = 0;
-            IIR_AntiAlias[chan].pkCoeffs = NULL;
-            IIR_AntiAlias[chan].pvCoeffs = NULL;
-        }
-
-        arm_fill_f32(0.0,iir_aa_state[chan],IIR_RX_STATE_ARRAY_SIZE);
-        IIR_AntiAlias[chan].pState = iir_aa_state[chan];					// point to state array for IIR filter
-    }
-
-    // TODO: We only have to do this, if the audio signal filter configuration changes
-    // RX+ TX Bass, Treble, Peak, Notch
-    AudioDriver_SetRxTxAudioProcessingAudioFilters(dmod_mode);
-
-    // initialize the goertzel filter used to detect CW signals at a given frequency in the audio stream
-    CwDecode_Filter_Set();
-
-    /*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-     * End of coefficient calculation and setting for cascaded biquad
-     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
-
-#ifdef USE_LMS_AUTONOTCH
-    // AUTO NOTCH INIT START
-    // LMS instance 2 - Automatic Notch Filter
-
-    // Calculate "mu" (convergence rate) from user "Notch ConvRate" setting
-    float32_t  mu_calc = log10f(((ts.dsp.notch_mu + 1.0)/1500.0) + 1.0);		// get user setting (0 = slowest)
-
-    // use "canned" init to initialize the filter coefficients
-    arm_lms_norm_init_f32(&lmsData.lms2Norm_instance, ts.dsp.notch_numtaps, lmsData.lms2NormCoeff_f32, lmsData.lms2StateF32, mu_calc, IQ_BLOCK_SIZE);
-
-    arm_fill_f32(0.0,lmsData.lms2_nr_delay,DSP_NOTCH_BUFLEN_MAX);
-
-    if(reset_dsp_nr)             // are we to reset the coefficient buffer as well?
-    {
-        arm_fill_f32(0.0,lmsData.lms2NormCoeff_f32,DSP_NOTCH_NUMTAPS_MAX);      // yes - zero coefficient buffers
-    }
-
-    if((ts.dsp.notch_delaybuf_len > DSP_NOTCH_BUFLEN_MAX) || (ts.dsp.notch_delaybuf_len < DSP_NOTCH_BUFLEN_MIN))
-    {
-        ts.dsp.notch_delaybuf_len = DSP_NOTCH_DELAYBUF_DEFAULT;
-    }
-    // AUTO NOTCH INIT END
-#endif
-
-// NEW SPECTRAL NOISE REDUCTION
-    // convert user setting of noise reduction to alpha NR parameter
-    // alpha ranges from 0.9 to 0.999 [float32_t]
-    // dsp_nr_strength is from 0 to 100 [uint8_t]
-    //    nr_params.alpha = 0.899 + ((float32_t)ts.dsp.nr_strength / 1000.0);
-    nr_params.alpha = 0.799 + ((float32_t)ts.dsp.nr_strength / 1000.0);
-
-// NEW AUTONOTCH
-    // not yet working !
-    // set to passthrough
-    //AudioNr_ActivateAutoNotch(0, 0);
-
-    AudioDriver_Spectrum_Set();
-
-#ifdef USE_CONVOLUTION
-// TODO: insert interpolation filter settings for convolution filter HERE
-#else
-    // Set up RX interpolation/filter
-    // NOTE:  Phase Length MUST be an INTEGER and is the number of taps divided by the decimation rate, and it must be greater than 1.
-    for (int chan = 0; chan < NUM_AUDIO_CHANNELS; chan++)
-    {
-        if (filters_p->interpolate != NULL)
-        {
-            arm_fir_interpolate_init_f32(&INTERPOLATE_RX[chan],
-                    ads.decimation_rate,
-                    filters_p->interpolate->phaseLength,
-                    filters_p->interpolate->pCoeffs,
-                    interpState[chan], IQ_BLOCK_SIZE);
-        }
-        else
-        {
-            INTERPOLATE_RX[chan].phaseLength = 0;
-            INTERPOLATE_RX[chan].pCoeffs = NULL;
-        }
-    }
-#endif
-
-#ifdef USE_CONVOLUTION
-    // Convolution Filter
-    // calculate coeffs
-    // for first trial, use hard-coded USB filter from 250Hz to 2700Hz
-    // hardcoded sample rate and Blackman-Harris 4th term
-    cbs.size = 128; // 128 samples processed at one time, this defines the latency:
-    // latency = cbs.size / sample rate = 128/48000 = 2.7ms
-    cbs.nc = 1024; // use 1024 coefficients
-    cbs.nfor = cbs.nc / cbs.size; // number of blocks used for the uniformly partitioned convolution
-    cbs.buffidx = 0; // needs to be reset to zero each time new coeffs are being calculated
-    AudioDriver_CalcConvolutionFilterCoeffs (cbs.nc, 250.0, 2700.0, IQ_SAMPLE_RATE_F, 0, 1, 1.0);
-#endif
-
-    AudioDriver_SetSamPllParameters();
-    AudioDriver_SetRxIqCorrection();
-
-    AudioFilter_SetRxHilbertAndDecimationFIR(dmod_mode); // this switches the Hilbert/FIR-filters
-
-    AudioDriver_AgcWdsp_Set();
-
-    // Unlock - re-enable filtering
-    if  (ads.af_disabled) { ads.af_disabled--; }
-    if (ts.dsp.inhibit) { ts.dsp.inhibit--; }
-
-}
 
 #ifdef USE_FREEDV
 /**
@@ -1352,7 +870,7 @@ void AudioDriver_IQPhaseAdjust(uint16_t txrx_mode, float32_t* i_buffer, float32_
  * @param iq_puf_b pair of i/q buffers
  * @param blockSize how many samples in a single iq buffer, target gets 2*blockSize samples
  */
-static void AudioDriver_SpectrumCopyIqBuffers(iq_buffer_t* iq_puf_b, const size_t blockSize)
+void AudioDriver_SpectrumCopyIqBuffers(iq_buffer_t* iq_puf_b, const size_t blockSize)
 {
     for(int i = 0; i < blockSize; i++)
     {
@@ -2464,3 +1982,121 @@ void AudioDriver_RxProcessor(IqSample_t * const srcCodec, AudioSample_t * const 
     }
 }
 
+
+/**
+ * AudioDriver_Init - one-time initialization of audio driver
+ * Called once during startup from uhsdr_main.c
+ */
+void AudioDriver_Init()
+{
+    ts.dsp.inhibit++;
+    ads.af_disabled++;
+
+    AudioManagement_KeyBeepPrepare();
+    Rtty_Modem_Init(ts.samp_rate);
+    Psk_Modem_Init(ts.samp_rate);
+    RxProcessor_Init();
+    TxProcessor_Init();
+
+    ads.af_disabled--;
+    ts.dsp.inhibit--;
+}
+
+/**
+ * AudioDriver_SetProcessingChain - configure audio processing based on demod mode
+ * Must be called before audio interrupt is activated
+ */
+void AudioDriver_SetProcessingChain(uint8_t dmod_mode, bool reset_dsp_nr)
+{
+    ts.dsp.inhibit++;
+    ads.af_disabled++;
+
+    ts.filter_path = AudioFilter_NextApplicableFilterPath(PATH_ALL_APPLICABLE|PATH_LAST_USED_IN_MODE,AudioFilter_GetFilterModeFromDemodMode(dmod_mode),ts.filter_path);
+    const FilterPathDescriptor* filters_p  = ts.filters_p = &FilterPathInfo[ts.filter_path];
+
+    ads.decimation_rate = filters_p->sample_rate_dec;
+    ads.decimated_freq = IQ_SAMPLE_RATE / ads.decimation_rate;
+
+    for (int chan = 0; chan < NUM_AUDIO_CHANNELS; chan++)
+    {
+        if (ts.filters_p->pre_instance != NULL)
+        {
+            IIR_PreFilter[chan].pkCoeffs = filters_p->pre_instance->pkCoeffs;
+            IIR_PreFilter[chan].pvCoeffs = filters_p->pre_instance->pvCoeffs;
+            IIR_PreFilter[chan].numStages = filters_p->pre_instance->numStages;
+        }
+        else
+        {
+            IIR_PreFilter[chan].numStages = 0;
+            IIR_PreFilter[chan].pkCoeffs = NULL;
+            IIR_PreFilter[chan].pvCoeffs = NULL;
+        }
+
+        arm_fill_f32(0.0,iir_rx_state[chan],IIR_RX_STATE_ARRAY_SIZE);
+        IIR_PreFilter[chan].pState = iir_rx_state[chan];
+
+        if (filters_p->iir_instance != NULL)
+        {
+            IIR_AntiAlias[chan].pkCoeffs = filters_p->iir_instance->pkCoeffs;
+            IIR_AntiAlias[chan].pvCoeffs = filters_p->iir_instance->pvCoeffs;
+            IIR_AntiAlias[chan].numStages = filters_p->iir_instance->numStages;
+        }
+        else
+        {
+            IIR_AntiAlias[chan].numStages = 0;
+            IIR_AntiAlias[chan].pkCoeffs = NULL;
+            IIR_AntiAlias[chan].pvCoeffs = NULL;
+        }
+
+        arm_fill_f32(0.0,iir_aa_state[chan],IIR_RX_STATE_ARRAY_SIZE);
+        IIR_AntiAlias[chan].pState = iir_aa_state[chan];
+    }
+
+    AudioDriver_SetRxTxAudioProcessingAudioFilters(dmod_mode);
+    CwDecode_Filter_Set();
+
+#ifdef USE_LMS_AUTONOTCH
+    float32_t mu_calc = log10f(((ts.dsp.notch_mu + 1.0)/1500.0) + 1.0);
+    arm_lms_norm_init_f32(&lmsData.lms2Norm_instance, ts.dsp.notch_numtaps, lmsData.lms2NormCoeff_f32, lmsData.lms2StateF32, mu_calc, IQ_BLOCK_SIZE);
+    arm_fill_f32(0.0,lmsData.lms2_nr_delay,DSP_NOTCH_BUFLEN_MAX);
+
+    if(reset_dsp_nr)
+    {
+        arm_fill_f32(0.0,lmsData.lms2NormCoeff_f32,DSP_NOTCH_NUMTAPS_MAX);
+    }
+
+    if((ts.dsp.notch_delaybuf_len > DSP_NOTCH_BUFLEN_MAX) || (ts.dsp.notch_delaybuf_len < DSP_NOTCH_BUFLEN_MIN))
+    {
+        ts.dsp.notch_delaybuf_len = DSP_NOTCH_DELAYBUF_DEFAULT;
+    }
+#endif
+
+    nr_params.alpha = 0.799 + ((float32_t)ts.dsp.nr_strength / 1000.0);
+
+    AudioDriver_Spectrum_Set();
+
+    for (int chan = 0; chan < NUM_AUDIO_CHANNELS; chan++)
+    {
+        if (filters_p->interpolate != NULL)
+        {
+            arm_fir_interpolate_init_f32(&INTERPOLATE_RX[chan],
+                    ads.decimation_rate,
+                    filters_p->interpolate->phaseLength,
+                    filters_p->interpolate->pCoeffs,
+                    interpState[chan], IQ_BLOCK_SIZE);
+        }
+        else
+        {
+            INTERPOLATE_RX[chan].phaseLength = 0;
+            INTERPOLATE_RX[chan].pCoeffs = NULL;
+        }
+    }
+
+    AudioDriver_SetSamPllParameters();
+    AudioDriver_SetRxIqCorrection();
+    AudioFilter_SetRxHilbertAndDecimationFIR(dmod_mode);
+    AudioDriver_AgcWdsp_Set();
+
+    if  (ads.af_disabled) { ads.af_disabled--; }
+    if (ts.dsp.inhibit) { ts.dsp.inhibit--; }
+}

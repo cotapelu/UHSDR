@@ -38,9 +38,15 @@ void UiDriver_DisplayVoltage(void);
 bool UiDriver_HandleVoltage(void);
 void UiDriver_DisplayTemperature(int temp);
 void UiDriver_HandleLoTemperature(void);
+void UiDriver_DrawPowerMeterLabels(void);
+void UiDriver_DisplayPowerLevel(void);
 
 #ifdef __cplusplus
 }
 #endif
+
+void UiDriver_CreateTemperatureDisplay(void);
+
+void UiDriver_Power2String(char* txt, size_t txt_len, uint32_t power_mW);
 
 #endif /* __UI_DRIVER_POWER_H */

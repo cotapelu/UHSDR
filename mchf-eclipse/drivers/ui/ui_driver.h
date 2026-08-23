@@ -182,7 +182,6 @@ typedef struct
 void 	UiDriver_Init(void);
 void 	UiDriver_TaskHandler_MainTasks(void);
 
-void 	UiDriver_CreateTemperatureDisplay(void);
 void 	UiDriver_UpdateFrequency(bool force_update, enum UpdateFrequencyMode_t mode);
 void    UiDriver_FrequencyUpdateLOandDisplay(bool full_update);
 void    UiDriver_RefreshEncoderDisplay(void);
@@ -240,7 +239,6 @@ void Codec_RestartI2S(void);
 uint32_t UiDriver_GetActiveDSPFunctions(void);
 void UiDriver_UpdateDSPmode(uint8_t new_dsp_mode);
 bool UiDriver_CheckTouchRegion(const UiArea_t* tr_p);
-void UiDriver_Power2String(char* txt, size_t txt_len,uint32_t power_mW);
 
 int32_t change_and_limit_int(volatile int32_t val, int32_t change, int32_t min, int32_t max);
 uint32_t change_and_limit_uint(volatile uint32_t val, int32_t change, uint32_t min, uint32_t max);
