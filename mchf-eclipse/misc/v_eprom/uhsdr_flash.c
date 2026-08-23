@@ -82,6 +82,8 @@
 // readings. It is otherwise just an arbitrary number.
 
 /* Private macro -------------------------------------------------------------*/
+#include "uhsdr_flash.h"
+
 /* Private variables ---------------------------------------------------------*/
 
 /* Global variable used to store variable value in read sequence */
@@ -91,13 +93,13 @@ static uint16_t DataVar = 0;
 
 /* Private function prototypes -----------------------------------------------*/
 /* Private functions ---------------------------------------------------------*/
-static HAL_StatusTypeDef Flash_Format();
+static HAL_StatusTypeDef Flash_Format(void);
 static uint16_t Flash_FindPage(uint8_t Operation);
 static uint16_t Flash_WriteVariableToPage(uint16_t VirtAddress, uint16_t Data, uint8_t pageType);
 static uint16_t Flash_PageTransfer(uint16_t VirtAddress);
 
 
-HAL_StatusTypeDef Flash_Erase(uint32_t sector)
+static HAL_StatusTypeDef Flash_Erase(uint32_t sector)
 {
 FLASH_EraseInitTypeDef flashEraseOp;
 uint32_t sectorError = 0;
@@ -120,7 +122,8 @@ return HAL_FLASHEx_Erase(&flashEraseOp, &sectorError);
  * we now use code to convert the id (start from 0) to addresses  (starting from VAR_ADDR_START)
  * This allows full backward compatibility of stored settings.
  */
-uint16_t Flash_GetVirtAddrForId(uint16_t id) {
+static uint16_t Flash_GetVirtAddrForId(uint16_t id)
+{
     return VAR_ADDR_START + id;
 }
 
@@ -173,7 +176,7 @@ static bool Flash_PageIsErased(uint8_t page)
     }
     return retval;
 }
-HAL_StatusTypeDef Flash_Check_And_EraseIfNeeded(uint8_t page)
+static HAL_StatusTypeDef Flash_Check_And_EraseIfNeeded(uint8_t page)
 {
     HAL_StatusTypeDef retval = HAL_OK;
     if (Flash_PageIsErased(page) == false)
@@ -233,7 +236,7 @@ static uint16_t Flash_TransferFullPage(uint8_t fromPage, uint8_t toPage, bool sk
   * @retval - Flash error code: on write Flash error
   *         - HAL_OK: on success
   */
-uint16_t Flash_InitA(void)
+static uint16_t Flash_InitA(void)
 {
 
     /*   1

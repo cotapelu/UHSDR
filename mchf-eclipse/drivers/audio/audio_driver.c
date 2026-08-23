@@ -172,7 +172,7 @@ void AudioDriver_I2SCallback(AudioSample_t *audio, IqSample_t *iq, AudioSample_t
             AudioDriver_IqFillSilence(iq, blockSize);
             if (to_rx)
             {
-                UhsdrHwI2s_Codec_ClearTxDmaBuffer();
+                hal_i2s_codec_clear_tx_dma_buffer();
             }
             if ( ts.audio_processor_input_mute_counter >0)
             {

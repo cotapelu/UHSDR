@@ -65,7 +65,7 @@ static __UHSDR_DMAMEM I2S_DmaBuffers_t dma;
 /* -------------------------------------------------------------------------
  * Internal helpers
  * ------------------------------------------------------------------------- */
-void UhsdrHwI2s_Codec_ClearTxDmaBuffer(void)
+static void UhsdrHwI2s_Codec_ClearTxDmaBuffer(void)
 {
     memset((void*)&dma.iq_buf.out, 0, sizeof(dma.iq_buf.out));
 }
@@ -126,14 +126,35 @@ static const audio_if_t audio_if = {
 /* -------------------------------------------------------------------------
  * Public API
  * ------------------------------------------------------------------------- */
-void UhsdrHwI2s_Codec_StartDMA(void)
+static void UhsdrHwI2s_Codec_StartDMA(void)
 {
     audio_if.start();
 }
 
-void UhsdrHwI2s_Codec_StopDMA(void)
+static void UhsdrHwI2s_Codec_StopDMA(void)
 {
     audio_if.stop();
+}
+
+/* -------------------------------------------------------------------------
+ * HAL abstract API implementation
+ * ------------------------------------------------------------------------- */
+hal_status_t hal_i2s_codec_start_dma(void)
+{
+    UhsdrHwI2s_Codec_StartDMA();
+    return HAL_STATUS_OK;
+}
+
+hal_status_t hal_i2s_codec_stop_dma(void)
+{
+    UhsdrHwI2s_Codec_StopDMA();
+    return HAL_STATUS_OK;
+}
+
+hal_status_t hal_i2s_codec_clear_tx_dma_buffer(void)
+{
+    UhsdrHwI2s_Codec_ClearTxDmaBuffer();
+    return HAL_STATUS_OK;
 }
 
 /* -------------------------------------------------------------------------

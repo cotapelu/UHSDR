@@ -89,7 +89,7 @@ hal_status_t hal_gpio_init(hal_gpio_port_t port, const hal_gpio_config_t* config
 
     HAL_GPIO_Init((GPIO_TypeDef*)port, &GPIO_InitStruct);
 
-    return HAL_OK;
+    return HAL_STATUS_OK;
 }
 
 hal_status_t hal_gpio_deinit(hal_gpio_port_t port, uint32_t pin)
@@ -101,7 +101,7 @@ hal_status_t hal_gpio_deinit(hal_gpio_port_t port, uint32_t pin)
 
     HAL_GPIO_DeInit((GPIO_TypeDef*)port, pin);
 
-    return HAL_OK;
+    return HAL_STATUS_OK;
 }
 
 hal_gpio_pin_state_t hal_gpio_read_pin(hal_gpio_port_t port, uint32_t pin)
@@ -119,7 +119,7 @@ hal_status_t hal_gpio_write_pin(hal_gpio_port_t port, uint32_t pin, hal_gpio_pin
 
     HAL_GPIO_WritePin((GPIO_TypeDef*)port, pin, (GPIO_PinState)state);
 
-    return HAL_OK;
+    return HAL_STATUS_OK;
 }
 
 hal_status_t hal_gpio_toggle_pin(hal_gpio_port_t port, uint32_t pin)
@@ -131,5 +131,5 @@ hal_status_t hal_gpio_toggle_pin(hal_gpio_port_t port, uint32_t pin)
 
     HAL_GPIO_TogglePin((GPIO_TypeDef*)port, pin);
 
-    return HAL_OK;
+    return HAL_STATUS_OK;
 }

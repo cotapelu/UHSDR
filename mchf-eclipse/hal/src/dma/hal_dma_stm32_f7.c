@@ -71,7 +71,7 @@ hal_status_t hal_dma_stop(hal_dma_handle_t handle)
         return HAL_STATUS_ERR_INVALID_PARAM;
     }
 
-    HAL_DMA_Stop((DMA_HandleTypeDef*)handle);
+    HAL_DMA_Abort((DMA_HandleTypeDef*)handle);
 
     return HAL_STATUS_OK;
 }

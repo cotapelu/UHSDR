@@ -25,7 +25,7 @@ static uint8_t config_ramcache[MAX_VAR_ADDR*2+2];
 
 
 #ifdef USE_CONFIGSTORAGE_FLASH
-void ConfigStorage_CopyFlash2RAMCache()
+static void ConfigStorage_CopyFlash2RAMCache(void)
 {
     uint16_t i, data;
 
@@ -175,7 +175,7 @@ uint16_t ConfigStorage_WriteVariable(uint16_t addr, uint16_t value)
     return status;
 }
 
-void ConfigStorage_Init()
+void ConfigStorage_Init(void)
 {
     // virtual Eeprom init
 #ifdef USE_CONFIGSTORAGE_FLASH
@@ -227,7 +227,7 @@ void ConfigStorage_Init()
 }
 
 
-void ConfigStorage_CopySerial2RAMCache()
+void ConfigStorage_CopySerial2RAMCache(void)
 {
     SerialEEPROM_24Cxx_ReadBulk(0, config_ramcache, MAX_VAR_ADDR*2+2, ts.ser_eeprom_type);
 
@@ -237,7 +237,7 @@ void ConfigStorage_CopySerial2RAMCache()
     ts.configstore_in_use = CONFIGSTORE_IN_USE_RAMCACHE;
 }
 
-uint16_t ConfigStorage_CopyRAMCache2Serial()
+uint16_t ConfigStorage_CopyRAMCache2Serial(void)
 {
     // we start behind the signature, which we don't want to change
     uint16_t retval = SerialEEPROM_24Cxx_WriteBulk(2, config_ramcache+2, MAX_VAR_ADDR*2, ts.ser_eeprom_type);

@@ -118,7 +118,7 @@ void HAL_GPIO_EXTI_Callback (uint16_t GPIO_Pin)
  * Detects if a special bootloader is used and configures some settings
  * Used for debugging and testing purposes only
  */
-void Main_DetectSpecialBootloader()
+static void Main_DetectSpecialBootloader(void)
 {
     // detection routine for special bootloader version strings which do enable debug or development functions
     char out[14];
@@ -155,7 +155,7 @@ void Main_DetectSpecialBootloader()
  * We try to initialize a single variable only once, to avoid confusion.
  *
  */
-void TransceiverStateInit(void)
+static void TransceiverStateInit(void)
 {
     // Defaults always
     ts.txrx_mode 		= TRX_MODE_RX;				// start in RX
@@ -450,7 +450,7 @@ int mchfMain(void)
     UiDriver_SetDemodMode(ts.dmod_mode);
 
     // Finally, start DMA transfers to get everything going
-    UhsdrHwI2s_Codec_StartDMA();
+    hal_i2s_codec_start_dma();
 
 
     // now enable paddles/ptt, i.e. external input
