@@ -1054,9 +1054,7 @@ static void UiLcdHy28_BulkWrite(uint16_t* pixel, uint32_t len)
         {
             pixel[i] = __REV16(pixel[i]); // reverse byte order;
         }
-#if defined(STM32F7) || defined(STM32H7)
         DMA_BUFFER_CLEAN(pixel, len * sizeof(uint16_t));
-#endif
         UiLcdHy28_SpiDmaStart((uint8_t*)pixel,len*2);
     }
 
@@ -1074,10 +1072,8 @@ static void UiLcdHy28_FinishWaitBulkWrite()
     if(UiLcdHy28_SpiDisplayUsed())         // SPI enabled?
     {
         UiLcdHy28_SpiDmaStop();
-#if defined(STM32F7) || defined(STM32H7)
         DMA_BUFFER_INVALIDATE(pixelbuffer[0], sizeof(pixelbuffer[0]));
         DMA_BUFFER_INVALIDATE(pixelbuffer[1], sizeof(pixelbuffer[1]));
-#endif
         UiLcdHy28_LcdSpiFinishTransfer();
     }
 }
