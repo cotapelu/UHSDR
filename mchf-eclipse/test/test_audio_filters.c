@@ -45,12 +45,18 @@ static void test_scale_biquad_coeffs(void)
     TEST_ASSERT_FLOAT_EQ( 6.0f, coeffs[2], 1e-6f);  /* B2 = 30/5 */
 }
 
+/* Test: CalcBandstop produces stable coefficients */
 static void test_calc_bandstop(void)
 {
     float32_t coeffs[5];
 
     AudioDriver_CalcBandstop(coeffs, 1000.0f, 48000.0f);
 
+    for (int i = 0; i < 5; i++)
+    {
+        TEST_ASSERT(!isnan(coeffs[i]));
+        TEST_ASSERT(!isinf(coeffs[i]));
+    }
 }
 
 /* Test: CalcBandpass produces stable coefficients (no NaN/Inf) */
@@ -86,6 +92,68 @@ static void test_calc_shelf_filters(void)
         TEST_ASSERT(!isnan(low[i]));
         TEST_ASSERT(!isinf(high[i]));
         TEST_ASSERT(!isinf(low[i]));
+    }
+}
+
+/* Test: SetBiquadCoeffsAllInstances copies coefficients into biquad array */
+static void test_set_biquad_coeffs_all_instances(void)
+{
+    typedef struct {
+        uint32_t numStages;
+        float32_t *pCoeffs;
+        float32_t *pState;
+    } test_biquad_t;
+
+    test_biquad_t instance;
+    float32_t coeffs[5] = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f};
+    float32_t pCoeffs[5] = {0.0f};
+    float32_t pState[10] = {0.0f};
+
+    instance.pCoeffs = pCoeffs;
+    instance.pState = pState;
+
+    AudioDriver_SetBiquadCoeffsAllInstances(&instance, 0, coeffs);
+
+    TEST_ASSERT_FLOAT_EQ(1.0f, pCoeffs[0], 1e-6f);
+    TEST_ASSERT_FLOAT_EQ(2.0f, pCoeffs[1], 1e-6f);
+    TEST_ASSERT_FLOAT_EQ(3.0f, pCoeffs[2], 1e-6f);
+    TEST_ASSERT_FLOAT_EQ(4.0f, pCoeffs[3], 1e-6f);
+    TEST_ASSERT_FLOAT_EQ(5.0f, pCoeffs[4], 1e-6f);
+}
+
+/* Test: Bandstop coefficients remain stable across sample rates */
+static void test_calc_bandstop_multiple_sample_rates(void)
+{
+    float32_t coeffs_48k[5];
+    float32_t coeffs_96k[5];
+
+    AudioDriver_CalcBandstop(coeffs_48k, 1000.0f, 48000.0f);
+    AudioDriver_CalcBandstop(coeffs_96k, 1000.0f, 96000.0f);
+
+    for (int i = 0; i < 5; i++)
+    {
+        TEST_ASSERT(!isnan(coeffs_48k[i]));
+        TEST_ASSERT(!isnan(coeffs_96k[i]));
+        TEST_ASSERT(!isinf(coeffs_48k[i]));
+        TEST_ASSERT(!isinf(coeffs_96k[i]));
+    }
+}
+
+/* Test: Bandpass coefficients remain stable across sample rates */
+static void test_calc_bandpass_multiple_sample_rates(void)
+{
+    float32_t coeffs_48k[5];
+    float32_t coeffs_96k[5];
+
+    AudioDriver_CalcBandpass(coeffs_48k, 2000.0f, 48000.0f);
+    AudioDriver_CalcBandpass(coeffs_96k, 2000.0f, 96000.0f);
+
+    for (int i = 0; i < 5; i++)
+    {
+        TEST_ASSERT(!isnan(coeffs_48k[i]));
+        TEST_ASSERT(!isnan(coeffs_96k[i]));
+        TEST_ASSERT(!isinf(coeffs_48k[i]));
+        TEST_ASSERT(!isinf(coeffs_96k[i]));
     }
 }
 

@@ -39,6 +39,9 @@ int test_main(void)
     TEST_REGISTER(test_calc_bandstop);
     TEST_REGISTER(test_calc_bandpass);
     TEST_REGISTER(test_calc_shelf_filters);
+    TEST_REGISTER(test_set_biquad_coeffs_all_instances);
+    TEST_REGISTER(test_calc_bandstop_multiple_sample_rates);
+    TEST_REGISTER(test_calc_bandpass_multiple_sample_rates);
     printf("\n");
 
     /* Canary tests (T26.1) */
