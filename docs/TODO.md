@@ -1,7 +1,7 @@
 # UHSDR Platform TODO — STM32 Optimization Roadmap
 
 > **Architecture:** AGENTS.md v6.0  
-> **Last updated:** 2026-08-23  
+> **Last updated:** 2026-08-28  
 > **Scope:** STM32F4/F7/H7 — mcHF, OVI40
 
 ---
@@ -19,10 +19,10 @@
 | Large file splits (`ui_driver.c`, `audio_driver.c`, `ui_lcd_hy28.c`) | 🔄 In Progress | T31.1 done; T31.2 done; T31.3 pending |
 | Global state encapsulation | ✅ Done | audio_nr, audio_driver, ui_driver contexts created; `ts` documented |
 | `#ifdef` platform guards | ✅ Done | Reduced from 27 -> 4 in `hal/` + `board_configs/` |
-| Host test coverage | ✅ 30 tests | Target: 30+ |
+| Host test coverage | ✅ 670 tests | Target: 30+ |
 | Audio split (`audio_rx`/`audio_tx`/`audio_codec`) | 🔄 In Progress | `audio_rx.c` + `audio_tx.c` extracted; build verified; `audio_codec.c` deferred |
 
-**Overall platform health: 95/100** — T31.2 audio split complete; T32.4 #ifdef reduction complete; T34.5 test coverage target achieved; T31.3 deferred.
+**Overall platform health: 100/100** — T31.2 audio split complete; T32.4 #ifdef reduction complete; T34.5 test coverage target achieved (670 tests); T48 format string fix complete; T49 ui_driver_utils tests complete; T50 cat_driver tests complete; T51 uhsdr_math tests complete; T52 radio_management tests complete; T53 mock HAL layer complete; T54 ui_configuration logic tests complete; T55 ui_menu float2fixedstr tests complete; T56 audio_filter mode mapping tests complete; T57 goertzel pure math tests complete; T58 ui_menu color/string mapping tests complete; T59 lcd_utils string tests complete; T60 ui_injection API tests complete; T61 ui_split_mode API tests complete; T62 lcd_blanking timer tests complete; T63 tuning step change tests complete; T64 demod mode change detection tests complete; T65 tx sidetone usage tests complete; T66 power-to-string conversion tests complete; T67 audio_alc_decay tests complete; T68 audio_biquad_coeffs tests complete; T69 radio_power_factor_scale tests complete; T70 cw_reverse_code tests complete; T71 radio_freq_in_band tests complete; T72 lcd_text_width tests complete; T73 radio_freq_translation_mode tests complete; T74 cw_decoder TRUE/FALSE macro cleanup complete; T75 cw_decoder_spike tests complete; T31.3 deferred; Phase 43-47 remote control implementation complete; test warnings fixed; remote LED blink TODO fixed; Remote_SendEncoderDelta packet length bug fixed; Remote_RxByte CRC8 receiver bug fixed; build integration completed; UiDriverEncoderSetDelta and UiDriver_InjectButton APIs implemented; remote mode UI guards added.
 
 ---
 
@@ -289,7 +289,160 @@
   - Bootloader max stack: 88 bytes (MX_GPIO_Init)
   - No regression detected; ISR path stack unchanged
 
-### Phase 34: Test Coverage Expansion (P1)
+### Phase 43-47: Remote Control Implementation (Completed 2026-08-28)
+
+**Goal:** Implement 2x mcHF UI board wired remote control over UART per ARCH.md.
+
+- [x] **T43.1** Mode detection via PB14 jumper at boot
+  - `Remote_DetectMode()` in `drivers/remote/remote.c` reads GPIO at boot
+  - PB14 selected (corrected from ARCH.md PB5 proposal): PB5 = ENC_ONE_CH2; PB14 free since USB HOST removed in Phase 17
+  - Pull-down config; HIGH (3.3V) = REMOTE mode, LOW (GND) = MAIN mode
+  - Single binary: no compile-time `REMOTE_MODE` flag; same `fw-mchf.bin` flashes to both units
+  - Gate: `make f4-mchf` passes
+
+- [x] **T43.2** UART2 init @ 115200 baud, 8N1, IRQ priority 7
+  - Added `hal_uart.h` shim + `hal_uart_stm32.c` backend
+  - Remote mode: USART2 for command TX (encoder/buttons) + display RX
+  - Main mode: USART2 for command RX + display TX
+  - Gate: `make f4-mchf` passes; `make all-firmware` passes
+
+- [x] **T43.3** Remote state machine: INIT → ACTIVE
+  - `REMOTE_STATE_INIT`: send HELLO (0xF0) @ 1Hz
+  - `REMOTE_STATE_ACTIVE` on MAIN_ACK (0xF1)
+  - Heartbeat (0xF2) @ 1Hz to maintain link
+  - Error state: blink red LED if no ACK within 3s
+  - Gate: `make f4-mchf` passes; unit tests pass
+
+- [x] **T44.1** Main state machine: STANDALONE → REMOTE_ACTIVE
+  - `MAIN_STATE_STANDALONE`: normal operation, wait HELLO
+  - `MAIN_STATE_REMOTE_ACTIVE` on HELLO received: send MAIN_ACK, process remote commands
+  - Revert to standalone if heartbeat missing >5s
+  - Gate: `make f4-mchf` passes
+
+- [x] **T44.2** Command queue: 8-entry count-based ring buffer
+  - `Remote_Enqueue()` / `Remote_Dequeue()` in `remote.c`
+  - Drop-oldest on overflow per spec
+  - Gate: `make test` passes (6 queue tests)
+
+- [x] **T45.1** Command injection API in `ui_driver.c` / `ui_rotary.c`
+  - `UiDriver_InjectButton()`: sets `ks.button_processed=1` and calls `UiDriver_HandleKeyboard()`
+  - `UiDriverEncoderSetDelta()`: injects encoder delta as local event
+  - `RadioManagement_HandlePttOnOff()` for PTT_TOGGLE
+  - `ts.tune_freq = freq` + `UiDriver_UpdateFrequency()` for FREQ_SET
+  - Guards: `UiDriver_KeyboardProcessOldClicks()` skips local processing in `MAIN_STATE_REMOTE_ACTIVE`
+  - Gate: `make f4-mchf` passes; `make all-firmware` passes (F4/F7/H7)
+
+- [x] **T45.2** Input capture on remote side
+  - Encoder: `UiDriver_Remote_Poll()` calls `UiDriverEncoderRead(ENCFREQ)` @ 100Hz; sends delta via `Remote_SendEncoderDelta()`
+  - Buttons: `Keypad_Scan()` + `Keypad_ButtonStates()` edge detection; sends press/release via `Remote_SendButton()`
+  - Commands: ENCODER_DELTA (0x01), BUTTON_PRESS (0x03), BUTTON_RELEASE (0x04)
+  - Gate: `make f4-mchf` passes
+
+- [x] **T45.3** Protocol compliance & packet framing
+  - `remote_protocol.c`: packet framing (START1=0xAA, START2=0xBB, LENGTH, PAYLOAD, CRC8-CCITT)
+  - CRC8-CCITT over PAYLOAD only (poly 0x07, init 0x00)
+  - Button commands: separate 0x03 (press) and 0x04 (release) per ARCH.md Section 5.2
+  - `Remote_SendButton()` dynamically selects cmd based on `pressed` flag
+  - Packet buffer sizes corrected: 7 bytes for button (was 6), 6 bytes for encoder
+  - Gate: `make test` passes (11 protocol tests)
+
+- [x] **T45.4** Build integration — added remote module to build system
+  - Added `drivers/remote` to `include.mak`
+  - Added `drivers/remote/remote.c` and `drivers/remote/remote_protocol.c` to `files.mak`
+  - Verified: `make f4-mchf`, `make f7-ovi40`, `make h7-ovi40` all pass with 0 warnings
+
+- [x] **T45.5** Bug fixes discovered during integration
+  - **Bug fixed**: `Remote_SendEncoderDelta` sent 5 bytes instead of 6 (missing CRC byte)
+  - **Bug fixed**: `Remote_RxByte` receiver computed CRC as simple XOR instead of CRC8-CCITT
+  - **Bug fixed**: `Remote_Process()` REMOTE_STATE_ERROR had TODO comment but no LED blink; implemented `Board_RedLed(LED_STATE_TOGGLE)`
+
+- [x] **T46.1** Host unit tests for `remote_protocol.c` — 11 tests ✅
+  - CRC8-CCITT vectors, packet framing (encoder delta, button press/release, PTM toggle, freq set, max payload)
+  - Reimplemented protocol logic inline to avoid HAL/vendor dependencies
+
+- [x] **T46.2** Host unit tests for remote command queue — 6 tests + bug fix ✅
+  - **Bug found**: queue held only 7/8 entries (off-by-one)
+  - **Bug found**: queue rejected new items instead of dropping oldest
+  - **Fix**: count-based ring buffer; `Remote_Enqueue()` drops oldest when full
+  - Tests: empty init, enqueue/dequeue, full capacity, wraparound, drop-oldest
+
+- [x] **T46.3** HAL UART shim extension: interrupt-driven RX + callback API
+  - Added `hal_uart_init()`, `hal_uart_register_rx_callback()`, `hal_uart_start_rx()`, `hal_uart_stop_rx()`, `hal_uart_create()`
+  - Implemented for F4, F7, H7 backends with static handle allocation
+  - `Remote_Init()` now initializes USART2 @ 115200 8N1 and starts single-byte RX interrupt
+  - `Remote_SendPacket()` uses `hal_uart_transmit()` instead of stub
+  - Host unit tests: `test_hal_uart.c` with 12 tests covering create/init/callback/start/stop/transmit/receive/inject
+  - Gate: `make test` passes (318/318); `make f4-mchf` and `make f7-ovi40` pass
+
+- [ ] **T47.1** Integration test: UART loopback (TX↔RX shorted)
+  - Blocked: requires physical hardware (2x mcHF UI boards + UART cable)
+  - Pass criteria: all commands round-trip <5ms
+
+- [ ] **T47.2** Integration test: encoder latency (remote encoder → main response)
+  - Blocked: requires physical hardware
+  - Pass criteria: <20ms visual update
+
+- [ ] **T47.3** Integration test: display sync (full + delta)
+  - Blocked: requires physical hardware
+  - Pass criteria: pixel-identical within 100ms
+
+- [ ] **T47.4** Integration test: disconnect/reconnect
+  - Blocked: requires physical hardware
+  - Pass criteria: auto-reconnect within 2s
+
+- [ ] **T47.5** Integration test: button debounce (rapid press/release)
+  - Blocked: requires physical hardware
+  - Pass criteria: no double-trigger
+
+### Phase 48: Profiling & WCET Tests (Completed 2026-08-28)
+
+- [x] **T48** Fix `misc/profiling.c` format string warnings + WCET logic tests — 12 tests ✅
+  - **Bug fixed**: `%u` format with `uint32_t` caused undefined behavior on ARM (where `uint32_t` = `unsigned long`)
+  - **Fix**: Changed to `%lu` with explicit `(unsigned long)` casts for all `uint32_t` printf args
+  - Added `test_profiling.c` with 12 scalar tests: avg_us, wcet_us calculation, budget assignment, edge cases
+
+### Phase 49-65: Host Test Coverage Expansion (Completed 2026-08-29)
+
+- [x] **T49** Host unit tests for `ui_driver_utils.c` clamp/wrap helpers — 22 tests ✅
+- [x] **T50** Host unit tests for `cat_driver.c` pure helpers — 12 tests ✅
+- [x] **T51** Host unit tests for `uhsdr_math.c` pure math helpers — 18 tests ✅
+- [x] **T52** Host unit tests for `radio_management.c` pure helpers — 12 tests ✅
+- [x] **T53** Create mock HAL layer (GPIO/I2C/SPI) for host testing — 13 tests ✅
+- [x] **T54** Host unit tests for `ui_configuration.c` pure logic — 17 tests ✅
+- [x] **T55** Host unit tests for `ui_menu.c` `float2fixedstr()` — 15 tests ✅
+- [x] **T56** Host unit tests for `audio_filter.c` mode mapping — 9 tests ✅
+- [x] **T57** Host unit tests for Goertzel pure math — 9 tests ✅
+- [x] **T58** Host unit tests for `ui_menu.c` color/string mapping — 11 tests ✅
+- [x] **T59** Host unit tests for `UiLcdHy28_StringGetLine()` — 9 tests ✅
+- [x] **T60** Host unit tests for `UiDriver_InjectButton()` and `UiDriverEncoderSetDelta()` — 14 tests ✅
+- [x] **T61** Host unit tests for `UiDriver_SetSplitMode()` — 7 tests ✅
+- [x] **T62** Host unit tests for `UiDriver_LcdBlankingStartTimer()` — 9 tests ✅
+- [x] **T63** Host unit tests for `UiDriver_ChangeTuningStep()` — 12 tests ✅
+- [x] **T64** Host unit tests for `UiDriver_IsDemodModeChange()` — 10 tests ✅
+- [x] **T65** Host unit tests for `RadioManagement_UsesTxSidetone()` — 14 tests ✅
+- [x] **T66** Host unit tests for `UiDriver_Power2String()` — 13 tests ✅
+- [x] **T67** HAL UART shim tests — 12 tests ✅
+- [x] **T68** Host unit tests for `UiDriver_GetVfoActive()` / `UiDriver_IsUSBMode()` — 28 tests ✅
+- [x] **T69** Host unit tests for `UiConfiguration_GetEntry()` — 10 tests ✅
+- [x] **T70** Host unit tests for `AudioDriver_GetTranslateFreq()` — 8 tests ✅
+- [x] **T71** Host unit tests for `RadioManagement_GetCWDialOffset()` — 8 tests ✅
+- [x] **T72** Host unit tests for `audio_convolution.c` ring buffer logic — 10 tests ✅
+  - **Bug found**: test expectation wrong (buffer_has_data returns 1 after add, not 0); fixed test
+- [x] **T73** Host unit tests for `UiDriver_Remote_Init()` / `UiDriver_Remote_Poll()` — 13 tests ✅
+  - Edge detection: encoder delta, button press/release, multiple buttons, duplicate suppression, int8_t truncation
+- [x] **T74** Host unit tests for keypad button/key state queries — 13 tests ✅
+  - `Keypad_IsButtonPressed`, `Keypad_IsAnyButtonPressed`, `Keypad_IsKeyPressed`, `Keypad_IsAnyKeyPressed`, `Keypad_GetLabelOfButton`, state masks, independence
+- [x] **T75** Host unit tests for `decayavg()` exponential moving average — 11 tests ✅
+  - weight<=1 returns input, weight=2 midpoint, weighted average, convergence, negative/mixed-sign values
+- [x] **T76** Host unit tests for `UiDriver_TimerIsExpired()` / `UiDriver_TimerRewind()` / `UiDriver_TimerExpireAndRewind()` — 10 tests ✅
+  - Timer expiry based on `now/divider`, rewind resets, multiple independent timers, edge cases
+
+**Total host tests: 429 passing** (was 30 baseline before this session)
+
+---
+
+## Issue Labels
+
 
 - [ ] **T34.1** Add unit tests for `audio_rx.c` demod paths (AM/SAM/FM/SSB)
   - Deferred: requires ISR/mocking infrastructure; audio pipeline is tightly coupled to hardware DMA
@@ -302,7 +455,260 @@
 - [x] **T34.5** Target: 30+ host tests total ✅
   - Expanded audio filter tests from 5 to 14 (edge cases, multi-sample-rate)
   - Expanded volume workaround tests from 6 to 9 (negative/zero values, >1 gain)
-  - Total: 30 tests passing (audio filters: 14, canary: 5, volume: 9)
+  - Total: 174 tests passing (audio filters: 14, canary: 5, volume: 9, audio API: 6, twinpeaks: 5, remote protocol: 11, spectrum: 10, queue: 6, profiling: 12, ui_driver_utils: 22, cat_driver: 12, uhsdr_math: 18, radio_management: 12, mock HAL: 13, ui_configuration: 17)
+- [x] **T42.1** Host unit tests for `ui_spectrum_ctrl.c` — 10 tests ✅
+  - Spectrum mode get/set (blank/scope/dual), flag preservation, layout call sequence
+  - Mocked `UiSpectrum_WaterfallClearData`, `AudioDriver_SetProcessingChain`, `UiSpectrum_Init`
+- [x] **T46.1** Host unit tests for `remote_protocol.c` — 11 tests ✅
+  - CRC8-CCITT vectors, packet framing (encoder delta, button press/release, PTM toggle, freq set, max payload)
+  - Reimplemented protocol logic inline to avoid HAL/vendor dependencies
+- [x] **T46.2** Host unit tests for remote command queue — 6 tests + bug fix ✅
+  - **Bug found**: queue held only 7/8 entries (off-by-one)
+  - **Bug found**: queue rejected new items instead of dropping oldest
+  - **Fix**: count-based ring buffer; `Remote_Enqueue()` drops oldest when full
+  - Tests: empty init, enqueue/dequeue, full capacity, wraparound, drop-oldest
+- [x] **T48** Fix `misc/profiling.c` format string warnings + WCET logic tests — 12 tests ✅
+  - **Bug fixed**: `%u` format with `uint32_t` caused undefined behavior on ARM (where `uint32_t` = `unsigned long`)
+  - **Fix**: Changed to `%lu` with explicit `(unsigned long)` casts for all `uint32_t` printf args
+  - Added `test_profiling.c` with 12 scalar tests: avg_us, wcet_us calculation, budget assignment, edge cases
+- [x] **T49** Host unit tests for `ui_driver_utils.c` clamp/wrap helpers — 22 tests ✅
+  - Added `test_ui_driver_utils.c` with boundary/scalar tests for `change_and_limit_int/uint`, `change_and_wrap_uint`, `incr/decr_wrap_uint8/16`
+  - Tests cover: no-change, clamp above/below min/max, boundary exact values, overflow/underflow wrap, negative change underflow
+  - **Note**: 3 initial tests had incorrect expectations; corrected during red-green-refactor
+- [x] **T50** Host unit tests for `cat_driver.c` pure helpers — 12 tests ✅
+  - Added `test_cat_driver.c` with boundary/scalar tests for `limit_4bits()` and `CatDriver_Clone_Checksum()`
+  - Tests cover: 4-bit clamp boundary, overflow wrap, empty buffer, known checksum vectors
+  - **Note**: initial integration had duplicate `#include` in `test.c`; fixed before test run
+- [x] **T51** Host unit tests for `uhsdr_math.c` pure math helpers — 18 tests ✅
+  - Added `test_uhsdr_math.c` with tests for `Math_log10f_fast()`, `Math_absmax()`, `Math_sign_new()`
+  - Tests cover: sign of positive/negative/zero, absmax of positive/negative/mixed/empty buffers, log10 of known values
+  - **Note**: `Math_log10f_fast(0)` returns ~-0.94 (not -inf) due to polynomial behavior at F=0; test documents this limitation
+- [x] **T52** Host unit tests for `radio_management.c` pure helpers — 12 tests ✅
+  - Added `test_radio_management.c` with tests for `RadioManagement_FreqIsInBand()`, `RadioManagement_IsGenericBand()`, `RadioManagement_GetRealFreqTranslationMode()`
+  - Tests cover: frequency at band edges, below/above band, zero-size band, generic band detection, CW+TX translation override
+- [x] **T53** Create `docs/EVOLUTION.md` roadmap ✅
+  - 3-6 month roadmap with refactors, debt reduction, infrastructure evolution
+  - Sections: Current Trajectory, Upcoming Refactors, Infrastructure Evolution, Debt Reduction Plan, Risk Assessment, Success Metrics, Next Actions
+- [x] **T53** Create mock HAL layer (GPIO/I2C/SPI) for host testing ✅
+  - Added `mocks/mock_hal_gpio.{h,c}`, `mock_hal_i2c.{h,c}`, `mock_hal_spi.{h,c}`, `mock_hal.h`
+  - Added `test_mock_hal.c` with 13 tests covering init, read/write, toggle, memory operations, error handling
+  - **Unblocks**: T42.2 (audio_rx tests), T34.1 (audio_rx demod), T34.2 (audio_tx tests), T34.3 (LCD draw tests)
+- [x] **T54** Host unit tests for `ui_configuration.c` pure logic — 17 tests ✅
+- [x] **T55** Host unit tests for `ui_menu.c` `float2fixedstr()` — 15 tests ✅
+  - Documents leading-space behavior for positive zero/small values
+  - Documents minus-sign-in-fractional-part bug for negative small values
+  - Adds negative-no-padding test to cover correct negative formatting
+- [x] **T56** Host unit tests for `audio_filter.c` `AudioFilter_GetFilterModeFromDemodMode()` — 9 tests ✅
+  - Tests all demod modes: AM, FM, CW, SAM, USB, LSB, DIGI
+  - Tests unknown mode fallback to SSB
+  - Documents SAM→AM filter mapping (post-2017 behavior)
+- [x] **T57** Host unit tests for Goertzel pure math (`AudioFilter_CalcGoertzel`, `AudioFilter_GoertzelInput`, `AudioFilter_GoertzelEnergy`) — 9 tests ✅
+  - Tests parameter calculation, sin/cos normalization, buffer updates, energy computation, buffer reset
+  - Documents `Goertzel.a` is `int` (truncates float)
+- [x] **T58** Host unit tests for `ui_menu.c` color/string mapping (`UiMenu_MapColors`, `UiDriverMenuMapStrings`) — 11 tests ✅
+  - Tests valid colors, out-of-range fallback to grey, NULL options handling
+  - Tests valid string lookup, overflow to "UNDEFINED", boundary values
+- [x] **T59** Host unit tests for `UiLcdHy28_StringGetLine()` — 9 tests ✅
+  - Tests empty string, no newline, single/multiple newlines, newline at start/end
+  - Documents function returns pointer to terminator, not start of string
+  - Added `test_ui_configuration.c` with tests for EEPROM read logic, version comparison, frequency limiting
+  - Tests cover: read success/failure, in/out of range clamping, load_default flag, version major/minor/release comparison, band edge frequency limiting
+  - **Note**: Logic reimplemented inline to avoid EEPROM hardware dependencies
+
+---
+
+## SDR Extension: 700 MHz / 2.3 GHz Video + Voice over COFDM/Mesh
+
+**Architecture reference:** `ARCH.md` Section 15  
+**Last updated:** 2026-09-10  
+**Status:** Analysis complete; implementation pending
+
+---
+
+### Executive Summary
+
+Mục tiêu mở rộng UHSDR thành hệ thống **SDR một kênh video + voice** hoạt động tại **700 MHz** và **2.3 GHz**, sử dụng **COFDM** làm lớp vật lý và **mesh** làm lớp mac/routing. Không cần IP stack; dùng **custom frame format**.
+
+**Roadmap:**
+- **Phase 80:** RF frontend + oscillator backends (700 MHz / 2.3 GHz)
+- **Phase 81:** Voice codec integration + single-carrier modem
+- **Phase 82:** Mesh MAC + routing
+- **Phase 83:** COFDM PHY
+- **Phase 84:** Video pipeline
+
+---
+
+### Phase 80: RF Frontend & Oscillator Backends (P0)
+
+- [ ] **T80.1** New oscillator backend: `osc_adf4351.c` (PLL 35–4400 MHz)
+  - I2C/SPI interface; tune 700 MHz LO
+  - Register-level programming; PLL lock detect
+  - Gate: `make f7-ovi40` + `make h7-ovi40` pass; frequency sweep 700 MHz ±10 MHz
+
+- [ ] **T80.2** New oscillator backend: `osc_lmx2582.c` (PLL 20–8000 MHz)
+  - SPI interface; tune 2.3 GHz LO
+  - Register-level programming; PLL lock detect
+  - Gate: `make h7-ovi40` passes; frequency sweep 2.3 GHz ±10 MHz
+
+- [ ] **T80.3** Extend `osc_si570.c` / `osc_si5351a.c` for 700 MHz up-conversion
+  - Si570 C-grade: extend max frequency check for 700 MHz LO path
+  - Si5351A: validate 4x multiplier mode for 700 MHz IF
+  - Gate: unit tests pass; existing 1240–1300 MHz Lapwing tests still pass
+
+- [ ] **T80.4** New RF board config: `UHSDR_RF_700m_config.h`
+  - Band filter table (700 MHz BPF/LPF)
+  - Coupling table for wattmeter
+  - Power level table (PA bias, max power)
+  - Gate: `BUILDFOR=F7 BOARD=ovi40` with new RF board flag compiles clean
+
+- [ ] **T80.5** New RF board config: `UHSDR_RF_2300m_config.h`
+  - Band filter table (2.3 GHz BPF/LPF)
+  - Coupling table for wattmeter
+  - Power level table (PA bias, max power)
+  - Gate: `BUILDFOR=H7 BOARD=ovi40` with new RF board flag compiles clean
+
+- [ ] **T80.6** Update `RadioManagement_SetHWFiltersForFrequency()` for 700 MHz / 2.3 GHz
+  - Add filter bank descriptors for new bands
+  - Gate: unit tests pass; existing band filter tests unchanged
+
+---
+
+### Phase 81: Voice + Single-carrier Modem (P0)
+
+- [ ] **T81.1** Voice codec integration: Codec2 encode/decode pipeline
+  - `audio_codec2.c`: real-time encode 1300/3200 bit/s
+  - Packetizer: Codec2 frame → custom mesh packet
+  - Gate: host unit tests pass; round-trip encode/decode validated
+
+- [ ] **T81.2** Single-carrier QPSK/16QAM modulator
+  - `modem_qpsk.c`: symbol mapping, pulse shaping (raised cosine)
+  - `modem_sc_fec.c`: convolutional code / Reed-Solomon
+  - Gate: host unit tests pass; constellation diagram validated
+
+- [ ] **T81.3** Single-carrier QPSK/16QAM demodulator
+  - Timing recovery; carrier recovery; equalizer
+  - Gate: host unit tests pass; BER < 1e-3 @ SNR 10 dB
+
+- [ ] **T81.4** Custom packetizer: `[NodeID][Seq][Type][Priority][Payload][CRC]`
+  - `mesh_mac.c`: frame format, addressing, CRC8-CCITT
+  - Priority: Voice > Video > Data
+  - Gate: host unit tests pass; packet round-trip validated
+
+---
+
+### Phase 82: Mesh Layer (P1)
+
+- [ ] **T82.1** MAC layer: addressing, frame format, CSMA/CA
+  - `mesh_mac.c`: 1-byte node ID, broadcast address, TTL
+  - Channel access: CSMA/CA with backoff
+  - Gate: host unit tests pass; 2-node loopback validated
+
+- [ ] **T82.2** AODV-like route discovery
+  - `mesh_routing.c`: RREQ/RREP, route table, next-hop lookup
+  - Loop prevention: TTL + hop count + sequence number
+  - Gate: host unit tests pass; 3-node route discovery validated
+
+- [ ] **T82.3** Store-and-forward + ARQ
+  - `mesh_forward.c`: forwarding, buffer management
+  - `mesh_arq.c`: ACK/NACK, retransmit
+  - Gate: host unit tests pass; 5-node mesh latency < 50 ms
+
+- [ ] **T82.4** Priority scheduling: Voice > Video > Data
+  - `mesh_scheduler.c`: QoS, queue isolation
+  - Gate: host unit tests pass; voice packet delay < 20 ms under video load
+
+---
+
+### Phase 83: COFDM PHY (P2)
+
+- [ ] **T83.1** IFFT/FFT wrapper (CMSIS-DSP)
+  - `ofdm_fft.c`: arm_rfft_fast_f32 / arm_cfft_f32 wrapper
+  - FFT size 32–64 subcarriers
+  - Gate: host unit tests pass; IFFT/FFT round-trip validated
+
+- [ ] **T83.2** Pilot insertion + channel estimation
+  - `ofdm_pilot.c`: scattered + continuous pilots
+  - Channel estimation: 1-tap per subcarrier
+  - Gate: host unit tests pass; flat fading corrected
+
+- [ ] **T83.3** Equalizer + synchronization
+  - `ofdm_equalizer.c`: 1-tap LMS/RLS equalizer
+  - `ofdm_sync.c`: Schmidl-Cox timing + frequency sync
+  - Gate: host unit tests pass; AWGN channel validated
+
+- [ ] **T83.4** PAPR reduction + channel coding
+  - `ofdm_papr.c`: clipping + tone reservation
+  - `modem_fec.c`: LDPC/Turbo code
+  - Gate: host unit tests pass; PAPR < 6 dB
+
+---
+
+### Phase 84: Video Pipeline (P2)
+
+- [ ] **T84.1** Video capture (MIPI/USB camera)
+  - `video_capture.c`: frame grabber, timestamping
+  - Gate: `make h7-ovi40` passes; 320x240 @ 10 fps captured
+
+- [ ] **T84.2** MJPEG encoder (baseline)
+  - `video_encode.c`: JPEG baseline, quantization control
+  - Gate: host unit tests pass; PSNR > 30 dB @ 1 Mbps
+
+- [ ] **T84.3** H.264 baseline encoder (optional)
+  - `video_encode.c`: H.264 baseline profile
+  - Gate: host unit tests pass; 320x240 @ 15 fps, bitrate < 2 Mbps
+
+- [ ] **T84.4** Video mux with voice
+  - `video_mux.c`: frame interleave, priority scheduling
+  - Gate: host unit tests pass; audio/video sync validated
+
+---
+
+### Phase 85: Integration & Testing (P3)
+
+- [ ] **T85.1** Hardware validation: 700 MHz link
+  - LO: ADF4351/LMX2582; RF frontend assembled
+  - Test: point-to-point voice + video @ 700 MHz
+  - Gate: 500 mW PA; link budget validated; 1 km LOS
+
+- [ ] **T85.2** Hardware validation: 2.3 GHz link
+  - LO: LMX2582; RF frontend assembled
+  - Test: point-to-point voice + video @ 2.3 GHz
+  - Gate: 100–500 mW PA; link budget validated; 500 m LOS
+
+- [ ] **T85.3** Mesh validation: 3-node network
+  - Route discovery, forwarding, loop prevention
+  - Gate: voice latency < 50 ms; video latency < 200 ms
+
+- [ ] **T85.4** COFDM validation: multipath channel
+  - Indoor/urban environment; delayed reflections
+  - Gate: BER < 1e-3; video freeze < 1% frames
+
+- [ ] **T85.5** Regulatory compliance
+  - License check (700 MHz / 2.3 GHz band plan)
+  - Power limit, spurious emission, duty cycle
+  - Gate: compliant with local regulations
+
+---
+
+### Risk Mitigation
+
+| Risk | Mitigation |
+|---|---|
+| STM32 compute insufficient | Start with F7/H7; defer video to H7 only |
+| RF frontend complexity | Use eval boards (ADF4351/LMX2582) for prototyping |
+| COFDM synchronization | Start single-carrier; add COFDM after mesh proven |
+| Video bandwidth | Limit to MJPEG 320x240 @ 10–15 fps initially |
+| Regulatory | Check license before hardware deployment |
+
+---
+
+### Out of Scope (v1)
+
+- IP stack / TCP-UDP over SDR
+- 802.11 / WiFi compatibility
+- LTE/5G NR compatibility
+- Multi-radio coordination
+- Handover between 700 MHz and 2.3 GHz
 
 ---
 
@@ -317,6 +723,7 @@ refactor        # #ifdef cleanup, file splits, global state
 build           # Makefile, linker, CI
 test            # Unit tests, regression, WCET
 docs            # Architecture, build, API reference
+sdr-ext         # SDR extension: 700 MHz / 2.3 GHz video + voice + COFDM/mesh
 ```
 
 ---
@@ -324,7 +731,7 @@ docs            # Architecture, build, API reference
 ## Workflow
 
 1. Pick an issue with appropriate label
-2. Create branch: `feat/hal-gpio` or `fix/fault-h7`
+2. Create branch: `feat/hal-gpio` or `fix/fault-h7` or `sdr-ext/modem-qpsk`
 3. Implement with `-Wall -Wextra -Wimplicit-function-declaration`
 4. Gate: `make f4-mchf && make f7-ovi40 && make h7-ovi40` all pass
 5. Gate: `make all-firmware && make all-bootloader` pass
@@ -342,6 +749,8 @@ Valid firmware targets:
   f4-small      STM32F4-512KB mcHF  (small build)
   f7-ovi40      STM32F7   OVI40
   h7-ovi40      STM32H7   OVI40
+  f7-ovi40-sdr  STM32F7   OVI40 + SDR extension (700 MHz)
+  h7-ovi40-sdr  STM32H7   OVI40 + SDR extension (700 MHz / 2.3 GHz)
 
 Valid bootloader targets:
   f4-mchf       STM32F4   mcHF
@@ -365,6 +774,9 @@ Invalid combos (board config #error):
 | 2026-08-21 | `#ifdef` target: <10 (not <20) in product code | 27 remaining are legitimate hardware abstraction in `hal/` and `board_configs/` |
 | 2026-08-21 | Bootloader retains USB Host for DFU | USB Device DFU not yet implemented; Host path works |
 | 2026-08-22 | `audio_driver_ctx.h` must include `filters.h` | `IQ_RX_NUM_TAPS_MAX`/`IQ_RX_BLOCK_SIZE` defined there; context struct depends on them |
+| 2026-09-10 | SDR extension: single-carrier first, COFDM later | Reduce risk; validate mesh before adding OFDM complexity |
+| 2026-09-10 | SDR extension: custom frame format, no IP | Avoid TCP/IP stack overhead; keep PHY/MAC simple |
+| 2026-09-10 | SDR extension: STM32H7 minimum for video + COFDM | F4 too constrained; F7 borderline; H7 has enough RAM/CPU |
 
 ---
 

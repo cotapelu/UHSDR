@@ -148,9 +148,11 @@ const UhsdrButtonLogical_t buttons[BUTTON_NUM] =
 // the initial button map is the default one
 UhsdrHwKey_t hwKeys = { .map = &bm_set_normal_arr[0], .num = 0 };
 
-// FIXME? Do we change state of these in IRQ? Maybe more save mark them as volatile?
-uint32_t buttonStates; // logical buttons
-uint32_t keyStates; // hw scan keys
+// FIXME resolved: Keypad_Scan() is only called from main loop, but these are
+// marked volatile to document shared-state intent and prevent future optimizer
+// surprises if access pattern ever changes.
+volatile uint32_t buttonStates; // logical buttons
+volatile uint32_t keyStates; // hw scan keys
 
 #ifdef UI_BRD_MCHF
 // this function invoked only on the UI_MCHF_BRD with RTC as they have different buttons layout

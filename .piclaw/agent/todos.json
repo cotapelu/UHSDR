@@ -3,22 +3,27 @@
   "phases": [
     {
       "id": "phase-1",
-      "name": "Global State Encapsulation",
+      "name": "Autonomous Cycle 12+",
       "tasks": [
         {
           "id": "task-1",
-          "content": "Encapsulate ui_driver.c statics into UiDriver_Context (T30.3)",
+          "content": "Continue proactive analysis: scan for next high-priority untested modules or code quality issues",
           "status": "in_progress"
         },
         {
           "id": "task-2",
-          "content": "Document remaining global state ownership (T30.4)",
+          "content": "Add tests for next module with pure logic (e.g., ui_menu.c menu rendering helpers, audio_driver_power.c)",
+          "status": "pending"
+        },
+        {
+          "id": "task-3",
+          "content": "Update docs/AGENT_METRICS.md and docs/TODO.md after each completed task",
           "status": "pending"
         }
       ]
     }
   ],
-  "nextTaskId": 3,
+  "nextTaskId": 4,
   "nextPhaseId": 2,
-  "updatedAt": "2026-08-22T04:28:53.138Z"
+  "updatedAt": "2026-08-29T00:17:21.749Z"
 }

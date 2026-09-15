@@ -99,8 +99,6 @@ void CwDecode_Filter_Set()
 // Needs to be significantly longer than longest symbol 'sos'= ~30.
 
 // FIXME: replace with true/false (since already defined elsewhere)
-#define  TRUE  1
-#define  FALSE 0
 
 typedef struct
 {
@@ -300,14 +298,14 @@ static void CW_Decode_exe(void)
 	{
 		static bool change; // reads to be the same to confirm a true change
 
-		if (change == TRUE)
+		if (change == true)
 		{
 			cw_state = newstate;
-			change = FALSE;
+			change = false;
 		}
 		else if (newstate != cw_state)
 		{
-			change = TRUE;
+			change = true;
 		}
 
 	}
@@ -409,17 +407,17 @@ void CwDecode_RxProcessor(float32_t * const src, int16_t blockSize)
 static void InitializationFunc(void)
 {
 	static int16_t startpos, progress;   // Progress counter, size = SIG_BUFSIZE
-	static bool initializing = FALSE; // Bool for first time init of progress counter
+	static bool initializing = false; // Bool for first time init of progress counter
 	int16_t processed;              // Number of states that have been processed
 	float32_t t;                     // We do timing calculations in floating point
 	// to gain a little bit of precision when low
 	// sampling rate
 	// Set up progress counter at beginning of initialize
-	if (initializing == FALSE)
+	if (initializing == false)
 	{
 		startpos = sig_outcount;        // We start at last processed mark/space
 		progress = sig_outcount;
-		initializing = TRUE;
+		initializing = true;
 		cw_times.pulse_avg = 0;                         // Reset CW timing variables to 0
 		cw_times.dot_avg = 0;
 		cw_times.dash_avg = 0;
@@ -434,8 +432,8 @@ static void InitializationFunc(void)
 
 	if (processed >= 98)
 	{
-		b.initialized = TRUE;                  // Indicate we're done and return
-		initializing = FALSE;          // Allow for correct setup of progress if
+		b.initialized = true;                  // Indicate we're done and return
+		initializing = false;          // Allow for correct setup of progress if
 		// InitializaitonFunc is invoked a second time
 		// Board_RedLed(LED_STATE_OFF);
 	}
@@ -507,7 +505,7 @@ bool CwDecoder_IsSpike(uint32_t t)
 	}
 	else if (cw_decoder_config.spikecancel == CW_SPIKECANCEL_MODE_SHORT) // SHORT CANCEL // Squash spikes shorter than 1/3rd dot duration
 	{
-		retval = (3 * t < cw_times.dot_avg) && (b.initialized == TRUE); // Only do this if we are not initializing dot/dash periods
+		retval = (3 * t < cw_times.dot_avg) && (b.initialized == true); // Only do this if we are not initializing dot/dash periods
 	}
 	return retval;
 }
@@ -521,13 +519,13 @@ float32_t spikeCancel(float32_t t)
 	{
 		if (CwDecoder_IsSpike(t) == true)
 		{
-			spike = TRUE;
+			spike = true;
 			sig_outcount = ring_idx_increment(sig_outcount, CW_SIG_BUFSIZE); // If short, then do nothing
 			t = 0.0;
 		}
-		else if (spike == TRUE) // Check if last state was a short Spike or Drop
+		else if (spike == true) // Check if last state was a short Spike or Drop
 		{
-			spike = FALSE;
+			spike = false;
 			// Add time of last three states together.
 			t =		t
 					+ sig[ring_idx_change(sig_outcount, -1, CW_SIG_BUFSIZE)].time
@@ -548,24 +546,24 @@ float32_t spikeCancel(float32_t t)
 // Variables containing dot, dash and space averages are maintained, and
 // output is a data[] buffer containing decoded dot/dash information, a
 // data_len variable containing length of incoming character data.
-// The function returns TRUE when further calls will not yield a change or a complete new character has been decoded.
+// The function returns true when further calls will not yield a change or a complete new character has been decoded.
 // The bool variable the parameter points to is set to true if a new character has been decoded
 // In addition, b.wspace flag indicates whether long (word) space after char
 //
 //------------------------------------------------------------------
 bool DataRecognitionFunc(bool* new_char_p)
 {
-	bool not_done = FALSE;                  // Return value
+	bool not_done = false;                  // Return value
 	static bool processed;
 
-	*new_char_p = FALSE;
+	*new_char_p = false;
 
 	//-----------------------------------
 	// Do we have a new state to process?
 	if (sig_outcount != sig_incount)
 	{
 		not_done = true;
-		b.timeout = FALSE;           // Mainly used by Error Correction Function
+		b.timeout = false;           // Mainly used by Error Correction Function
 
 		const float32_t t = spikeCancel(sig[sig_outcount].time); // Get time of the new state
 		// Squash spikes/transients if enabled
@@ -580,12 +578,12 @@ bool DataRecognitionFunc(bool* new_char_p)
 			// Is it a Mark (keydown)?
 			if (is_markstate == true)
 			{
-				processed = FALSE; // Indicate that incoming character is not processed
+				processed = false; // Indicate that incoming character is not processed
 
 				// Determine if Dot or Dash (e.q. 4.10)
 				if ((cw_times.pulse_avg - t) >= 0)                         // It is a Dot
 				{
-					b.dash = FALSE;                           // Clear Dash flag
+					b.dash = false;                           // Clear Dash flag
 					data[data_len].state = 0;                   // Store as Dot
 					cw_times.dot_avg = cw_times.dot_avg + (t - cw_times.dot_avg) / 8.0; // Update cw_times.dot_avg (e.q. 4.6)
 				}
@@ -593,7 +591,7 @@ bool DataRecognitionFunc(bool* new_char_p)
 				// Is it a Dash?
 				else
 				{
-					b.dash = TRUE;                              // Set Dash flag
+					b.dash = true;                              // Set Dash flag
 					data[data_len].state = 1;                   // Store as Dash
 					if (t <= 5 * cw_times.dash_avg)        // Store time if not stuck key
 					{
@@ -611,7 +609,7 @@ bool DataRecognitionFunc(bool* new_char_p)
 			else
 			{
 				bool full_char_detected = true;
-				if (b.dash == TRUE)                // Last character was a dash
+				if (b.dash == true)                // Last character was a dash
 				{
 				    b.dash = false;
 				    float32_t eq4_12 = t
@@ -632,7 +630,7 @@ bool DataRecognitionFunc(bool* new_char_p)
 				        if (eq4_14 >= 0)                   // It is a Word space
 				        {
 				            cw_times.w_space = t;
-				            b.wspace = TRUE;
+				            b.wspace = true;
 				        }
 				    }
 				}
@@ -652,14 +650,14 @@ bool DataRecognitionFunc(bool* new_char_p)
 						if ((t - cw_times.cwspace_avg) >= 0)        // It is a Word space
 						{
 							cw_times.w_space = t;
-							b.wspace = TRUE;
+							b.wspace = true;
 						}
 					}
 				}
 				// Process the character
-				if (full_char_detected == true && processed == FALSE)
+				if (full_char_detected == true && processed == false)
 				{
-					*new_char_p = TRUE; // Indicate there is a new char to be processed
+					*new_char_p = true; // Indicate there is a new char to be processed
 				}
 			}
 		}
@@ -671,10 +669,10 @@ bool DataRecognitionFunc(bool* new_char_p)
 		// If current state is Key up and Long key up then  Char finalized
 		if (sig[sig_incount].state == false && processed == false)
 		{
-			processed = TRUE;
-			b.wspace = TRUE;
-			b.timeout = TRUE;
-			*new_char_p = TRUE;                         // Process the character
+			processed = true;
+			b.wspace = true;
+			b.timeout = true;
+			*new_char_p = true;                         // Process the character
 		}
 	}
 
@@ -688,7 +686,7 @@ bool DataRecognitionFunc(bool* new_char_p)
 		last_outcount = cur_outcount;
 		cur_outcount = sig_outcount;
 	}
-	return not_done;  // FALSE if all data processed or new character, else TRUE
+	return not_done;  // false if all data processed or new character, else true
 }
 
 //------------------------------------------------------------------
@@ -827,9 +825,9 @@ void PrintCharFunc(uint8_t c)
 //------------------------------------------------------------------
 void WordSpaceFunc(uint8_t c)
 {
-	if (b.wspace == TRUE)                             // Print word space
+	if (b.wspace == true)                             // Print word space
 	{
-		b.wspace = FALSE;
+		b.wspace = false;
 
 		// Word space correction routine - longer space required if certain characters
 		if ((c == 'I') || (c == 'J') || (c == 'Q') || (c == 'U') || (c == 'V')
@@ -860,13 +858,13 @@ void WordSpaceFunc(uint8_t c)
 // 3) If not 2) then separate two run-on characters caused by
 // a short character space - Extend the char space and reprocess
 //
-// If not able to resolve anything, then return FALSE
-// Return TRUE if something was resolved.
+// If not able to resolve anything, then return false
+// Return true if something was resolved.
 //
 //------------------------------------------------------------------
 bool ErrorCorrectionFunc(void)
 {
-	bool result = FALSE; // Result of Error resolution - FALSE if nothing resolved
+	bool result = false; // Result of Error resolution - false if nothing resolved
 
 	if (data_len >= CW_DATA_BUFSIZE - 2)     // Too long char received
 	{
@@ -876,7 +874,7 @@ bool ErrorCorrectionFunc(void)
 
 	else
 	{
-		b.wspace = FALSE;
+		b.wspace = false;
 		//-----------------------------------------------------
 		// Find the location of pulse with shortest duration
 		// and the location of symbol space of longest duration
@@ -970,7 +968,7 @@ bool ErrorCorrectionFunc(void)
 			if (decoded[0] != 0xff)
 			{
 				PrintCharFunc(decoded[0]);
-				result = TRUE;                // Error correction had success.
+				result = true;                // Error correction had success.
 			}
 			else
 			{
@@ -1015,7 +1013,7 @@ bool ErrorCorrectionFunc(void)
 			{
 				PrintCharFunc(decoded[0]);
 				PrintCharFunc(decoded[1]);
-				result = TRUE;                // Error correction had success.
+				result = true;                // Error correction had success.
 			}
 			else
 			{
@@ -1041,14 +1039,14 @@ void CW_Decode(void)
 {
 	//-----------------------------------
 	// Initialize pulse_avg, dot_avg, cw_times.dash_avg, cw_times.symspace_avg, cwspace_avg
-	if (b.initialized == FALSE)
+	if (b.initialized == false)
 	{
 		InitializationFunc();
 	}
 
 	//-----------------------------------
 	// Process the works once initialized - or if timeout
-	if ((b.initialized == TRUE) || (cur_time >= ONE_SECOND * CW_TIMEOUT)) //
+	if ((b.initialized == true) || (cur_time >= ONE_SECOND * CW_TIMEOUT)) //
 	{
 		bool received;                       // True on a symbol received
 		DataRecognitionFunc(&received);      // True if new character received
@@ -1068,9 +1066,9 @@ void CW_Decode(void)
 			else if (decoded == 0xff)                // Attempt Error Correction
 			{
 				// If Error Correction function cannot resolve, then reinitialize speed
-				if (ErrorCorrectionFunc() == FALSE)
+				if (ErrorCorrectionFunc() == false)
 				{
-					b.initialized = FALSE;
+					b.initialized = false;
 				}
 			}
 		}

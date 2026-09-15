@@ -42,6 +42,42 @@ extern int test_fail_count;
         } \
     } while (0)
 
+#define TEST_ASSERT_EQUAL_STRING(expected, actual) \
+    do { \
+        if (strcmp((expected), (actual)) != 0) { \
+            test_fail_count++; \
+            printf("  FAIL: %s:%d: expected '%s', got '%s'\n", __FILE__, __LINE__, (expected), (actual)); \
+            return; \
+        } \
+    } while (0)
+
+#define TEST_ASSERT_NULL(ptr) \
+    do { \
+        if ((ptr) != NULL) { \
+            test_fail_count++; \
+            printf("  FAIL: %s:%d: expected NULL, got %p\n", __FILE__, __LINE__, (void*)(ptr)); \
+            return; \
+        } \
+    } while (0)
+
+#define TEST_ASSERT_EQUAL_PTR(expected, actual) \
+    do { \
+        if ((void*)(expected) != (void*)(actual)) { \
+            test_fail_count++; \
+            printf("  FAIL: %s:%d: expected %p, got %p\n", __FILE__, __LINE__, (void*)(expected), (void*)(actual)); \
+            return; \
+        } \
+    } while (0)
+
+#define TEST_ASSERT_NOT_EQUAL(expected, actual) \
+    do { \
+        if ((expected) == (actual)) { \
+            test_fail_count++; \
+            printf("  FAIL: %s:%d: expected not equal, but both are %d\n", __FILE__, __LINE__, (int)(expected)); \
+            return; \
+        } \
+    } while (0)
+
 #define TEST_ASSERT_FLOAT_EQ(expected, actual, epsilon) \
     do { \
         float32_t diff = fabsf((float32_t)(expected) - (float32_t)(actual)); \

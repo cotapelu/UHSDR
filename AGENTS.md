@@ -438,17 +438,435 @@ HAL backends (hal/src/*/):
 
 ---
 
-## 14. Non-Negotiable Rules
+## 15. SDR Extension Analysis: 700 MHz / 2.3 GHz Video + Voice over COFDM/Mesh
 
-1. No `malloc`/`free` in ISR, audio, or RF paths
-2. Watchdog always running in production builds
-3. Fault handlers must have register dump (all MCUs)
-4. All blocking calls have bounded timeout
-5. ISR is non-blocking and deterministic
-6. Vendor headers NEVER in public API of `drivers/`, `hardware/`, `misc/`, `src/`
-7. Static allocation is default — heap = 0
-8. All string operations are bounded
-9. DMA buffers are cache-line aligned + maintained (F7/H7)
-10. Board-specific code ONLY in `board_configs/`
-11. Product code is MCU-agnostic — use `hal_*` APIs
-12. All new code compiles on F4, F7, and H7 without modification
+**Version:** 0.1  
+**Date:** 2026-09-10  
+**Status:** Analysis — Design Pending
+
+---
+
+### 15.1 Executive Summary
+
+Tài liệu này bổ sung phân tích khả năng mở rộng UHSDR từ **HF/UHF SSB/FM transceiver** hiện tại thành hệ thống **SDR một kênh video + voice** hoạt động tại **700 MHz** và **2.3 GHz**, sử dụng **COFDM** làm lớp vật lý và **mesh** làm lớp mac/routing. Phân tích dựa trên toàn bộ codebase hiện tại và các ràng buộc phần cứng/phần mềm đã biết.
+
+**Kết luật tóm tắt:**
+- **Voice:** khả thi ở cả 700 MHz và 2.3 GHz.
+- **Video:** khả thi nhưng chặt; cần H7 là minimum hợp lý.
+- **COFDM:** khả thi nhưng cần viết lại modem layer gần như từ đầu.
+- **Mesh:** khả thi ở layer 2, không cần IP.
+- **Không cần IP stack:** đúng, có thể làm custom PHY/MAC hoàn toàn độc lập.
+
+---
+
+### 15.2 Current Capability Assessment
+
+#### 15.2.1 UHSDR hiện tại là gì
+
+UHSDR hiện là firmware **bare-metal cooperative** cho STM32F4/F7/H7:
+- Audio DMA ISR 1.5 kHz → PendSV → main loop.
+- DSP audio 48 kHz: SSB/AM/FM/CW/RTTY/PSK/FreeDV.
+- LO: Si570 hoặc Si5351.
+- Codec audio: WM8731/WM8776.
+- UI: LCD + encoder + keypad + menu + spectrum/waterfall.
+- USB CDC, USB Audio, USB Host DFU.
+
+UHSDR đã có board **LAPWING** (`RF_BRD_LAPWING`) chạy băng **1240–1300 MHz**, chứng minh codebase không bị khóa ở HF.
+
+#### 15.2.2 Frequency coverage limits
+
+| Component | Current range | Gap to target |
+|---|---|---|
+| Si5351A | ~2.3–290 MHz LO | 700 MHz cần converter; 2.3 GHz cần ngoại PLL |
+| Si570 CMOS | 10–160 MHz LO | 700 MHz cần up-conversion |
+| Si570 C-grade | 10–280 MHz LO | 2.3 GHz cần ngoại PLL |
+| mcHF RF | HF/6m/2m/70cm | không có 700 MHz / 2.3 GHz RF frontend |
+| OVI40 RF | HF/2m/70cm | không có 700 MHz / 2.3 GHz RF frontend |
+| Lapwing RF | 1240–1300 MHz | đã có 1.2–1.3 GHz, nhưng không có 700 MHz / 2.3 GHz |
+
+---
+
+### 15.3 Service Layer: Voice + Video
+
+#### 15.3.1 Voice
+
+- **Khả thi:** cao.
+- Codec đã có sẵn: **Codec2** (1300/3200 bit/s), **FreeDV**.
+- Có thể thay thế bằng **AMBE+** nếu cần, nhưng cần codec phần cứng hoặc port software.
+- Voice có thể được đóng gói trực tiếp vào khung custom mà không cần IP.
+
+#### 15.3.2 Video
+
+- **Khả thi:** có, nhưng chặt.
+- Codebase hiện **không có video pipeline**.
+- Cần thêm:
+  - **Video source:** camera MIPI/CSI, USB webcam, hoặc overlay.
+  - **Video encoder:** H.264 baseline hoặc MJPEG.
+  - **Video decoder** nếu cần receive.
+- H7 có **HAL_JPEG** cho JPEG image, nhưng không phải video stream.
+
+#### 15.3.3 Codec recommendation
+
+| Use case | Codec | Bitrate | Notes |
+|---|---|---|---|
+| Voice only | Codec2 1300 | 1300 bit/s | Đã có sẵn |
+| Voice quality | Codec2 3200 | 3200 bit/s | Đã có sẵn |
+| Digital voice narrow | AMBE+ | 3600 bit/s | Cần hardware/port |
+| Video low res | MJPEG | 1–4 Mbps | Dễ implement |
+| Video standard | H.264 baseline | 512 kbps–2 Mbps | Cần encoder |
+| Video high quality | H.265 | 256 kbps–1 Mbps | Cần encoder, phức tạp |
+
+---
+
+### 15.4 Transmission Layer: COFDM
+
+#### 15.4.1 COFDM không cần IP
+
+**Có.** COFDM là **physical layer** hoàn toàn độc lập với IP.
+
+- COFDM chỉ cần: **IFFT/FFT + pilot + cyclic prefix + equalizer**.
+- Có mang trực tiếp **voice codec stream** hoặc **video elementary stream**.
+- Có thể dùng **custom frame format** thay vì IP.
+
+#### 15.4.2 Simplified COFDM design
+
+Để triển khai trên STM32, nên bắt đầu với **COFDM đơn giản**:
+
+| Parameter | Recommendation |
+|---|---|
+| FFT size | 32–64 subcarriers |
+| Modulation | QPSK / 16QAM |
+| Pilot pattern | Scattered + continuous |
+| CP length | 1/4–1/8 of FFT |
+| Equalizer | 1-tap per subcarrier |
+| Synchronization | Schmidl-Cox |
+| PAPR reduction | Clipping + tone reservation |
+| Channel coding | LDPC hoặc Turbo code (quan trọng cho video) |
+
+#### 15.4.3 COFDM vs Single-carrier
+
+| Feature | COFDM | Single-carrier QPSK/16QAM + FHSS |
+|---|------|
+| Độ phức tạp | Cao | Trung bình–Thấp |
+| Chống fading | Rất tốt | Tốt với equalizer |
+| PAPR | Cao | Thấp |
+| Synchronization | Phức tạp | Đơn giản |
+| Mesh nhiều hop | Khó | Dễ |
+| Point-to-point | Rất tốt | Tốt |
+
+**Khuyến nghị:**
+- Nếu cần **mesh nhiều hop** → **Single-carrier + DSSS/FHSS**.
+- Nếu cần **chống fading/multipath** nặng → **COFDM**.
+
+---
+
+### 15.5 Mesh Layer (No IP Required)
+
+#### 15.5.1 Mesh không cần IP
+
+**Có.** Mesh hoạt động ở **layer 2 (MAC)**, không cần IP stack.
+
+- Định tuyến theo **Node ID**.
+- Frame format: `[Header][Payload][CRC]`.
+- Routing protocol: **AODV-like** hoặc **BATMAN-like**.
+
+#### 15.5.2 Custom frame format
+
+```
+┌──────────┬──────────┬──────────┬──────────────┬────────┐
+│  START1  │  START2  │  LENGTH  │   PAYLOAD    │  CRC8  │
+│  0xAA    │  0xBB    │  1 byte  │  0-252 bytes │ 1 byte │
+└──────────┴──────────┴──────────┴──────────────┴────────┘
+
+Payload:
+  [NodeID_SRC: 1 byte]
+  [NodeID_DST: 1 byte]
+  [Next_Hop: 1 byte]
+  [Seq: 1 byte]
+  [Type: 1 byte]  // VOICE / VIDEO / CTRL
+  [Priority: 1 byte]
+  [Payload data...]
+```
+
+#### 15.5.3 MAC features needed
+
+| Feature | Description |
+|---|---|
+| Node addressing | 1-byte node ID, 0 = broadcast |
+| Route discovery | AODV-like RREQ/RREP |
+| Forwarding | Store-and-forward, next-hop lookup |
+| Loop prevention | TTL + hop count + sequence number |
+| Priority scheduling | Voice > Video > Data |
+| ARQ | Simple ACK/NACK per frame |
+| Channel access | CSMA/CA hoặc scheduled TDMA |
+
+---
+
+### 15.6 Hardware Requirements
+
+#### 15.6.1 RF Frontend
+
+| Band | LO/VCO | Mixer | PA | LNA | Filter |
+|---|---|---|---|---|---|
+| 700 MHz | ADF4351/ADF4360, LMX2582 | ADL5801, SIM7600 | 500 mW–1 W | 2–3 dB NF | SAW/ceramic |
+| 2.3 GHz | LMX2582, HMC1031 | HMC219, ADL5375 | 100–500 mW | 2–3 dB NF | Microstrip/SAW |
+
+#### 15.6.2 ADC/DAC requirements
+
+| Band | Sample rate | Resolution | Notes |
+|---|---|---|---|
+| 700 MHz | 16–20 MSPS | 12–14 bit | Down-convert trước khi ADC |
+| 2.3 GHz | 50–100 MSPS | 12–14 bit | Cần mixer + ADC ngoại |
+
+#### 15.6.3 MCU selection
+
+| MCU | Voice | Simple video | COFDM | Mesh | Notes |
+|---|---|---|---|---|---|
+| STM32F4 | ✅ | ❌ | ⚠️ Cực chật | ⚠️ 3 nodes | mcHF hiện tại |
+| STM32F7 | ✅ | ⚠️ MJPEG | ✅ Cơ bản | ✅ 3–5 nodes | OVI40 F7 |
+| STM32H7 | ✅ | ✅ H.264 baseline | ✅ Khả thi | ✅ 5–10 nodes | OVI40 H7 |
+
+**Kết luận:** STM32H7 là **minimum hợp lý** cho video + COFDM + mesh. STM32F4 chỉ đủ cho voice single-carrier.
+
+---
+
+### 15.7 Software Requirements
+
+#### 15.7.1 New oscillator backends
+
+```
+osc_si570.c          ← Đã có, extend cho 700 MHz
+osc_si5351a.c        ← Đã có, extend
+osc_adf4351.c        ← NEW: PLL 35–4400 MHz
+osc_lmx2582.c        ← NEW: PLL 20–8000 MHz
+```
+
+#### 15.7.2 New RF board config
+
+```
+UHSDR_RF_700m_config.h    ← NEW
+UHSDR_RF_2300m_config.h   ← NEW
+
+- Band filter table (700 MHz / 2.3 GHz)
+- Coupling table
+- Power level table
+- PA bias/max power limits
+```
+
+#### 15.7.3 Modem layer (PHY)
+
+```
+drivers/
+├── modem/
+│   ├── modem.h                 ← Modem abstraction
+│   ├── modem_qpsk.c            ← QPSK/16QAM modulator/demodulator
+│   ├── modem_sc_fec.c          ← Single-carrier FEC
+│   ├── modem_cofdm.c           ← COFDM PHY
+│   │   ├── ofdm_fft.c          ← IFFT/FFT wrapper
+│   │   ├── ofdm_pilot.c        ← Pilot insertion/removal
+│   │   ├── ofdm_equalizer.c    ← 1-tap per subcarrier
+│   │   ├── ofdm_sync.c         ← Schmidl-Cox
+│   │   └── ofdm_papr.c         ← Clipping + tone reservation
+│   └── modem_fec.c             ← LDPC / Turbo code
+```
+
+#### 15.7.4 Mesh layer (MAC + routing)
+
+```
+drivers/
+├── mesh/
+│   ├── mesh.h                  ← Mesh API
+│   ├── mesh_mac.c              ← Frame format, addressing
+│   ├── mesh_routing.c          ← AODV-like route discovery
+│   ├── mesh_forward.c          ← Forwarding, loop prevention
+│   ├── mesh_arq.c              ← ARQ, ACK/NACK
+│   └── mesh_scheduler.c        ← Priority: Voice > Video > Data
+```
+
+#### 15.7.5 Video pipeline
+
+```
+drivers/
+├── video/
+│   ├── video.h                 ← Video API
+│   ├── video_capture.c         ← Camera input (MIPI/USB)
+│   ├── video_encode.c          ← H.264 baseline / MJPEG
+│   ├── video_decode.c          ← Receive side
+│   └── video_mux.c             ← Mux with voice
+```
+
+#### 15.7.6 Audio enhancements
+
+```
+drivers/audio/
+├── audio_voicemode.c          ← Voice-specific processing
+├── audio_codec2.c              ← Codec2 encode/decode (đã có)
+├── audio_ambe.c                ← AMBE+ (nếu cần)
+```
+
+---
+
+### 15.8 Layer Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    APPLICATION LAYER                        │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────────┐   │
+│  │    Voice     │ │    Video     │ │      Data        │   │
+│  │  Codec2/     │ │  H.264/      │ │  Custom frames   │   │
+│  │  AMBE+       │ │  MJPEG       │ │                  │   │
+│  └──────┬───────┘ └──────┬───────┘ └───────┬──────────┘   │
+│         │                │                │               │
+│  ┌──────▼────────────────▼────────────────▼──────┐        │
+│  │              PACKETIZER / MUXER               │        │
+│  │   [NodeID][Seq][Type][Priority][Payload][CRC] │        │
+│  └──────────────────────┬────────────────────────┘        │
+│                         │                                 │
+│  ┌──────────────────────▼────────────────────────┐        │
+│  │           MESH ROUTING LAYER                  │        │
+│  │   [Route Table][Next Hop][TTL][Hop Count]     │        │
+│  └──────────────────────┬────────────────────────┘        │
+│                         │                                 │
+│  ┌──────────────────────▼────────────────────────┐        │
+│  │              MODEM LAYER                      │        │
+│  │   Single-carrier QPSK/16QAM DSSS/FHSS        │        │
+│  │   hoặc Simplified COFDM                       │        │
+│  │   [Scramble][FEC][Mod][Shaping]               │        │
+│  └──────────────────────┬────────────────────────┘        │
+│                         │                                 │
+│  ┌──────────────────────▼────────────────────────┐        │
+│  │              BASEBAND / PHY                   │        │
+│  │   [Upsample][Interpolate][DAC][RF Frontend]   │        │
+│  └───────────────────────────────────────────────┘        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 15.9 Implementation Roadmap
+
+#### Phase 1: Foundation (STM32F7 minimum)
+1. New oscillator backend cho ADF4351/LMX2582 (700 MHz / 2.3 GHz).
+2. New RF board config (`UHSDR_RF_700m_config.h`, `UHSDR_RF_2300m_config.h`).
+3. Voice codec integration: Codec2 encode/decode vào pipeline.
+4. Simple single-carrier QPSK modem.
+5. Custom packetizer: `[NodeID][Seq][Type][Payload][CRC]`.
+
+#### Phase 2: Mesh Layer
+6. MAC layer: addressing, frame format.
+7. AODV-like route discovery.
+8. Forwarding + loop prevention.
+9. Priority scheduling: Voice > Video > Data.
+10. ARQ (ACK/NACK).
+
+#### Phase 3: COFDM PHY
+11. IFFT/FFT wrapper (CMSIS-DSP đã có sẵn).
+12. Pilot insertion + channel estimation.
+13. Equalizer 1-tap per subcarrier.
+14. Synchronization (Schmidl-Cox).
+15. PAPR reduction.
+16. LDPC/Turbo code.
+
+#### Phase 4: Video
+17. Video capture (camera interface).
+18. MJPEG encoder (đơn giản nhất).
+19. H.264 baseline encoder (nếu cần chất lượng cao).
+20. Video mux with voice.
+
+---
+
+### 15.10 Technology Comparison
+
+| Technology | Độ phức tạp | Chống fading | PAPR | Mesh fit | Best for |
+|---|---|---|---|---|---|
+| **COFDM** | Cao | Rất tốt | Cao | Trung bình | Broadcast, mobile, multipath nặng |
+| **Single-carrier + FHSS** | Thấp | Tốt | Thấp | Rất tốt | Mesh nhiều hop, anti-jam |
+| **DSSS + QPSK** | Trung bình | Rất tốt | Thấp | Rất tốt | Tactical mesh, low SNR |
+| **GMSK** | Thấp | Trung bình | Thấp | Tốt | Voice, low-rate data |
+
+**Khuyến nghị cho use-case video + voice + mesh:**
+- **Phase 1–2:** Single-carrier QPSK/16QAM + DSSS/FHSS mesh (đi nhanh, robust).
+- **Phase 3+:** Simplified COFDM nếu multipath là vấn đề lớn.
+
+---
+
+### 15.11 Feasibility Summary
+
+| Question | Answer | Notes |
+|---|------|
+| COFDM không cần IP? | ✅ Có | Là PHY layer, independent |
+| Mesh không cần IP? | ✅ Có | Là MAC/layer 2, independent |
+| Voice @ 700 MHz? | ✅ Khả thi | Codec2 đã có |
+| Voice @ 2.3 GHz? | ✅ Khả thi | Cần LO/frontend mới |
+| Video @ 700 MHz? | ⚠️ Khả thi | Cần H7 minimum |
+| Video @ 2.3 GHz? | ⚠️ Khả thi | Cần H7 + frontend mới |
+| COFDM trên STM32F4? | ❌ Không | Quá chật |
+| COFDM trên STM32F7? | ⚠️ Cơ bản | Voice + simple video |
+| COFDM trên STM32H7? | ✅ Khả thi | Voice + basic video + mesh |
+| Single-carrier mesh trên F4? | ⚠️ Voice only | Không đủ cho video |
+| Single-carrier mesh trên F7? | ✅ Khả thi | Voice + small mesh |
+| Single-carrier mesh trên H7? | ✅ Khả thi | Voice + video + mesh |
+| Nên dùng UHSDR trực tiếp? | ⚠️ Cần nhiều viết lại | Dùng làm nền hoặc module |
+
+---
+
+### 15.12 Recommendations
+
+1. **Nếu cần đi nhanh:**
+   - Bắt đầu với **Voice + Single-carrier QPSK/16QAM + FHSS mesh** trên STM32F7/H7.
+   - COFDM để phase sau.
+
+2. **Nếu cần chống fading:**
+   - Simplified COFDM (32–64 subcarriers) trên STM32H7.
+   - Single-carrier cho mesh, COFDM cho point-to-point.
+
+3. **Nếu cần production-grade:**
+   - STM32H7 là minimum.
+   - Cân nhắc **FPGA/SoC** (Zynq, RFSoC) nếu cần video+COFDM+mesh thực sự.
+   - Hoặc dùng **LimeSDR / USRP / bladeRF** + GNU Radio + custom stack.
+
+4. **Architecture reuse:**
+   - Có thể tái sử dụng **HAL shim layer**, **cooperative execution model**, **watchdog/fault handler**, **config storage**, **UI framework** của UHSDR.
+   - Cần viết lại: **modem PHY**, **mesh MAC**, **video pipeline**, **RF frontend config**.
+
+---
+
+### 15.13 Risk Analysis
+
+| Risk | Severity | Mitigation |
+|---|---|---|
+| STM32 compute insufficient | Cao | Dùng H7, hoặc FPGA/SoC |
+| RF frontend complexity | Cao | Thuê design nếu không có kinh nghiệm RF |
+| COFDM synchronization | Trung bình | Bắt đầu single-carrier, thêm COFDM sau |
+| Video bandwidth | Trung bình | Giới hạn resolution/fps, dùng MJPEG |
+| Regulatory (700 MHz / 2.3 GHz) | Cao | Kiểm tra license, power limit, band plan |
+| Thermal (PA 700 MHz / 2.3 GHz) | Trung bình | Heat sink, power control |
+
+---
+
+### 15.14 References
+
+- `docs/AGENTS.md` — Platform architecture v6.0
+- `mchf-eclipse/drivers/ui/oscillator/osc_si570.c` — Si570 oscillator backend
+- `mchf-eclipse/drivers/ui/oscillator/osc_si5351a.c` — Si5351 oscillator backend
+- `mchf-eclipse/drivers/audio/audio_driver.c` — Audio pipeline
+- `mchf-eclipse/drivers/audio/codec/codec.c` — Audio codec driver
+- `mchf-eclipse/drivers/ui/radio_management.c` — Band/power/frequency management
+- `mchf-eclipse/hardware/board_configs/UHSDR_UI_mchf_config.h` — mcHF board config
+- `mchf-eclipse/hardware/board_configs/UHSDR_UI_ovi40_config.h` — OVI40 board config
+- `mchf-eclipse/basesw/mcHF/Drivers/CMSIS/DSP_Lib/Source/` — CMSIS-DSP (FFT/IFFT available)
+
+---
+
+## 16. References
+
+- `docs/TODO.md` — Task tracking for Phase 43+
+- `mchf-eclipse/drivers/cat/cat_driver.c` — Existing CAT protocol implementation
+- `mchf-eclipse/hardware/uhsdr_board.c` — Board init code
+- `mchf-eclipse/drivers/ui/ui_driver.c` — UI input handling
+- `mchf-eclipse/drivers/remote/remote.c` — Remote control module implementation
+- `mchf-eclipse/drivers/remote/remote_protocol.c` — Packet framing & CRC8-CCITT
+
+---
+
+*This document is the single source of truth for architecture decisions. All implementation must align with this design.*

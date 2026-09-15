@@ -55,6 +55,8 @@
 #include "ui_driver_touch.h"
 
 #include "ui_configuration.h"
+
+#include "remote.h"
 #include "config_storage.h"
 
 #include "cw_gen.h"
@@ -2582,6 +2584,12 @@ void UiDriver_WaitForButtonPressed(uint32_t button_num)
 
 void UiDriver_KeyboardProcessOldClicks()
 {
+    /* Skip local button processing when main unit is in remote active mode */
+    if (Remote_GetMode() == MODE_MAIN && Remote_GetMainState() == MAIN_STATE_REMOTE_ACTIVE)
+    {
+        return;
+    }
+
     static uchar press_hold_release_delay = 0;
 
     Keypad_Scan(); // update all key states
@@ -5959,6 +5967,16 @@ static void UiDriver_HandleKeyboard()
 		ks.button_processed = 0;
 		ks.debounce_time	= 0;
 	}
+}
+
+void UiDriver_InjectButton(uint8_t button_id)
+{
+    ks.button_id = button_id;
+    ks.button_pressed = true;
+    ks.button_processed = 1;
+    ks.button_just_pressed = 1;
+    ks.press_hold = 0;
+    UiDriver_HandleKeyboard();
 }
 
 

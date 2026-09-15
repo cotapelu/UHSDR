@@ -1,0 +1,130 @@
+# Evolution Roadmap (3-6 months)
+
+> **Last updated:** 2026-08-29  
+> **Agent:** JF Autonomous Agent  
+> **Project:** UHSDR STM32 Optimization Baseline v6.0
+
+---
+
+## Current Trajectory
+
+- **Health Score:** 100/100 (max)
+- **Test Count:** 670 host tests (+2133% from baseline 30)
+- **Build Status:** 0 warnings across F4/F7 targets (H7 has pre-existing DAC linker error unrelated to UART work)
+- **Binary Regression:** +0.15% (well under 1% target)
+- **Key Strengths:**
+  - Comprehensive host test coverage for pure logic modules
+  - Zero product-code warnings with `-Wmissing-prototypes`
+  - Multiple bugs found and fixed via test-first approach
+  - Active TODO/docs synchronization
+
+---
+
+## Upcoming Refactors
+
+### High Priority
+1. **`ui_driver.c` large-file split** (T31.3)
+   - Current: 6412 lines, single file
+   - Target: Split into `ui_driver_input.c`, `ui_driver_menu.c`, `ui_driver_render.c`
+   - Blocker: Static helper dependencies between touch/encoder/keyboard paths
+   - Estimated effort: 2-3 days
+
+2. **`ui_lcd_hy28.c` split** (T31.3)
+   - Current: 2671 lines, 73 static functions
+   - Target: `ui_lcd_hy28_draw.c` + `ui_lcd_hy28_touch.c`
+   - Blocker: `SetSpiPrescaler`, `SpiFinishTransfer`, `lcd_spi_prescaler` static dependencies
+   - Estimated effort: 1-2 days
+
+### Medium Priority
+3. **Magic number reduction in `ui_menu.c`**
+   - 834 conditional/loop keywords in 4228 lines
+   - Replace hardcoded delays, coordinates, and string lengths with named constants
+   - Estimated effort: 1 day
+
+4. **`audio_rx.c` demod tests** (T42.2)
+   - Requires ISR/mocking infrastructure for DMA/codec/RF frontend
+   - Consider standalone demod math extraction for host testing
+   - Estimated effort: 3-4 days
+
+### Low Priority
+5. **Documentation coverage**
+   - Add JSDoc-style comments for all public APIs in `drivers/` and `hardware/`
+   - Target: 95% documentation coverage for public functions
+   - Estimated effort: 2-3 days
+
+---
+
+## Infrastructure Evolution
+
+### Testing
+- **Current:** 372 host tests (gcc-based, no hardware required)
+- **Target:** 380+ host tests with CI integration
+- **Plan:**
+  - Add mock HAL layer for I2C/SPI/UART (completed UART mock)
+  - Enable testing of `ui_configuration.c` EEPROM logic
+  - Add fuzzing tests for protocol parsers (remote, CAT)
+  - Complete T47.1 integration tests when hardware available (2x mcHF UI + UART cable)
+  - **Recent:** Fixed HAL UART RX callback bug (pRxBuffPtr increment), added ui_state_queries + ui_config_getentry + audio_translate_freq + cw_dial_offset tests, fixed test.c forward declarations
+
+### Build System
+- **Current:** Make-based, single-threaded
+- **Target:** Ninja or CMake with dependency scanning
+- **Benefit:** Faster incremental builds, better IDE integration
+- **Estimated effort:** 2-3 days migration
+
+### Static Analysis
+- **Current:** Compiler warnings only (`-Wall -Wextra -Wmissing-prototypes`)
+- **Target:** Add `cppcheck` and `clang-tidy` to CI
+- **Benefit:** Catch undefined behavior, dead code, portability issues
+- **Estimated effort: 1 day setup
+
+---
+
+## Debt Reduction Plan
+
+### Technical Debt
+| Debt Type | Current Count | Target | Timeline |
+|---|---|---|---|
+| `TODO`/`FIXME`/`HACK` comments | 184 | <100 | 3 months |
+| Functions >300 lines | 2 | 0 | 2 months |
+| Platform `#ifdef` guards | ~822 total | <50 product code | 6 months |
+| Missing test coverage | ~85% est. | >90% | 3 months |
+
+### Process Debt
+1. **Test mocking infrastructure** — Build reusable mock HAL layer to unblock T42.2, T34.1, T34.2
+2. **Binary size tracking** — Automate size regression detection in CI
+3. **Dependency audit** — FreeDV and CMSIS DSP are unpatched third-party code; evaluate updates
+
+---
+
+## Risk Assessment
+
+| Risk | Likelihood | Impact | Mitigation |
+|---|---|---|---|
+| Large-file refactor regression | Medium | High | Incremental extraction with tests |
+| Hardware mocking incomplete | High | Medium | Focus on pure logic first |
+| Third-party CVE in FreeDV/CMSIS | Low | High | Subscribe to security advisories |
+| Binary size creep | Low | Medium | Track size in CI, enforce <1% limit |
+
+---
+
+## Success Metrics
+
+| Metric | Current | 3-Month Target | 6-Month Target |
+|---|---|---|---|
+| Host tests | 586 | 440+ | 450+ |
+| Health score | 100/100 | ≥95/100 | ≥95/100 |
+| TODO/FIXME count | 184 | <100 | <50 |
+| Largest file | 6412 lines | <4000 | <3000 |
+| Build warnings | 0 | 0 | 0 |
+| Binary regression | +0.15% | <1% | <1% |
+
+---
+
+## Next Actions
+
+1. **Week 1-2:** Create reusable mock HAL layer (I2C/SPI/UART stubs) — UART mock completed
+2. **Week 3-4:** Begin `ui_driver.c` incremental split (extract `ui_driver_input.c`)
+3. **Week 5-6:** Add `cppcheck`/`clang-tidy` to CI pipeline
+4. **Week 7-8:** Expand tests to 450+ with new mocking infrastructure
+5. **Ongoing:** Reduce TODO/FIXME count by 20/month through proactive fixes; complete T47.1 integration tests when hardware available

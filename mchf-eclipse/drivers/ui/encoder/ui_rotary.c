@@ -279,3 +279,22 @@ int UiDriverEncoderRead(const uint32_t encId)
     return pot_diff;
 }
   */
+
+void UiDriverEncoderSetDelta(uint32_t encId, int8_t delta)
+{
+    if (encId < ENC_MAX)
+    {
+        uint32_t cnt = __HAL_TIM_GET_COUNTER(encoderIO[encId].htim);
+        __HAL_TIM_SET_COUNTER(encoderIO[encId].htim, cnt + delta);
+        encSel[encId].value_old = cnt;
+        uint8_t abs_delta = (delta < 0) ? (uint8_t)(-delta) : (uint8_t)delta;
+        if (abs_delta < USE_DETENTED_VALUE)
+        {
+            encSel[encId].de_detent = USE_DETENTED_VALUE - abs_delta;
+        }
+        else
+        {
+            encSel[encId].de_detent = 0;
+        }
+    }
+}

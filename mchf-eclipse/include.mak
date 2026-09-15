@@ -26,4 +26,5 @@ drivers/usb/device/class/AUDIO/Inc \
 drivers/usb/device/class/CDC/Inc \
 drivers/usb/host/class/HID/Inc \
 drivers/usb/app \
+drivers/remote \
 

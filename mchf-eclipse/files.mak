@@ -164,3 +164,5 @@ drivers/audio/rb.c \
 drivers/audio/tx_processor.c \
 drivers/ui/lcd/ui_lcd_layouts.c \
 drivers/ui/ui_vkeybrd.c \
+drivers/remote/remote.c \
+drivers/remote/remote_protocol.c \

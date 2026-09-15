@@ -70,5 +70,6 @@ enum EncoderId
 };
 
 int UiDriverEncoderRead(const uint32_t encId);
+void UiDriverEncoderSetDelta(uint32_t encId, int8_t delta);
 
 #endif

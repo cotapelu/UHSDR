@@ -307,4 +307,8 @@ extern PowerMeter				pwmt;
 
 extern const ulong tune_steps[T_STEP_MAX_STEPS];
 
+// ------------------------------------------------
+// Remote control injection
+void UiDriver_InjectButton(uint8_t button_id);
+
 #endif

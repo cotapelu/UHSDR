@@ -1,0 +1,118 @@
+#include <stdint.h>
+#include "test.h"
+
+/* Replicated from drivers/audio/psk.c for host-based pure-logic testing */
+static const uint16_t test_psk_varicode[] = {
+    0b1010101011, 0b1011011011, 0b1011101101, 0b1101110111, 0b1011101011, 0b1101011111, 0b1011101111, 0b1011111101, 
+    0b1011111111, 0b11101111, 0b11101, 0b1101101111, 0b1011011101, 0b11111, 0b1101110101, 0b1110101011, 
+    0b1011110111, 0b1011110101, 0b1110101101, 0b1110101111, 0b1101011011, 0b1101101011, 0b1101101101, 0b1101010111, 
+    0b1101111011, 0b1101111101, 0b1110110111, 0b1101010101, 0b1101011101, 0b1110111011, 0b1011111011, 0b1101111111, 
+    0b1, 0b111111111, 0b101011111, 0b111110101, 0b111011011, 0b1011010101, 0b1010111011, 0b101111111, 
+    0b11111011, 0b11110111, 0b101101111, 0b111011111, 0b1110101, 0b110101, 0b1010111, 0b110101111, 
+    0b10110111, 0b10111101, 0b11101101, 0b11111111, 0b101110111, 0b101011011, 0b101101011, 0b110101101, 
+    0b110101011, 0b110110111, 0b11110101, 0b110111101, 0b111101101, 0b1010101, 0b111010111, 0b1010101111, 
+    0b1010111101, 0b1111101, 0b11101011, 0b10101101, 0b10110101, 0b1110111, 0b11011011, 0b11111101, 
+    0b101010101, 0b1111111, 0b111111101, 0b101111101, 0b11010111, 0b10111011, 0b11011101, 0b10101011, 
+    0b11010101, 0b111011101, 0b10101111, 0b1101111, 0b1101101, 0b101010111, 0b110110101, 0b101011101, 
+    0b101110101, 0b101111011, 0b1010101101, 0b111110111, 0b111101111, 0b111111011, 0b1010111111, 0b101101101, 
+    0b1011011111, 0b1011, 0b1011111, 0b101111, 0b101101, 0b11, 0b111101, 0b1011011, 
+    0b101011, 0b1101, 0b111101011, 0b10111111, 0b11011, 0b111011, 0b1111, 0b111, 
+    0b111111, 0b110111111, 0b10101, 0b10111, 0b101, 0b110111, 0b1111011, 0b1101011, 
+    0b11011111, 0b1011101, 0b111010101, 0b1010110111, 0b110111011, 0b1010110101, 0b1011010111, 0b1110110101, 
+    0b1110111101, 0b1110111111, 0b1111010101, 0b1111010111, 0b1111011011, 0b1111011101, 0b1111011111, 0b1111101011, 
+    0b1111101101, 0b1111101111, 0b1111110101, 0b1111110111, 0b1111111011, 0b1111111101, 0b1111111111, 0b10101010101, 
+    0b10101010111, 0b10101011011, 0b10101011101, 0b10101011111, 0b10101101011, 0b10101101101, 0b10101101111, 0b10101110101, 
+    0b10101110111, 0b10101111011, 0b10101111101, 0b10101111111, 0b10110101011, 0b10110101101, 0b10110101111, 0b10110110101, 
+    0b10110110111, 0b10110111011, 0b10110111101, 0b10110111111, 0b10111010101, 0b10111010111, 0b10111011011, 0b10111011101, 
+    0b10111011111, 0b10111101011, 0b10111101101, 0b10111101111, 0b10111110101, 0b10111110111, 0b10111111011, 0b10111111101, 
+    0b10111111111, 0b11010101011, 0b11010101101, 0b11010101111, 0b11010110101, 0b11010110111, 0b11010111011, 0b11010111101, 
+    0b11010111111, 0b11011010101, 0b11011010111, 0b11011011011, 0b11011011101, 0b11011011111, 0b11011101011, 0b11011101101, 
+    0b11011101111, 0b11011110101, 0b11011110111, 0b11011111011, 0b11011111101, 0b11011111111, 0b11101010101, 0b11101010111, 
+    0b11101011011, 0b11101011101, 0b11101011111, 0b11101101011, 0b11101101101, 0b11101101111, 0b11101110101, 0b11101110111, 
+    0b11101111011, 0b11101111101, 0b11101111111, 0b11110101011, 0b11110101101, 0b11110101111, 0b11110110101, 0b11110110111, 
+    0b11110111011, 0b11110111101, 0b11110111111, 0b11111010101, 0b11111010111, 0b11111011011, 0b11111011101, 0b11111011111, 
+    0b11111101011, 0b11111101101, 0b11111101111, 0b11111110101, 0b11111110111, 0b11111111011, 0b11111111101, 0b11111111111, 
+    0b101010101011, 0b101010101101, 0b101010101111, 0b101010110101, 0b101010110111, 0b101010111011, 0b101010111101, 0b101010111111, 
+    0b101011010101, 0b101011010111, 0b101011011011, 0b101011011101, 0b101011011111, 0b101011101011, 0b101011101101, 0b101011101111, 
+    0b101011110101, 0b101011110111, 0b101011111011, 0b101011111101, 0b101011111111, 0b101101010101, 0b101101010111, 0b101101011011, 
+};
+
+static char decode_varicode(uint16_t code)
+{
+    char result = '*';
+    for (int i = 0; i < 256; i++) {
+        if (test_psk_varicode[i] == code) {
+            result = (char)i;
+            break;
+        }
+    }
+    return result;
+}
+
+static uint16_t find_char_reversed(uint8_t c)
+{
+    uint16_t retval = 0;
+    uint16_t code = test_psk_varicode[c];
+    while(code > 0) {
+        retval |= code & 0x1;
+        retval <<= 1;
+        code >>= 1;
+    }
+    return retval;
+}
+
+/* Tests */
+void test_psk_varicode_table_size(void) {
+    TEST_ASSERT_EQUAL(256, 256);
+}
+
+void test_psk_varicode_all_codes_decodable(void) {
+    for (int i = 0; i < 256; i++) {
+        char decoded = decode_varicode(test_psk_varicode[i]);
+        TEST_ASSERT_EQUAL(i, (int)(unsigned char)decoded);
+    }
+}
+
+void test_psk_varicode_invalid_code(void) {
+    TEST_ASSERT_EQUAL('*', decode_varicode(0xFFFF));
+    TEST_ASSERT_EQUAL('*', decode_varicode(0));
+    /* 0xABAB is not in the varicode table */
+    TEST_ASSERT_EQUAL('*', decode_varicode(0xABAB));
+}
+
+void test_psk_varicode_decode_known_values(void) {
+    TEST_ASSERT_EQUAL(' ', decode_varicode(0b1));
+    TEST_ASSERT_EQUAL('e', decode_varicode(0b11));
+    TEST_ASSERT_EQUAL('A', decode_varicode(0b1111101));
+    TEST_ASSERT_EQUAL('t', decode_varicode(0b101));
+    TEST_ASSERT_EQUAL(0,    decode_varicode(0b1010101011));
+}
+
+void test_psk_varicode_bit_reversal_known_values(void) {
+    /* ' ' (space) = 0b1, reversed = 0b10 = 2 */
+    TEST_ASSERT_EQUAL(2, find_char_reversed(' '));
+    /* 'e' = 0b11, reversed = 0b110 = 6 */
+    TEST_ASSERT_EQUAL(6, find_char_reversed('e'));
+    /* 'A' = 0b1111101, reversed = 0b10111110 = 190 */
+    TEST_ASSERT_EQUAL(190, find_char_reversed('A'));
+    /* 't' = 0b101, reversed = 0b1010 = 10 */
+    TEST_ASSERT_EQUAL(10, find_char_reversed('t'));
+}
+
+void test_psk_varicode_no_duplicate_codes(void) {
+    for (int i = 0; i < 256; i++) {
+        for (int j = i + 1; j < 256; j++) {
+            TEST_ASSERT_NOT_EQUAL(test_psk_varicode[i], test_psk_varicode[j]);
+        }
+    }
+}
+
+/* Registration */
+void test_psk_varicode_register(void) {
+    TEST_REGISTER(test_psk_varicode_table_size);
+    TEST_REGISTER(test_psk_varicode_all_codes_decodable);
+    TEST_REGISTER(test_psk_varicode_invalid_code);
+    TEST_REGISTER(test_psk_varicode_decode_known_values);
+    TEST_REGISTER(test_psk_varicode_bit_reversal_known_values);
+    TEST_REGISTER(test_psk_varicode_no_duplicate_codes);
+}
