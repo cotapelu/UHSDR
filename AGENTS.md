@@ -319,7 +319,7 @@ make coverage             # Host tests + gcov report (test/coverage.txt)
 make quality              # Local pre-commit gate (switch test, tests, identity, doctor)
 make check-identity       # Verify every target reports its own board identity
 make build-switch-test    # Verify configuration switches on a dirty tree
-make static-analysis      # cppcheck gate (slow, see docs/TODO.md T78)
+make static-analysis      # cppcheck gate (bounded, ~5 min; see docs/TODO.md T78)
 ```
 
 ---
@@ -393,7 +393,7 @@ HAL backends (hal/src/*/):
 - ✅ **Firmware builds:** F4, F4-512KB, F7, H7 — 0 errors each
   (F7/H7 previously failed to link entirely; fixed in Phase 66)
 - ✅ **Bootloader builds:** F4, F7, H7 — 0 errors each
-- ✅ **Host tests:** 670 passing / 0 failing (53 files, 11 475 LOC)
+- ✅ **Host tests:** 671 passing / 0 failing (53 files, 11 475 LOC)
 - ✅ *Vendor HAL `#include` in product code:* **0 files** — architecture goal met
 - ✅ *`HAL_*` calls in product code:* delay path now 0 (`HAL_Delay` → `hal_delay_ms`)
 - ✅ **HAL shim layer:** 14 abstract APIs in `hal/include`, backends per MCU
@@ -408,7 +408,9 @@ HAL backends (hal/src/*/):
   mixed `bool`(`int`) vs `_Bool` across TUs; see docs/TODO.md Phase 67.1
 - ✅ **Test coverage wired** — `make -C test coverage` → `coverage.txt` (Phase 67.2, T68)
 - ✅ **Static analysis gates CI** — `.github/workflows/ci.yml` + cppcheck `--error-exitcode`
-  on a committed baseline (Phase 67.3, T70); vendored dirs suppressed wholesale
+  (Phase 67.3, T70); vendored dirs suppressed wholesale. The gate is bounded
+  and parallel (T78, 4–5 min) and the **product-code baseline is empty**
+  (T76): 0 findings, 0 debt suppressions
 - 🟡 **~219 product-code warnings total** (was 260 → measured 206 `missing-prototypes`,
   8 VLA-parameter, 3 `absolute-value`, plus 2 minor — see docs/TODO.md)
 - 🟡 **8 `-Wvla-parameter` in `drivers/freedv/`** — re-framed: these are VLA *parameters*
@@ -431,7 +433,7 @@ HAL backends (hal/src/*/):
 | Platform `#ifdef` in product code | 542 | <50 feature flags |
 | Firmware targets building | **4 / 4** (was 2 / 4) | 4 ✅ |
 | Bootloader targets building | **3 / 3** | 3 ✅ |
-| Host tests | **670 passing** | 30+ ✅ |
+| Host tests | **671 passing** | 30+ ✅ |
 | Host test coverage | **unknown** | >90% measured |
 | Product-code compiler warnings | 260 (→ ~219 after Phase 67) | <25 |
 | `-Wlto-type-mismatch` | 57 (→ **0** after Phase 67) | 0 |

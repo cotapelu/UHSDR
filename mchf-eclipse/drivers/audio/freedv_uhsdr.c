@@ -134,7 +134,9 @@ static void FreeDv_DisplaySnr()
         clr_fg = Yellow;
     }
 
-    snprintf(SNR_string,12,"%-2ld",SNR_Int);  //Display the current SNR and round it up to the next int
+    // int32_t is 'long int' on arm-none-eabi but 'int' on the host, so the
+    // argument is cast explicitly to keep the format specifier exact on both.
+    snprintf(SNR_string,12,"%-2ld",(long)SNR_Int);  //Display the current SNR and round it up to the next int
     UiLcdHy28_PrintText(ts.Layout->FREEDV_SNR.x + freedv_display_x_offset, ts.Layout->FREEDV_SNR.y ,SNR_string,clr_fg,Black, ts.Layout->FREEDV_FONT);
 }
 

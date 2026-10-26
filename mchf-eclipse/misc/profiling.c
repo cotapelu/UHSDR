@@ -98,14 +98,15 @@ void WCET_Report(void)
                 default:                      budget_us = 0; break;
             }
             
-            printf("%-30s %8lu %8lu %8lu %8lu", 
+            printf("%-30s %8lu %8lu %8lu %8lu",
                    (const char*[]){
                        "Audio ISR", "TP1", "TP2", "TP3", "TP4", "TP5",
                        "TP6", "TP7", "TP8", "TP9", "FreeDV", "TX Underrun",
                        "Audio ISR WCET", "PendSV WCET", "Main Loop WCET",
                        "Spectrum WCET", "Menu WCET"
                    }[i],
-                   ev->count, avg_us, wcet_us, budget_us);
+                   (unsigned long)ev->count, (unsigned long)avg_us,
+                   (unsigned long)wcet_us, (unsigned long)budget_us);
             
             if (budget_us > 0 && wcet_us > budget_us) {
                 printf(" <-- OVER BUDGET!");

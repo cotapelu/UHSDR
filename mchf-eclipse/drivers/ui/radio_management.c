@@ -72,6 +72,12 @@
 
 #define LOW_POWER_CALC_THRESHOLD        0.05    // voltage from sensor below which we use the "low power" calculations, above
 
+// Smallest power value that is fed into the dBm calculation. The polynomial
+// above yields a negative value at zero output power, and log10f(0) returns
+// -inf, which would propagate into the S-meter and the CAT readings. The
+// floor keeps the dBm value finite (T76).
+#define RF_PWR_MIN_WATTS                1e-9f   // 1 nW
+
 
 // SWR/Power meter
 SWRMeter                    swrm;
@@ -1696,9 +1702,9 @@ static void RadioManagement_PowerFromADCValue(float inval, float sensor_null, fl
     }
     // calculate forward and reverse RF power in watts (p = a + bx + cx^2) for high power (above 50-60
 
-    if(pwr < 0)     // prevent negative power readings from emerging from the equations - particularly at zero output power
+    if(pwr < RF_PWR_MIN_WATTS)   // prevent negative or zero power readings from emerging from the equations - particularly at zero output power
     {
-        pwr = 0;
+        pwr = RF_PWR_MIN_WATTS;
     }
 
     const float32_t dbm = (10 * (log10f(pwr))) + 30 + coupling_calc;

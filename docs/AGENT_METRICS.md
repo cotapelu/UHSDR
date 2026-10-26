@@ -3127,3 +3127,21 @@
   - **Verified identical output**: single-threaded vs `-j8` gate findings are byte-identical (234 lines); the merged report is byte-identical to a reference full-tree scan (366 findings, `diff` clean).
   - **Negative test**: a temporary `%d`/`char *` mismatch in `drivers/diag/` made the gate fail with rc=42 and report `invalidPrintfArgType_sint`; the probe was removed and the gate passes again.
   - Scope is unchanged by design, so no finding can be silently dropped. The committed baseline of pre-existing findings stays open as T76.
+
+## [2026-10-26 19:05] Cycle 54 - Task: T76 Retire the committed cppcheck product baseline
+- **Type**: Violation Fix (static-analysis gate / latent product bugs)
+- **Priority**: P2 (Medium — 14 findings were permanently hidden from the gate, 4 of them real defects)
+- **Duration**: ~110 min (T76.1 logic findings + T76.2 format strings + T76.3 suppressions + full verification)
+- **Status**: ✅ Success
+- **Test Delta**: +1 test (total **671** passing / 0 failing)
+- **Coverage Delta**: not measured (the touched code is UI/formatting glue; the new test covers the power-calculation path that was previously untested at the `-inf` boundary)
+- **Performance**: static analysis gate 4 m 13 s / 5 m 34 s (`-j8`, `timeout 900 s`); release text size F4 **−8 B**, F4-512KB **+56 B**, F7 **+64 B**, H7 **+64 B** (max **+0.012 %**)
+- **Security**: the bootloader NULL-vector guard removes a reachable fault path (`uhsdrBl_IsValidApplication(0)` previously dereferenced NULL); no new attack surface, no secrets touched
+- **Notes**:
+  - **What was hidden:** `scripts/cppcheck_suppressions.txt` carried **14 product-code suppression lines** over 9 files. All 14 are now removed; the gate reports **0 findings** in the product tree and the scan scope is provably unchanged (366 files, sorted file-set `diff` clean).
+  - **4 real defects found and fixed**: (1) `radio_management.c` — `log10f(0)` produced `-inf` dBm at zero RF power, which also made the VSWR `rev/fwd` a `0/0` **NaN**; now floored by the named constant `RF_PWR_MIN_WATTS` (1 nW). (2) `ui_menu.c` — `osc->type` was dereferenced at line 523 *before* the `osc == NULL` check at line 532; `osc` is explicitly `NULL` when no oscillator is present. (3) `ui_driver.c` — `S_Meter_Cal_Ptr[s_count]` was read before the bounds check (array has 33 entries). (4) `bootloader_main.c` — `uhsdrBl_IsValidApplication()` cast `0` to `NULL` and dereferenced it.
+  - **Test-first evidence for (1)**: new `test_zero_power_dbm_stays_finite` was RED first — `FAIL: test_radio_power_calc.c:96: isfinite(dbm)`, 671 passed / 1 failed — and GREEN after the fix (671/0).
+  - **The important lesson — cppcheck and the target disagree about `int32_t`.** cppcheck models `int32_t`/`uint32_t` as `int`/`unsigned int` (host x86-64), but `arm-none-eabi` maps them to `long int`/`long unsigned int`. The original `%ld`/`%lu` specifiers were therefore **correct on the target** and only looked wrong to cppcheck. The first pass of T76.2 "fixed" them to `%d`/`%u`, which silenced cppcheck but introduced **98 new `-Wformat` warnings** on the target (925 → 1023 total) and genuine varargs UB. The accepted fix keeps the target-correct specifier and makes the argument type exact with an explicit cast (`(long)`, `(unsigned long)`, `(unsigned int)`), so **both** analysers are satisfied with zero behaviour change.
+  - **Verification**: `make -j4 all-firmware` 4/4 and `make -j4 all-bootloader` 3/3 with 0 errors; compiler warning profile **byte-identical** to the pre-T76 baseline (812 `-Wmissing-prototypes`, 32 `-Wvla-parameter`, 10 `-Wmaybe-uninitialized`, 4 `-Wcpp`, 3 `-Wimplicit-function-declaration`, 4 `-Wstringop-overflow`, 4 `-Warray-parameter` — the last two pre-exist in vendored `drivers/freedv/`); **0** `-Wformat`; `make quality` → switch 7/7, tests 671/0, identity 23/23, doctor PASSED; `git diff --check` clean.
+  - **Tool quirk worth recording**: a bare `#` line in a cppcheck suppressions file is **not** a comment — cppcheck 2.13 aborts with `Failed to add suppression. No id.` A comment line needs text after the `#`.
+  - **Measurement pitfall corrected**: the release sizes in §68.6 are ELF **`text`** sizes from `arm-none-eabi-size`, not `.bin` file sizes. Comparing against `.bin` sizes produced a bogus "+1951 B" regression; building the pre-T76 tree proved the delta was 0.

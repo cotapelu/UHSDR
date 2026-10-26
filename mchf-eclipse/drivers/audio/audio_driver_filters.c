@@ -36,7 +36,9 @@ void AudioDriver_SetBiquadCoeffsAllInstances(arm_biquad_casd_df1_inst_f32 biquad
 {
     for (int chan = 0; chan < NUM_AUDIO_CHANNELS; chan++)
      {
-         AudioDriver_SetBiquadCoeffs(&biquad_inst_array[chan].pCoeffs[idx],coeffsFrom);
+         // pCoeffs points to an array of 5*numStages coefficients. Pointer
+         // arithmetic keeps the addressing explicit (T76).
+         AudioDriver_SetBiquadCoeffs(biquad_inst_array[chan].pCoeffs + idx,coeffsFrom);
      }
 }
 

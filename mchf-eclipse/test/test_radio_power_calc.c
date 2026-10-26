@@ -11,6 +11,7 @@ typedef float float32_t;
 #define SWR_ADC_FULL_SCALE          4095
 #define SWR_ADC_VOLT_REFERENCE      3.3
 #define LOW_POWER_CALC_THRESHOLD    0.05
+#define RF_PWR_MIN_WATTS            1e-9f   /* 1 nW, mirrors radio_management.c */
 #define LOW_RF_PWR_COEFF_A         -0.0338205168744131
 #define LOW_RF_PWR_COEFF_B          5.02584652062682
 #define LOW_RF_PWR_COEFF_C         -106.610490958242
@@ -37,9 +38,9 @@ static void RadioManagement_PowerFromADCValue_under_test(float inval, float sens
         pwr = HIGH_RF_PWR_COEFF_A + (HIGH_RF_PWR_COEFF_B * val) + (HIGH_RF_PWR_COEFF_C * (val * val));
     }
 
-    if (pwr < 0)
+    if (pwr < RF_PWR_MIN_WATTS)
     {
-        pwr = 0;
+        pwr = RF_PWR_MIN_WATTS;
     }
 
     const float dbm = (10 * (log10f(pwr))) + 30 + coupling_calc;
@@ -84,6 +85,18 @@ static void test_negative_power_clamped_to_zero(void)
     /* Input that would produce negative power from low-power equation */
     RadioManagement_PowerFromADCValue_under_test(1, 0, 0, &pwr, &dbm);
     TEST_ASSERT(pwr >= 0);
+}
+
+static void test_zero_power_dbm_stays_finite(void)
+{
+    float pwr = 0, dbm = 0;
+    /* Zero input at low power: the polynomial yields a negative value that is
+     * clamped to zero. log10f(0) is -inf, so the dBm reading has to stay a
+     * finite number instead of propagating -inf into the S-meter and CAT. */
+    RadioManagement_PowerFromADCValue_under_test(0, 0, 0, &pwr, &dbm);
+    TEST_ASSERT(isfinite(dbm));
+    TEST_ASSERT(isfinite(pwr));
+    TEST_ASSERT(dbm > -100);
 }
 
 static void test_sensor_null_offset(void)
@@ -188,6 +201,7 @@ void test_radio_power_calc_register(void)
     TEST_REGISTER(test_high_power_calculation);
     TEST_REGISTER(test_coupling_offset_applied);
     TEST_REGISTER(test_negative_power_clamped_to_zero);
+    TEST_REGISTER(test_zero_power_dbm_stays_finite);
     TEST_REGISTER(test_sensor_null_offset);
     TEST_REGISTER(test_deterministic_output);
     TEST_REGISTER(test_boundary_low_power_threshold);

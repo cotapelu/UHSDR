@@ -445,15 +445,15 @@ static void UiSpectrum_SpectrumTopBar_GetText(char* wfbartext)
 
     if(is_waterfallmode() && is_scopemode())           // dual waterfall
     {
-        sprintf(wfbartext,"Dual%s < Magnify %2ux >",scope_scaling_factors[ts.spectrum_db_scale].label, (1<<sd.magnify));
+        sprintf(wfbartext,"Dual%s < Magnify %2ux >",scope_scaling_factors[ts.spectrum_db_scale].label, (1u<<sd.magnify));
     }
     else if(is_waterfallmode())           //waterfall
     {
-        sprintf(wfbartext,"  %s   < Magnify %2ux >",scope_scaling_factors[0].label, (1<<sd.magnify));	// a small trick, we use the empty location of index 0 in the table
+        sprintf(wfbartext,"  %s   < Magnify %2ux >",scope_scaling_factors[0].label, (1u<<sd.magnify));	// a small trick, we use the empty location of index 0 in the table
     }
     else                                                // scope
     {
-        sprintf(wfbartext," SC %s < Magnify %2ux >",scope_scaling_factors[ts.spectrum_db_scale].label, (1<<sd.magnify));	// a small trick, we use the empty location of index 0 in the table
+        sprintf(wfbartext," SC %s < Magnify %2ux >",scope_scaling_factors[ts.spectrum_db_scale].label, (1u<<sd.magnify));	// a small trick, we use the empty location of index 0 in the table
     }
 
 
@@ -1704,7 +1704,11 @@ static void UiSpectrum_DrawFrequencyBar()
        // FIXME: This code expect 8 vertical lines)
         for (int idx = -4; idx < 5; idx += (sd.magnify < 2) ? 1 : 2 )
         {
-            int pos = idx2pos[idx+4];
+            // The loop runs from -4 to +4, so the position array is indexed
+            // with idx + 4. The explicit bound check keeps the access inside
+            // the array even if the loop range is ever changed (T76).
+            const int gridIdx = idx + 4;
+            int pos = (gridIdx >= 0 && gridIdx <= pos_spectrum->SCOPE_GRID_VERT_COUNT) ? idx2pos[gridIdx] : 0;
             const uint8_t graticule_font = 4;
             const uint16_t number_width = UiLcdHy28_TextWidth("    ",graticule_font);
             const uint16_t pos_number_y = (slayout.graticule.y +  (slayout.graticule.h - UiLcdHy28_TextHeight(graticule_font))/2);
@@ -1713,7 +1717,7 @@ static void UiSpectrum_DrawFrequencyBar()
                 char *c;
                 if(sd.magnify < 3)
                 {
-                    snprintf(txt,16, "%02lu", ((uint32_t)(freq_calc+(idx*grat)))%100);   // build string for middle-left frequency (1khz precision)
+                    snprintf(txt,16, "%02lu", (unsigned long)(((uint32_t)(freq_calc+(idx*grat)))%100));   // build string for middle-left frequency (1khz precision)
                     c = txt;  // point at 2nd character from the end
                 }
                 else
@@ -1721,7 +1725,7 @@ static void UiSpectrum_DrawFrequencyBar()
                     float32_t disp_freq = freq_calc+(idx*grat);
                     int bignum = disp_freq;
                     int smallnum = roundf((disp_freq-bignum)*100);
-                    snprintf(txt,16, " %u.%02u", bignum, smallnum);   // build string for middle-left frequency (10Hz precision)
+                    snprintf(txt,16, " %u.%02u", (unsigned int)bignum, (unsigned int)smallnum);   // build string for middle-left frequency (10Hz precision)
                     c = &txt[strlen(txt)-4];  // point at 5th character from the end
                 }
                 if (idx == -4) // left border

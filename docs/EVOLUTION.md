@@ -20,7 +20,7 @@
 - **Firmware builds:** F4, F4-512KB, F7, H7 — **0 errors each**.
   F7 and H7 previously failed to link entirely (11 errors); fixed in Phase 66.
 - **Bootloader builds:** F4, F7, H7 — 0 errors each.
-- **Host test suite:** **670 passing, 0 failing** (53 test files, 11 475 LOC).
+- **Host test suite:** **671 passing, 0 failing** (53 test files, 11 475 LOC).
   This is the single most valuable asset in the repo — the audio/DSP logic is
   host-testable without hardware.
 - **Compiler warnings (re-measured 2026-10-26):** the 57 `-Wlto-type-mismatch`
@@ -68,7 +68,7 @@
 ### High Priority
 0. **Close the 57 `-Wlto-type-mismatch` warnings** (T67) — blocks any real warning
    triage, and until the cause is known these cannot be classified as safe or unsafe.
-0. **Measure test coverage** (T68) — 670 tests with unknown coverage.
+0. **Measure test coverage** (T68) — 671 tests with unknown coverage.
 0. **Validate remote control on hardware** (T69) — it was dead code until Phase 66.
 1. **`ui_driver.c` large-file split** (T31.3)
    - Current: 6430 lines, single file
@@ -104,9 +104,9 @@
 ## Infrastructure Evolution
 
 ### Testing
-- **Current:** 670 host tests (gcc-based, no hardware required), 0 failing
+- **Current:** 671 host tests (gcc-based, no hardware required), 0 failing
 - **Blocked on:** coverage measurement. `gcov` is available on the host but nothing
-  in `test/Makefile` invokes it, so the effective coverage of the 670 tests is unknown.
+  in `test/Makefile` invokes it, so the effective coverage of the 671 tests is unknown.
   This is now the top test-related task (T68).
 - **Plan:**
   - Wire `--coverage` into `test/Makefile` and publish a per-module percentage (T68)
@@ -161,7 +161,7 @@
 
 | Metric | Current (measured) | 3-Month Target | 6-Month Target |
 |---|---|---|---|
-| Host tests | 670 passing | 670 + coverage gate | 700+ |
+| Host tests | 671 passing | 671 + coverage gate | 700+ |
 | Health score | **not scored** (see TODO.md) | score only after T67+T68 close | ≥95/100 |
 | TODO/FIXME count | 184 | <100 | <50 |
 | Largest file | 6 430 lines | <4000 | <3000 |
@@ -187,6 +187,58 @@
    runtime-sized `arm_rfft_fast_init_f32` call.
 4. **Week 1-2:** Create reusable mock HAL layer (I2C/SPI/UART stubs) — UART mock completed
 5. **Week 3-4:** Begin `ui_driver.c` incremental split (extract `ui_driver_input.c`)
-6. **Week 5-6:** Add `cppcheck`/`clang-tidy` to CI pipeline — cppcheck gate exists, runtime still unbounded (T78)
+7. **Week 7-8:** Expand tests with new mocking infrastructure
+8. **Ongoing:** Reduce TODO/FIXME count by 20/month through proactive fixes; complete T47.1 integration tests when hardware available
+
+---
+
+## Trajectory Update — Cycle 54 (T76, 2026-10-26)
+
+The product-code static-analysis debt is now **zero**. This closes the last
+measured "the gate cannot see it" blind spot and moves the gate from
+"suppression-managed" to "enforcing".
+
+| Signal | Before (Cycle 53) | After (Cycle 54) |
+|---|---|---|
+| Product-code cppcheck suppressions | 14 lines / 9 files | **0** |
+| Product-code cppcheck findings | 14 (all hidden) | **0** (all fixed) |
+| Real defects hidden by the baseline | unknown | **4** found and fixed (NULL deref, OOB read, `-inf`/NaN power calc, NULL vector read) |
+| Host tests | 670 | **671** |
+| Release text size F4 / H7 | 427 073 B / 547 857 B | 427 065 B / 547 921 B (max **+0.012 %**) |
+| Compiler warning profile | 925 | **925** (unchanged) |
+
+**What changed in the trajectory.** The static-analysis infrastructure work
+(T67.3 → T78 → T76) is finished: the gate is fast (4–5 min, bounded),
+parallel, scope-stable (366 files, verified) and now has **no debt to
+excuse**. The remaining measurable product-code signal is the compiler
+warning profile (925 warnings, of which 812 are `-Wmissing-prototypes` in
+vendored + product code) and the 184 TODO/FIXME markers. T71/T72/T73 are
+therefore the natural next targets, ahead of further gate work.
+
+**New capability unlocked.** Because the product tree is clean, the gate can
+now be **tightened** rather than merely maintained: enabling `--enable=style`
+(the gate currently uses `warning,portability`) becomes a measurable, bounded
+next step instead of an unbounded flood. Tracked as **T83** below.
+
+**New tracked items:**
+
+| ID | Item | Priority | Why |
+|---|---|---|---|
+| **T83** | Extend the cppcheck gate to `--enable=style` and triage the new findings | P2 | The product tree is now clean for `warning,portability`; style findings can be measured and the noise baselined without hiding real debt |
+| **T84** | Add a target-aware type check to the static-analysis pipeline | P2 | cppcheck's host type model produced 39 false positives on `int32_t`/`uint32_t`; a `arm-none-eabi` cross-check (or `PRIu32` adoption) removes the whole class of confusion |
+
+**Next Actions (revised):**
+
+1. **Now (P0):** T77 — finish the HAL boundary migration for the product-owned
+   paths that still include vendor headers or call `HAL_*` directly (RTC, flash,
+   UI, bootloader), then re-state the AGENTS.md claim truthfully.
+2. **Next (P1):** T81 — decide the H7/F7 DSP table reclaim: fix the wideband
+   FFT lengths (60/16 are unsupported by CMSIS-DSP) and remove the
+   runtime-sized `arm_rfft_fast_init_f32` call.
+3. **Next (P2):** T83 — widen the static-analysis gate to `style` and triage.
+4. **Next (P2):** T72 / T71 — reduce the 812 `-Wmissing-prototypes` and the
+   32 `-Wvla-parameter` warnings.
+5. **Week 1-2:** Create reusable mock HAL layer (I2C/SPI/UART stubs) — UART mock completed
+6. **Week 3-4:** Begin `ui_driver.c` incremental split (extract `ui_driver_input.c`)
 7. **Week 7-8:** Expand tests with new mocking infrastructure
 8. **Ongoing:** Reduce TODO/FIXME count by 20/month through proactive fixes; complete T47.1 integration tests when hardware available

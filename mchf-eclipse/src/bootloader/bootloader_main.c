@@ -246,6 +246,12 @@ static const uint32_t linker_ram_start_addr = (uint32_t)&_linker_ram_start;
 bool uhsdrBl_IsValidApplication(uint32_t ApplicationAddress)
 {
     // TODO: Better checks
+    // A zero address would be dereferenced as a NULL pointer below, so it is
+    // rejected before the vector table is read (T76).
+    if (ApplicationAddress == 0)
+    {
+        return false;
+    }
     // check if the stackpointer points into a likely ram area (normal RAM start + 1MB)
     uint32_t* const APPLICATION_PTR = (uint32_t*)ApplicationAddress;
     return  APPLICATION_PTR[0] <= (linker_ram_start_addr + (1024 * 1024)) && ( APPLICATION_PTR[0] >= linker_ram_start_addr);

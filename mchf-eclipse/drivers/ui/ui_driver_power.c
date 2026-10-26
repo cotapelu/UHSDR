@@ -153,7 +153,7 @@ void UiDriver_DisplayVoltage(void)
 	}
 
 	char digits[6];
-	snprintf(digits,6,"%2ld.%02ld",pwmt.voltage/100,pwmt.voltage%100);
+	snprintf(digits,6,"%2lu.%02lu",(unsigned long)(pwmt.voltage/100),(unsigned long)(pwmt.voltage%100));
 	UiLcdHy28_PrintText(ts.Layout->PWR_IND.x,ts.Layout->PWR_IND.y,digits,col,Black,0);
 }
 
@@ -254,7 +254,7 @@ void UiDriver_DisplayTemperature(int temp)
 			{
 				ttemp = ((ttemp *9)/5) + 320;			// multiply by 1.8 and add 32 degrees
 			}
-			snprintf(out,10,"%3ld.%1ld",ttemp/10,(ttemp)%10);
+			snprintf(out,10,"%3ld.%1ld",(long)(ttemp/10),(long)((ttemp)%10));
 			txt_ptr = out;
 		}
 		UiLcdHy28_PrintText(ts.Layout->TEMP_IND.x + TEMP_DATA + SMALL_FONT_WIDTH*1,(ts.Layout->TEMP_IND.y + 1),txt_ptr,Grey,Black,0);
@@ -438,15 +438,15 @@ void UiDriver_Power2String(char* txt, size_t txt_len,uint32_t power_mW)
     }
     else if (power_mW < 100)
     {
-        snprintf(txt,txt_len,"%ldmW",power_mW);
+        snprintf(txt,txt_len,"%lumW",(unsigned long)power_mW);
     }
     else if (power_mW < 1000)
     {
-        snprintf(txt,txt_len,"0.%ldW",power_mW/100);
+        snprintf(txt,txt_len,"0.%luW",(unsigned long)(power_mW/100));
     }
     else
     {
-        snprintf(txt,txt_len,"%ldW",power_mW/1000);
+        snprintf(txt,txt_len,"%luW",(unsigned long)(power_mW/1000));
     }
 }
 void UiDriver_DrawPowerMeterLabels(void)

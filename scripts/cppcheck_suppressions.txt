@@ -15,17 +15,10 @@
 *:*Middlewares/*
 
 # ---- 2) product-code baseline (current debt) ----
-arrayIndexThenCheck:drivers/ui/ui_driver.c
-invalidFunctionArg:drivers/ui/radio_management.c
-invalidPrintfArgType_sint:drivers/audio/freedv_uhsdr.c
-invalidPrintfArgType_sint:drivers/ui/menu/ui_menu.c
-invalidPrintfArgType_sint:drivers/ui/ui_driver.c
-invalidPrintfArgType_sint:drivers/ui/ui_driver_power.c
-invalidPrintfArgType_uint:drivers/ui/lcd/ui_spectrum.c
-invalidPrintfArgType_uint:drivers/ui/menu/ui_menu.c
-invalidPrintfArgType_uint:drivers/ui/ui_driver.c
-invalidPrintfArgType_uint:misc/profiling.c
-negativeIndex:drivers/ui/lcd/ui_spectrum.c
-nullPointerRedundantCheck:drivers/ui/menu/ui_menu.c
-nullPointer:src/bootloader/bootloader_main.c
-objectIndex:drivers/audio/audio_driver_filters.c
+# T76 (2026-10-26): ALL 14 product-code findings were fixed and their
+# suppressions removed. The gate now covers the whole product tree with zero
+# known debt. Do NOT re-add a suppression line to silence a NEW defect: fix
+# the defect instead. A re-added line must name the exact <id>:<file>.
+# NOTE: a comment line must contain text after the '#' (a bare '#' line is
+# rejected by cppcheck 2.13 with "Failed to add suppression. No id.").
+# (no product-code entries remain below)

@@ -1022,7 +1022,7 @@ void UiDriver_EncoderDisplaySimple(const uint8_t column, const uint8_t row, cons
 	char temp[5];
 	uint32_t color = encoder_active?White:Grey;
 
-	snprintf(temp,5," %2lu",value);
+	snprintf(temp,5," %2lu",(unsigned long)value);
 	UiDriver_EncoderDisplay(column, row, label, encoder_active,
 			temp, color);
 }
@@ -4059,7 +4059,7 @@ static void UiDriver_DisplayRfGain(bool encoder_active)
 		label = "SQL";
 		value = ts.fm_sql_threshold;
 	}
-	snprintf(temp,5," %02ld",value);
+	snprintf(temp,5," %02ld",(long)value);
 
 	UiDriver_EncoderDisplay(0,1,label, encoder_active, temp, color);
 
@@ -4108,7 +4108,7 @@ static void UiDriver_DisplayNoiseBlanker(bool encoder_active)
 			}
 			label = "NB";
 			value = ts.dsp.nb_setting;
-			snprintf(temp,5,"%3ld",value);
+			snprintf(temp,5,"%3ld",(long)value);
 			val_txt = temp;
 		}
 
@@ -4140,7 +4140,7 @@ static void UiDriver_DisplayNoiseBlanker(bool encoder_active)
 				break;
 			}
 			value = (int32_t)(agc_wdsp_conf.tau_decay[agc_wdsp_conf.mode] / 10.0);
-			snprintf(temp,5,"%3ld",value);
+			snprintf(temp,5,"%3ld",(long)value);
 			val_txt = temp;
 		}
 		UiDriver_EncoderDisplay(1,1,label, encoder_active, val_txt, color);
@@ -4372,7 +4372,7 @@ static void UiDriver_HandleSMeter()
 			// find corresponding signal level
 			for (
 					s_count = 1;
-					(sm.dbm >= S_Meter_Cal_Ptr[s_count]) && (s_count < S_Meter_Cal_Size);
+					(s_count < S_Meter_Cal_Size) && (sm.dbm >= S_Meter_Cal_Ptr[s_count]);
 					s_count++)
 			{
 				// nothing to do here
@@ -4722,7 +4722,7 @@ static void UiDriver_KeyTestScreen()
 		UiLcdHy28_LcdClear(Blue);							// clear the screen
         UiLcdHy28_PrintTextCentered(2,05,ts.Layout->Size.x-4,"INPUT TEST SCREEN",clr_fg,clr_bg,1);
 
-		snprintf(txt_buf,40,"Keys Initial: %08lx",keyScanState);
+		snprintf(txt_buf,40,"Keys Initial: %08lx",(unsigned long)keyScanState);
 		UiLcdHy28_PrintTextCentered(0,30,ts.Layout->Size.x,txt_buf,White,Blue,0);
 
 		UiLcdHy28_PrintTextCentered(0,70,ts.Layout->Size.x,"press & hold POWER button to poweroff\npress & hold BAND- button to reboot",White,Blue,0);
@@ -4745,7 +4745,7 @@ static void UiDriver_KeyTestScreen()
 	        if (newKeyScanState != keyScanState)
 	        {
 	            keyScanState = newKeyScanState;
-	            snprintf(txt_buf,40,"Keys Current: %08lx",keyScanState);
+	            snprintf(txt_buf,40,"Keys Current: %08lx",(unsigned long)keyScanState);
 	            UiLcdHy28_PrintTextCentered(0,45,ts.Layout->Size.x,txt_buf,White,Blue,0);
 	        }
 
@@ -4788,7 +4788,7 @@ static void UiDriver_KeyTestScreen()
 
 			if(encoderIdx != ENC_MAX)
 			{
-				snprintf(txt_buf,40," Encoder %ld <%s>", encoderIdx+1, encoderDirection>0 ? "right":"left");		// building string for encoders
+				snprintf(txt_buf,40," Encoder %lu <%s>", (unsigned long)(encoderIdx+1), encoderDirection>0 ? "right":"left");		// building string for encoders
 				idxFirstPressedButton = BUTTON_NUM+encoderIdx;					// add encoders behind buttons;
 			}
 
@@ -4868,7 +4868,7 @@ static void UiDriver_KeyTestScreen()
 				UiLcdHy28_PrintTextCentered(0,120,ts.Layout->Size.x,txt,White,Blue,1);			// identify button on screen
 			}
 
-			snprintf(txt_buf,40, "# of buttons pressed: %ld  ", numOfPressedButtons);
+			snprintf(txt_buf,40, "# of buttons pressed: %lu  ", (unsigned long)numOfPressedButtons);
 			UiLcdHy28_PrintTextCentered(0,160,ts.Layout->Size.x,txt_buf,White,Blue,0);			// show number of buttons pressed on screen
 
 			if(ts.tp->present)			// show translation of touchscreen if present

@@ -520,26 +520,30 @@ const char* UiMenu_GetSystemInfo(uint32_t* m_clr_ptr, int info_item)
 #ifdef USE_OSC_SI570
     case INFO_SI570:
     {
-        if (osc->type == OSC_SI570) {
+        // osc is NULL when no oscillator was detected, so it must be checked
+        // before it is dereferenced (T76).
+        if (osc == NULL)
+        {
+            outs = "Not applicable";
+            *m_clr_ptr = Red;
+        }
+        else if (osc->type == OSC_SI570) {
             float suf = Si570_GetStartupFrequency();
             int vorkomma = (int)(suf);
             int nachkomma = (int) roundf((suf-vorkomma)*10000);
-            snprintf(out,32,"%xh / %u.%04u MHz",(Si570_GetI2CAddress() >> 1),vorkomma,nachkomma);
+            snprintf(out,32,"%xh / %u.%04u MHz",(unsigned int)(Si570_GetI2CAddress() >> 1),(unsigned int)vorkomma,(unsigned int)nachkomma);
         }
         else
         {
             outs = "Not applicable";
-            if (osc == NULL)
-            {
-            	*m_clr_ptr = Red;
-            }
         }
     }
     break;
 #endif
     case INFO_OSC_NAME:
     {
-        if (osc->isPresent) {
+        // osc is NULL when no oscillator was detected (T76).
+        if (osc != NULL && osc->isPresent) {
         	outs = osc->name;
         }
         else
@@ -567,7 +571,7 @@ const char* UiMenu_GetSystemInfo(uint32_t* m_clr_ptr, int info_item)
             snprintf(out,32,"%d",(STM32_GetFlashSize()));
             break;
     case INFO_CPU:
-            snprintf(out,32,"%3lx:%04lxh",HAL_GetDEVID(),HAL_GetREVID());
+            snprintf(out,32,"%3lx:%04lxh",(unsigned long)HAL_GetDEVID(),(unsigned long)HAL_GetREVID());
             break;
     case INFO_RAM:
             snprintf(out,32,"%d",(ts.ramsize));
@@ -1134,7 +1138,7 @@ void UiMenu_UpdateItem(uint16_t select, MenuProcessingMode_t mode, int pos, int 
        {
            AudioDriver_AgcWdsp_Set();
        }
-       snprintf(options, 32, "  %ums", agc_wdsp_conf.tau_decay[agc_wdsp_conf.mode]);
+       snprintf(options, 32, "  %ums", (unsigned int)agc_wdsp_conf.tau_decay[agc_wdsp_conf.mode]);
        break;
 
     case MENU_AGC_WDSP_TAU_HANG_DECAY:      //
@@ -1148,7 +1152,7 @@ void UiMenu_UpdateItem(uint16_t select, MenuProcessingMode_t mode, int pos, int 
        {
            AudioDriver_AgcWdsp_Set();
        }
-       snprintf(options, 32, "  %ums", agc_wdsp_conf.tau_hang_decay);
+       snprintf(options, 32, "  %ums", (unsigned int)agc_wdsp_conf.tau_hang_decay);
        break;
 
      case MENU_DBM_CALIBRATE:      //
@@ -1158,7 +1162,7 @@ void UiMenu_UpdateItem(uint16_t select, MenuProcessingMode_t mode, int pos, int 
                                             0,
                                             1
                                            );
-        snprintf(options, 32, "  %lddB", ts.dbm_constant);
+        snprintf(options, 32, "  %lddB", (long)ts.dbm_constant);
         break;
 
      case MENU_UI_INVERSE_SCROLLING:      //
@@ -1701,7 +1705,7 @@ void UiMenu_UpdateItem(uint16_t select, MenuProcessingMode_t mode, int pos, int 
             CwGen_SetSpeed(); // make sure keyerspeed is being used
             UiDriver_RefreshEncoderDisplay(); // maybe shown on encoder boxes
         }
-        snprintf(options,32, "  %u.%02u", ts.cw_keyer_weight/100,ts.cw_keyer_weight%100);
+        snprintf(options,32, "  %u.%02u", (unsigned int)(ts.cw_keyer_weight/100),(unsigned int)(ts.cw_keyer_weight%100));
         break;
 
     case MENU_SIDETONE_GAIN:    // sidetone gain
@@ -1747,7 +1751,7 @@ void UiMenu_UpdateItem(uint16_t select, MenuProcessingMode_t mode, int pos, int 
                                               1
                                              );
 
-        snprintf(options,32, "%3ums", ts.cw_rx_delay*10);
+        snprintf(options,32, "%3ums", (unsigned int)(ts.cw_rx_delay*10));
         break;
 
     case MENU_CW_AUTO_MODE_SELECT:     // Enable/Disable auto LSB/USB select
@@ -2522,7 +2526,7 @@ void UiMenu_UpdateItem(uint16_t select, MenuProcessingMode_t mode, int pos, int 
                                     0,
                                     1
                                    );
-        snprintf(options,32, "%3ums", ts.txrx_switch_audio_muting_timing*10);
+        snprintf(options,32, "%3ums", (unsigned int)(ts.txrx_switch_audio_muting_timing*10));
         break;
     case CONFIG_LCD_AUTO_OFF_MODE:  // LCD auto-off mode control
         temp_var_u8 = ts.lcd_backlight_blanking;        // get control variable
@@ -3492,7 +3496,7 @@ void UiMenu_UpdateItem(uint16_t select, MenuProcessingMode_t mode, int pos, int 
         {
             UhsdrHw_I2C_ChangeSpeed(&hi2c1);
         }
-        snprintf(options, 32, " %3dkHz",(unsigned int)(ts.i2c_speed[I2C_BUS_1]*I2C_BUS_SPEED_MULT) / 1000 );
+        snprintf(options, 32, " %3ukHz",(unsigned int)(ts.i2c_speed[I2C_BUS_1]*I2C_BUS_SPEED_MULT) / 1000 );
 		if((ts.i2c_speed[I2C_BUS_1]*I2C_BUS_SPEED_MULT) / 1000 < 50 || (ts.i2c_speed[I2C_BUS_1]*I2C_BUS_SPEED_MULT) / 1000 > 250)
 		{
 		  clr = Red;
@@ -4205,7 +4209,7 @@ void UiMenu_UpdateItem(uint16_t select, MenuProcessingMode_t mode, int pos, int 
 
             if (FreeDV_Is_Squelch_Enable(&freedv_conf))
             {
-                snprintf(options,32,"     %ld",FreeDV_Get_Squelch_SNR(&freedv_conf));
+                snprintf(options,32,"     %ld",(long)FreeDV_Get_Squelch_SNR(&freedv_conf));
             }
             else
             {

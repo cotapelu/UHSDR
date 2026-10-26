@@ -254,7 +254,9 @@ changes; only agent context/task state was modified.
 | T72 | Reduce the 206 `-Wmissing-prototypes` | Hides real declaration defects like 66.3 | P2 |
 | T73 | Continue `ui_driver.c` split (6 431 L measured) | Long-standing structural debt | P2 |
 | T74 | License decision (GPL-3.0) | Blocks commercial distribution of firmware | P0 (business) |
-| T76 | Pay down the committed cppcheck product baseline | Remove printf-format debt and tighten the gate | P2 |
+| T76 | Pay down the committed cppcheck product baseline | Remove printf-format debt and tighten the gate | ✅ **done in Phase 68** (68.9) — all 14 product-code suppressions removed, gate = 0 findings |
+| **T83** | Widen the cppcheck gate to `--enable=style` and triage | The product tree is now clean for `warning,portability`; style findings can be measured without hiding debt | P2 — open |
+| **T84** | Make the static-analysis pipeline type-target aware | cppcheck's host type model produced 39 false positives on `int32_t`/`uint32_t` | P2 — open |
 
 ### 68.4 T75 implementation and verification
 
@@ -436,6 +438,106 @@ re-scanned everything the gate had already scanned, so the script needed roughly
 findings (T76) and the vendored `drivers/freedv/` tree is baselined rather
 than fixed. The runtime is now bounded; the *scope* is unchanged by design so
 that no finding can be silently dropped.
+
+---
+
+### 68.9 T76 — the committed product-code cppcheck baseline is retired
+
+**Measured before:** `scripts/cppcheck_suppressions.txt` carried **14
+product-code suppression lines** across **9 files**. Every one of them hid a
+finding that the gate could no longer see. The vendored-dir suppressions
+(`*:*basesw/*`, `*:*freedv/*`, `*:*Middlewares/*`) stay — they are third-party
+code, not project debt.
+
+**The 14 findings, split by what they actually were:**
+
+| # | File | cppcheck id | Reality |
+|---|---|---|---|
+| 1 | `drivers/ui/radio_management.c` | `invalidFunctionArg` | **Real bug** — `log10f(0)` → `-inf` dBm at zero RF power |
+| 2 | `drivers/ui/menu/ui_menu.c` | `nullPointerRedundantCheck` | **Real bug** — `osc->type` dereferenced *before* the `osc == NULL` check |
+| 3 | `drivers/ui/ui_driver.c` | `arrayIndexThenCheck` | **Real bug** — `S_Meter_Cal_Ptr[s_count]` read before the bounds check (array has 33 entries) |
+| 4 | `drivers/ui/lcd/ui_spectrum.c` | `negativeIndex` | False positive — `idx + 4` is a sentinel offset, never negative |
+| 5 | `drivers/audio/audio_driver_filters.c` | `objectIndex` | False positive — `pCoeffs` is a *pointer*, `&pCoeffs[idx]` is legal C |
+| 6 | `src/bootloader/bootloader_main.c` | `nullPointer` | **Real bug** — `0` was cast to `NULL` and dereferenced |
+| 7–14 | 6 files | `invalidPrintfArgType_sint` / `_uint` | **False positives** — see the type-model trap below |
+
+**The type-model trap (most important finding of this phase).** cppcheck
+models `int32_t`/`uint32_t` as `int`/`unsigned int` (the host x86-64
+mapping). On the actual target, `arm-none-eabi` maps them to
+`long int`/`long unsigned int`:
+
+```
+arm-none-eabi-gcc -E -dM -x c /dev/null | grep __INT32_TYPE__
+  #define __INT32_TYPE__ long int
+  #define __UINT32_TYPE__ long unsigned int
+```
+
+The original code therefore used `%ld`/`%lu`, which was **correct on the
+target** and merely looked wrong to cppcheck. The first attempt at T76.2
+changed those specifiers to `%d`/`%u` — which silenced cppcheck but
+introduced **98 new `-Wformat` warnings** on the target (925 → 1023) and
+re-introduced undefined behaviour in the varargs. The fix that satisfies
+**both** analysers is to keep the target-correct specifier and make the
+argument type exact with an explicit cast:
+
+```c
+snprintf(SNR_string,12,"%-2ld",(long)SNR_Int);   /* int32_t  */
+printf("%-30s %8lu %8u ...", ..., (unsigned long)ev->count);  /* uint32_t */
+```
+
+**Fixes applied:**
+
+- `radio_management.c` — new named constant `RF_PWR_MIN_WATTS` (1 nW) floors
+  the RF power before `log10f()`, so the dBm value stays finite instead of
+  `-inf`. This also removes a **NaN VSWR**: `rev_pwr/fwd_pwr` was `0/0` at
+  zero power, now it is `0/1e-9` → VSWR 1.0. Test-first:
+  `test_zero_power_dbm_stays_finite` was RED (`FAIL: isfinite(dbm)`,
+  671 passed / 1 failed) before the fix and GREEN afterwards.
+- `ui_menu.c` — `INFO_SI570` now checks `osc == NULL` **before** dereferencing
+  `osc->type`; `INFO_OSC_NAME` uses `osc != NULL && osc->isPresent`. `osc` is
+  explicitly set to `NULL` when no oscillator is present
+  (`osc_si570.c:736`, `osc_si5351a.c:469`).
+- `ui_driver.c` — the S-meter loop operands were swapped to
+  `(s_count < S_Meter_Cal_Size) && (sm.dbm >= S_Meter_Cal_Ptr[s_count])`, so
+  the out-of-bounds read is gone while the behaviour is unchanged.
+- `ui_spectrum.c` — the graticule index is now computed as
+  `gridIdx = idx + 4` and explicitly bounds-checked against
+  `SCOPE_GRID_VERT_COUNT` (the array is `SCOPE_GRID_VERT_COUNT + 1` long, so
+  the valid range 0…8 is preserved exactly).
+- `audio_driver_filters.c` — `biquad_inst_array[chan].pCoeffs + idx` instead
+  of `&biquad_inst_array[chan].pCoeffs[idx]`.
+- `bootloader_main.c` — `uhsdrBl_IsValidApplication()` rejects
+  `ApplicationAddress == 0` before reading the vector table.
+- 39 format-string sites in 6 files — target-correct specifier plus an
+  explicit type-exact cast.
+
+**Verification (all measured):**
+
+| Check | Result |
+|---|---|
+| cppcheck product gate | **0 findings** (was 14 baselined) |
+| gate runtime | 4 m 13 s / 5 m 34 s (`-j8`) — bounded by `timeout 900 s` |
+| report scan scope | **identical** — 366 files, `diff` of the sorted file set is clean |
+| `make -j4 all-firmware` | 4/4 targets, **0 errors** |
+| `make -j4 all-bootloader` | 3/3 targets, **0 errors** |
+| compiler warnings | **925 — byte-identical to the pre-T76 baseline**, 0 `-Wformat` |
+| host tests | **671 passed / 0 failed** (+1 new) |
+| `make quality` | switch 7/7, tests 671/0, identity 23/23, doctor PASSED |
+| release text size | F4 427 065 (−8), F4-512KB 281 497 (+56), F7 539 217 (+64), H7 547 921 (+64) — max **+0.012 %** |
+
+**Note on the size numbers:** §68.6 records the release baseline as **ELF
+`text`** sizes (`arm-none-eabi-size`), not `.bin` file sizes. The `.bin` files
+are larger because they are padded to the flash page and carry the DFU
+header. Always compare like with like.
+
+**Side effect worth remembering:** a bare `#` line in a cppcheck
+suppressions file is **not** treated as a comment — cppcheck 2.13 aborts with
+`Failed to add suppression. No id.` Every comment line must contain text
+after the `#`.
+
+**Result:** the product-code part of `scripts/cppcheck_suppressions.txt` is
+now empty. The gate covers the whole product tree with **zero known debt**;
+the only remaining suppressions are the three vendored-directory rules.
 
 ---
 

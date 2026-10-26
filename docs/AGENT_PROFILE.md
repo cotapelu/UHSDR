@@ -76,3 +76,42 @@
 - A `make` target that exits 0 proves nothing about *what* was built. Assert on
   the artifact (ELF architecture attributes, embedded strings), not on the exit
   code.
+
+## Static-Analysis Weaknesses (Phase 68, Cycle 54)
+
+- **cppcheck's type model is the host's, not the target's.** cppcheck maps
+  `int32_t`/`uint32_t` to `int`/`unsigned int` (x86-64), while
+  `arm-none-eabi` maps them to `long int`/`long unsigned int`. Every
+  `invalidPrintfArgType_*` finding on a fixed-width integer is therefore
+  suspect. *Rule:* never "fix" such a finding by editing the format specifier
+  alone — check what the **target** compiler says
+  (`arm-none-eabi-gcc -E -dM -x c /dev/null | grep __INT32_TYPE__`), and make
+  the argument type exact with an explicit cast so that both analysers agree.
+- **A gcc `-Wformat` warning on the ARM target outranks a cppcheck format
+  finding.** The measured cost of "fixing" 39 format findings the cppcheck way
+  was **+98 real warnings** (925 → 1023) plus varargs UB.
+- **A committed suppression line is a permanent blind spot.** 14 lines in
+  `scripts/cppcheck_suppressions.txt` hid 4 genuine defects (a NULL
+  dereference, an out-of-bounds read, a `-inf`/NaN power calculation and a
+  NULL vector-table read) for months. *Rule:* when the gate is the only thing
+  that sees a finding, treat a baseline entry as a defect report, not as
+  accepted debt.
+- **cppcheck suppression files: a bare `#` line is not a comment.** cppcheck
+  2.13 aborts the whole run with `Failed to add suppression. No id.` Every
+  comment line needs text after the `#`.
+- **cppcheck false positives must be restructured, not suppressed.** The three
+  false positives in this cycle (a sentinel array index, a pointer-to-array
+  member, a redundant NULL check) were each resolved by making the *code*
+  precise — an explicit bound check, pointer arithmetic, an early NULL guard —
+  so the analyser can see the invariant.
+
+## Measurement Pitfalls (Phase 68, Cycle 54)
+
+- **Compare like with like.** The release baseline in `docs/TODO.md` §68.6 is
+  the ELF **`text`** size from `arm-none-eabi-size`; the `.bin` file size is
+  larger because of flash-page padding and the DFU header. Comparing a `.bin`
+  size against a `text` baseline manufactured a phantom "+1951 B" regression.
+- **Attribute a size delta before accepting it.** Building the pre-change tree
+  and diffing the ELF text sizes is the only reliable attribution; the
+  pre-T76 tree produced the identical 429 024 B `.bin`, proving the delta was
+  0.
