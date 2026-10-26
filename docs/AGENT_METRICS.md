@@ -3111,3 +3111,19 @@
   - Help text quoted a build matrix that does not exist ("ALL firmware (5) + ALL bootloader (4)"); corrected to 4/3. `make info` listed `h7-mchf` twice.
   - A bare `make` built all seven targets although the file header promised help; `.DEFAULT_GOAL := help` now matches the header. Verified that neither CI nor `scripts/` rely on a bare `make`.
   - **Verified**: `make` → help; `make test` → 670/670; `make coverage` → report written; `make quality` → switch 7/7, tests 670/670, identity 23/23, doctor PASSED; `make config` shows `TRX_NAME = <board config default>`.
+
+## [2026-10-26 17:05] Cycle 53 - Task: T78 Bounded and parallel cppcheck gate
+- **Type**: Violation Fix (quality gate usability)
+- **Priority**: P1 (High — the gate was unusable: >600 s locally, unbounded in CI)
+- **Duration**: ~45 min
+- **Status**: ✅ Success
+- **Test Delta**: +0 (build gate; negative test with an injected finding)
+- **Coverage Delta**: N/A
+- **Performance**: static analysis **~25 min -> 4 m 15 s** (5.9x); product-code gate 11 m 38 s -> 4 m 09 s with `-j8`
+- **Security**: N/A
+- **Notes**:
+  - **Measured before**: the product-code gate alone took 11 m 38 s single threaded; the informational report re-scanned the whole tree, so the script needed roughly 25 min.
+  - **Fixes**: cppcheck now runs with `-j${CPPCHECK_JOBS}` (default `nproc`); the report reuses the gate output and scans only the trees outside the gate (`drivers/freedv`, `drivers/usb`, 18 s) and merges them; every scan runs under `timeout ${CPPCHECK_TIMEOUT}` (default 900 s) and a timeout fails the gate with exit 124; the CI job got `timeout-minutes: 25`.
+  - **Verified identical output**: single-threaded vs `-j8` gate findings are byte-identical (234 lines); the merged report is byte-identical to a reference full-tree scan (366 findings, `diff` clean).
+  - **Negative test**: a temporary `%d`/`char *` mismatch in `drivers/diag/` made the gate fail with rc=42 and report `invalidPrintfArgType_sint`; the probe was removed and the gate passes again.
+  - Scope is unchanged by design, so no finding can be silently dropped. The committed baseline of pre-existing findings stays open as T76.

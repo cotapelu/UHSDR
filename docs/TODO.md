@@ -43,7 +43,7 @@
 | Transceiver identity per board | ✅ **fixed (T80)** | was: every target reported `mchf Transceiver`; now `mcHF QRP` / `OVI40 F7` / `OVI40 H7`; `make check-identity` passes 23/23 |
 | Release artifact size baseline | ⚠️ **re-baselined (T81)** | the old "release" builds were actually DEBUG builds; corrected true-release sizes are below |
 | Vendor HAL boundary claim | ❌ **not zero in all product-owned files** | Phase 68 found vendor includes/direct HAL calls in RTC, flash, UI and bootloader paths; tracked as T77 |
-| Static-analysis gate runtime | ⚠️ **>600 s locally** | the product-code gate did not finish in 600 s; tracked as T78 |
+| Static-analysis gate runtime | ✅ **4 m 15 s** (was ~25 min) | parallel `-j$(nproc)` + no duplicate scan + hard timeout; tracked as T78 |
 | SDR extension implementation | ❌ not started | no `drivers/modem`, `drivers/mesh`, or `drivers/video` directories; Phases 80–84 remain design-only |
 
 ### Health claim
@@ -245,7 +245,7 @@ changes; only agent context/task state was modified.
 |---|---|---|---|
 | **T75** | Make single-target builds configuration-safe on a dirty tree | Current behavior can silently label an F4 ELF as H7. This is a release-integrity risk, not merely a convenience issue. | ✅ **done in Phase 68** (68.4) |
 | **T77** | Re-baseline and finish the HAL boundary migration | The documented zero-vendor-HAL state is false. Inventory compiled paths, add HAL shims where needed, then remove direct calls/includes product by product. | **P0 architecture debt** |
-| **T78** | Bound and optimize the cppcheck gate | A >600 s local gate is not usable; CI needs a deterministic timeout and a usable scan scope. | P1 — **next actionable** |
+| **T78** | Bound and optimize the cppcheck gate | A >600 s local gate is not usable; CI needs a deterministic timeout and a usable scan scope. | ✅ **done in Phase 68** (68.8) — 25 min → 4 m 15 s |
 | **T79** | Make `make clean` remove every generated object | 742 vendor objects survived root clean. | ✅ **done in Phase 68** (68.4) |
 | **T80** | Make each build report its own transceiver identity | Every target reported `mchf Transceiver` regardless of board. | ✅ **done in Phase 68** (68.5) |
 | **T81** | Re-baseline release artifact sizes and reclaim the CMSIS-DSP tables | The old "release" numbers were DEBUG builds; the corrected release keeps unused DSP twiddle tables. | P2 — open (68.6) |
@@ -404,6 +404,38 @@ documents, and its help text quoted a build matrix that does not exist.
 **Verified:** `make` → help; `make test` → 670/670; `make coverage` → report
 written; `make quality` → switch test 7/7, tests 670/670, identity 23/23,
 doctor PASSED; `make config` → `TRX_NAME = <board config default>`.
+
+### 68.8 T78 — bounded and parallel cppcheck gate
+
+**Measured before:** the product-code gate alone needed **11 m 38 s** (single
+threaded, cppcheck 2.13.0, 8-core host), and the informational full-tree report
+re-scanned everything the gate had already scanned, so the script needed roughly
+**25 min** — unusable interactively and unbounded in CI.
+
+**Root causes and fixes:**
+
+| Cause | Fix | Effect |
+|---|---|---|
+| cppcheck ran single threaded | `-j${CPPCHECK_JOBS}` (default `nproc`) | 11 m 38 s → **4 m 09 s**, findings verified byte-identical (234 lines) |
+| the report pass re-scanned the whole tree | the gate output is reused; only the trees outside the gate are scanned additionally (`drivers/freedv`, `drivers/usb`) and merged | extra scan **18 s**; merged report verified byte-identical to a full-tree scan (**366 findings**) |
+| no upper bound | every scan runs under `timeout ${CPPCHECK_TIMEOUT}` (default 900 s); a timeout **fails** the gate with exit 124 instead of hanging | deterministic behaviour in CI and locally |
+| CI job had no timeout | `timeout-minutes: 25` on the `static-analysis` job | outer safety net |
+
+**Verification:**
+
+- `bash scripts/static_analysis.sh` → **4 m 15 s**, gate PASS, report identical
+  to the reference full-tree scan (366 findings, `diff` clean).
+- Negative test: a temporary file with a `%d`/`char *` format mismatch in
+  `drivers/diag/` made the gate **fail with rc=42** and report
+  `invalidPrintfArgType_sint` — the detection capability is preserved. The
+  probe file was removed afterwards and the gate passes again.
+- `CPPCHECK_JOBS` and `CPPCHECK_TIMEOUT` can be overridden from the
+  environment; on a memory-constrained runner lower `CPPCHECK_JOBS`.
+
+**Still open:** the gate reports a large committed baseline of pre-existing
+findings (T76) and the vendored `drivers/freedv/` tree is baselined rather
+than fixed. The runtime is now bounded; the *scope* is unchanged by design so
+that no finding can be silently dropped.
 
 ---
 

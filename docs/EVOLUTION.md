@@ -171,7 +171,7 @@
 | Firmware size, H7 release | 547 857 B (corrected baseline, T81) | reclaim DSP tables | < 550 kB |
 | Build-output verification | 2 executable gates (switch 7/7, identity 23/23) | 4 gates | artifact attestation |
 | Local quality gate | `make quality` (switch + tests + identity + doctor) | CI parity | signed artifacts |
-| Static-analysis gate runtime | **>600 s, unbounded** (T78) | < 120 s | < 60 s |
+| Static-analysis gate runtime | **4 m 15 s**, bounded (T78 fixed) | < 120 s | < 60 s |
 
 ---
 
@@ -180,8 +180,8 @@
 1. **Now (P0):** T77 — finish the HAL boundary migration for the product-owned
    paths that still include vendor headers or call `HAL_*` directly (RTC, flash,
    UI, bootloader), then re-state the AGENTS.md claim truthfully.
-2. **Now (P1):** T78 — bound and parallelise the cppcheck gate so it finishes
-   locally in a usable time and gets a deterministic timeout in CI.
+2. **Now (P1):** T76 — pay down the committed cppcheck baseline so the gate can
+   be tightened; the gate itself is now bounded and parallel (T78 closed).
 3. **Next (P1):** T81 — decide the H7/F7 DSP table reclaim: fix the wideband
    FFT lengths (60/16 are unsupported by CMSIS-DSP) and remove the
    runtime-sized `arm_rfft_fast_init_f32` call.

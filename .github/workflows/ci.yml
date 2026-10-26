@@ -53,6 +53,9 @@ jobs:
   static-analysis:
     name: cppcheck gate (product code)
     runs-on: ubuntu-24.04
+    # The gate is bounded by its own CPPCHECK_TIMEOUT (default 900 s per
+    # scan); this job timeout is the outer safety net (T78).
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - name: Install cppcheck
@@ -62,6 +65,7 @@ jobs:
           cppcheck --version
       - name: Static analysis gate
         # Exits non-zero on NEW findings in product code (vendored freedv noise is baselined).
+        # Runs parallel (-j$(nproc)) and with a hard per-scan timeout.
         run: bash scripts/static_analysis.sh
       - name: Upload report
         if: always()
