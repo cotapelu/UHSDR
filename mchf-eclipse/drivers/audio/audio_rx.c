@@ -13,6 +13,7 @@
  ************************************************************************************/
 
 #include "audio_rx.h"
+#include "audio_tx.h"           /* AudioDriver_SetRxTxAudioProcessingAudioFilters (declared, was implicit) */
 #include "audio_driver.h"
 
 #include "audio_driver_ctx.h"  /* T31.2: internal context */

@@ -29,6 +29,7 @@
 
 #include "audio_driver.h"
 #include "audio_driver_ctx.h"  /* T31.2: internal context */
+#include "audio_rx.h"          /* AudioDriver_RxProcessor (declared, was implicit) */
 #include "audio_nr.h"
 #include "audio_agc.h"
 #include "audio_management.h"

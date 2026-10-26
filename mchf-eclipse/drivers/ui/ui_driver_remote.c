@@ -17,7 +17,7 @@
 #include "remote.h"
 #include "uhsdr_mcu.h"
 #include "hal_gpio.h"
-#include "board_configs/UHSDR_UI_mchf_config.h"
+#include "board_configs/UHSDR_UI_board.h"
 #include "drivers/ui/encoder/ui_rotary.h"
 #include "uhsdr_keypad.h"
 

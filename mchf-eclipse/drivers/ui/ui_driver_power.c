@@ -24,6 +24,7 @@
 #include "soft_tcxo.h"
 #include "adc.h"
 #include "uhsdr_keypad.h"
+#include "hal_delay.h"
 #include "radio_management.h"
 
 void UiDriver_CreateVoltageDisplay(void)
@@ -111,7 +112,7 @@ void UiDriver_PowerDownCleanup(bool saveConfiguration)
 		UiConfiguration_SaveEepromValues();     // save EEPROM values
 	}
 
-	HAL_Delay(3000);
+	hal_delay_ms(3000);
 }
 
 
@@ -339,7 +340,7 @@ bool UiDriver_LoadSavedConfigurationAtStartup(void)
 				"Settings will be saved at POWEROFF",clr_fg,clr_bg,0);
 
 		// On screen delay									// delay a bit...
-		HAL_Delay(5000);
+		hal_delay_ms(5000);
 
 		// add this for emphasis
 		UiLcdHy28_PrintTextCentered(2,195, 316,
@@ -368,7 +369,7 @@ bool UiDriver_LoadSavedConfigurationAtStartup(void)
 		}
 		UiLcdHy28_LcdClear(clr_bg);                         // clear the screen
 		UiLcdHy28_PrintTextCentered(2,108,316,txp,clr_fg,clr_bg,0);
-		HAL_Delay(5000);
+		hal_delay_ms(5000);
 	}
 
 	bool load_freq_mode_defaults = false;

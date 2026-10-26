@@ -121,7 +121,8 @@ void FreeDV_Squelch_Update(freedv_conf_t* freedv_conf_p);
 #if defined(USE_FREEDV) || defined(USE_ALTERNATE_NR)
 
 
-extern MultiModeBuffer_t mmb;
+/* __MCHF_SPECIALMEM matches definition in freedv_uhsdr.c (fixes -Wlto-type-mismatch) */
+extern __MCHF_SPECIALMEM MultiModeBuffer_t mmb;
 
 // we allow for one more pointer to a buffer as we have buffers
 // why? because our implementation will only fill up the fifo only to N-1 elements

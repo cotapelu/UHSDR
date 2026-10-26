@@ -15,6 +15,7 @@
 // Common
 #include <stdbool.h>
 #include "uhsdr_board.h"
+#include "hal_delay.h"
 #include "profiling.h"
 #include <assert.h>
 
@@ -1063,7 +1064,7 @@ void UiAction_CopyVfoAB()
 	{
 		UiSpectrum_Clear();          // clear display under spectrum scope
 		UiLcdHy28_PrintText(80,160,is_vfo_b()?"VFO B -> VFO A":"VFO A -> VFO B",Cyan,Black,1);
-		HAL_Delay(3000);
+		hal_delay_ms(3000);
 		UiSpectrum_Init();           // init spectrum scope
 	}
 }
@@ -2549,7 +2550,7 @@ static void UiDriver_ShowTxErrorMessages()
 		{
         	UiLcdHy28_PrintTextCentered(sd.Slayout->full.x, scope_middle_y-6, sd.Slayout->full.w,txp,Red,Black,0);
 
-        	HAL_Delay(display_time);
+        	hal_delay_ms(display_time);
 		}
         UiDriver_DisplayMessageStop();
     }
@@ -2578,7 +2579,7 @@ void UiDriver_WaitForButtonPressed(uint32_t button_num)
         {
             break;
         }
-        HAL_Delay(20);
+        hal_delay_ms(20);
     }
 }
 
@@ -4665,7 +4666,7 @@ void UiDriver_WaitForBandMAndBandPorPWR()
 {
     while((((UiDriver_IsButtonPressed(BUTTON_BNDM_PRESSED)) && (UiDriver_IsButtonPressed(BUTTON_BNDP_PRESSED))) == false) && UiDriver_IsButtonPressed(BUTTON_PWR_PRESSED) == false)
     {
-        HAL_Delay(20);
+        hal_delay_ms(20);
         Keypad_Scan();
     }
 }
@@ -4703,7 +4704,7 @@ static void UiDriver_KeyTestScreen()
 	    // touchscreen was pressed:
 	    // wait a little and see if touch is still pressed
 	    // some TRX seem to see touchscreen events even if not pressed
-	    HAL_Delay(500);
+	    hal_delay_ms(500);
 	}
 
 	Keypad_Scan();
@@ -4732,7 +4733,7 @@ static void UiDriver_KeyTestScreen()
 			uint32_t numOfPressedButtons = 0;
 
 			// we slow down the loop a bit so that our wait counters take some time to go down.
-            HAL_Delay(10);
+            hal_delay_ms(10);
 
 	        Keypad_Scan();
 	        // read and map the hw keys to their logical buttons
@@ -5062,7 +5063,7 @@ void UiDriver_StartUpScreenFinish()
 
 	UiLcdHy28_PrintTextCentered(ts.Layout->StartUpScreen_START.x,g_ui_driver_ctx.startUpScreen_nextLineY + 10,320,txp,fg_clr,clr,0);
 
-	HAL_Delay(hold_time);
+	hal_delay_ms(hold_time);
 
 	UiDriver_CreateDesktop();
 }
@@ -5306,7 +5307,7 @@ static void UiAction_SaveConfigurationToMemory()
 	{
 		UiDriver_DisplayMessageStart();
 		UiDriver_SaveConfiguration();
-		HAL_Delay(3000);
+		hal_delay_ms(3000);
         UiDriver_DisplayMessageStop();
 
 		ts.menu_var_changed = 0;                    // clear "EEPROM SAVE IS NECESSARY" indicators

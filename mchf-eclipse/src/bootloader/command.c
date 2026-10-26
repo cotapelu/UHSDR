@@ -22,6 +22,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "command.h"
 #include "uhsdr_mcu.h"
+#include "hal_delay.h"
 #include "fatfs.h"
 #include "uhsdr_boot_hw.h"
 #include "bootloader_main.h"
@@ -46,7 +47,7 @@ static FIL fileR;
 
 void Wait(int time)
 {
-    HAL_Delay(time);
+    hal_delay_ms(time);
     // we show the error message until user presses power...
     if(mchfBl_ButtonGetState(BUTTON_POWER) == 0)
     {

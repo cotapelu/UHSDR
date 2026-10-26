@@ -8,21 +8,112 @@
 
 ## Executive Summary
 
-| Category | Status | Notes |
-|---|---|---|
-| Safety (watchdog, fault, canary) | ✅ Done | All MCUs, production-ready |
-| Hardware abstraction (RAM, I2C, RTC, SPI DMA) | ✅ Done | F4/F7/H7 verified |
-| Cache & Memory (DMA maintenance) | ✅ Done | LCD + FFT buffers |
-| Bootloader safety (CRC, anti-rollback, boot counter) | ✅ Done | 3-strike recovery |
-| Build system (`doctor`, `check`, `info`, `size-summary`) | ✅ Done | CI-compatible |
-| HAL shim layer (GPIO/SPI/I2S/DMA/…) | ✅ Done | 13 APIs + backends verified |
-| Large file splits (`ui_driver.c`, `audio_driver.c`, `ui_lcd_hy28.c`) | 🔄 In Progress | T31.1 done; T31.2 done; T31.3 pending |
-| Global state encapsulation | ✅ Done | audio_nr, audio_driver, ui_driver contexts created; `ts` documented |
-| `#ifdef` platform guards | ✅ Done | Reduced from 27 -> 4 in `hal/` + `board_configs/` |
-| Host test coverage | ✅ 670 tests | Target: 30+ |
-| Audio split (`audio_rx`/`audio_tx`/`audio_codec`) | 🔄 In Progress | `audio_rx.c` + `audio_tx.c` extracted; build verified; `audio_codec.c` deferred |
+## Executive Summary
 
-**Overall platform health: 100/100** — T31.2 audio split complete; T32.4 #ifdef reduction complete; T34.5 test coverage target achieved (670 tests); T48 format string fix complete; T49 ui_driver_utils tests complete; T50 cat_driver tests complete; T51 uhsdr_math tests complete; T52 radio_management tests complete; T53 mock HAL layer complete; T54 ui_configuration logic tests complete; T55 ui_menu float2fixedstr tests complete; T56 audio_filter mode mapping tests complete; T57 goertzel pure math tests complete; T58 ui_menu color/string mapping tests complete; T59 lcd_utils string tests complete; T60 ui_injection API tests complete; T61 ui_split_mode API tests complete; T62 lcd_blanking timer tests complete; T63 tuning step change tests complete; T64 demod mode change detection tests complete; T65 tx sidetone usage tests complete; T66 power-to-string conversion tests complete; T67 audio_alc_decay tests complete; T68 audio_biquad_coeffs tests complete; T69 radio_power_factor_scale tests complete; T70 cw_reverse_code tests complete; T71 radio_freq_in_band tests complete; T72 lcd_text_width tests complete; T73 radio_freq_translation_mode tests complete; T74 cw_decoder TRUE/FALSE macro cleanup complete; T75 cw_decoder_spike tests complete; T31.3 deferred; Phase 43-47 remote control implementation complete; test warnings fixed; remote LED blink TODO fixed; Remote_SendEncoderDelta packet length bug fixed; Remote_RxByte CRC8 receiver bug fixed; build integration completed; UiDriverEncoderSetDelta and UiDriver_InjectButton APIs implemented; remote mode UI guards added.
+> **All figures below are measured on this checkout, not asserted. See Phase 66 for the
+> verification commands. Anything marked ⚠️ is a measured defect, not a target.**
+
+### Measured state (2026-10-24, ARM GCC 13.2.1)
+
+| Category | Measured | Notes |
+|---|---|---|
+| Firmware build — F4 | ✅ 0 errors | `fw-mchf.elf` 426 961 + 1 968 + 96 444 = 525 373 B |
+| Firmware build — F4-512KB | ✅ 0 errors | 283 285 B, fits 512 KB flash |
+| Firmware build — F7 | ✅ 0 errors | ⚠️ **was failing to build** before Phase 66 (11 errors) |
+| Firmware build — H7 | ✅ 0 errors | ⚠️ **was failing to build** before Phase 66 (11 errors) |
+| Bootloader build — F4 / F7 / H7 | ✅ 0 errors | all three |
+| Host unit tests | ✅ 670/670 pass | 53 test files, 11 475 LOC, no hardware needed |
+| Vendor HAL `#include` in product code | ✅ 0 files | architecture claim verified true |
+| `HAL_Delay` calls in product code | ✅ 0 (was 26) | now `hal_delay_ms()` (Phase 66) |
+| `-Wimplicit-function-declaration` in product code | ✅ 0 (was 2) | Phase 66 |
+| Compiler warnings — F4 total | ⚠️ 295 | 260 in product code, 20 vendor, 15 HAL backends |
+| Compiler warnings — `-Wlto-type-mismatch` | ⚠️ 57 | real, root cause **not** isolated yet (Phase 67) |
+| Compiler warnings — `-Wvla-parameter` | ⚠️ 8 | VLAs in `drivers/freedv/` — unbounded stack |
+| `#ifdef` / `#if defined` in product code | 542 | was documented as 730/822 |
+| `TODO`/`FIXME`/`HACK` in product code | 184 | matches previous count |
+| Largest product file | 6 430 L | `drivers/ui/ui_driver.c` (split still open) |
+| UART HAL driver compiled? | ✅ yes (Phase 66) | ⚠️ was compiling to an **empty object** (all targets) |
+| Remote control module live in ELF | ✅ 6 symbols | ⚠️ was 0 (dead code) before Phase 66 |
+| Test coverage measured? | ❌ no | `gcov` exists on host but is not wired into `test/Makefile` |
+| CI platform | ⚠️ Travis only | no `.github/workflows`; static analysis is `\|\| true` (not gating) |
+
+### Health claim
+
+**Platform health: not scored.** An earlier revision of this file claimed "100/100". That
+number was not derived from any measurement and was contradicted by a clean build
+(295 warnings, and F7/H7 did not link). This revision replaces it with the table above.
+A score should only be reintroduced once coverage is measured (T78) and the
+`-Wlto-type-mismatch` root cause is closed (T67).
+
+---
+
+## Phase 66: Audit + P0 Defect Removal (2026-10-24)
+
+A full audit of the checkout found that several documented "done" items were not
+actually true. Each fix below was verified by rebuilding all four firmware targets
+and all three bootloaders, and re-running the host suite.
+
+### Verified defects found and fixed
+
+| # | Defect | Root cause | Fix |
+|---|---|---|---|
+| 66.1 | **F7 and H7 firmware did not build** (11 errors each) | `drivers/remote/remote.c` and `drivers/ui/ui_driver_remote.c` hard-coded `board_configs/UHSDR_UI_mchf_config.h`, pulling the mcHF config into an OVI40 build, whose `#error McHF boards support only CORTEX_M4 MCU!` then fired | new `hardware/board_configs/UHSDR_UI_board.h` selector keyed on `UI_BRD_*`; both files include it |
+| 66.2 | `UFM_LARGE` undeclared on non-mcHF builds | `ui_driver.h` (which declares `UiDriver_UpdateFrequency` / `UFM_LARGE`) was included only inside `#ifdef UI_BRD_MCHF`, but used unguarded | `ui_driver.h` + `radio_management.h` now included unconditionally; only encoder/remote-unit headers stay gated |
+| 66.3 | `AudioDriver_RxProcessor` / `AudioDriver_SetRxTxAudioProcessingAudioFilters` implicitly declared | `audio_driver.c` did not include `audio_rx.h`; `audio_rx.c` did not include `audio_tx.h` | includes added |
+| 66.4 | 26 vendor `HAL_Delay` calls in product code (AGENTS.md 5.3/9.4 violation) | written before `hal_delay.h` existed | replaced with `hal_delay_ms()` + `#include "hal_delay.h"` |
+| 66.5 | **UART HAL driver compiled to an empty object on every target** | all of `stm32f*xx_hal_uart.c` is wrapped in `#ifdef HAL_UART_MODULE_ENABLED`, and every `basesw` `hal_conf.h` ships that macro commented out | `-DHAL_UART_MODULE_ENABLED` added from the Makefile (`HALUARTFLAGS`) — basesw is vendor-owned and was not touched (AGENTS.md 5.2) |
+| 66.6 | **Entire remote-control module was dead code** (0 symbols in `fw-mchf.elf`) | `Remote_Init()` and `Remote_Process()` had no callers anywhere outside `drivers/remote/` | wired into `uhsdr_main.c`, gated by `REMOTE_UI_PAIR_ENABLE` |
+| 66.7 | Mode-detect pin was hard-coded in product code (`GPIO_PIN_14`/`GPIOB`, plus vendor types) | pin should live in `board_configs/` per AGENTS.md 9.3 | `REMOTE_MODE_DETECT` moved into both board configs, with `REMOTE_UI_PAIR_ENABLE`. **PB14 is kept** — ARCH.md 16 selects PB14 and records that PB5 is `ENC_ONE_CH2` (frequency encoder channel B). An earlier cut of this task wrongly moved it to PB5; reverted |
+| 66.8 | `hal_uart_create()` left `huart->Instance == NULL` → `HAL_UART_Init()` would deref NULL in `UART_SetConfig()` | handle never bound to a peripheral | F4 backend now binds USART2, enables clocks/GPIO AF7/NVIC prio 7 and supplies `USART2_IRQHandler`; F7/H7 bind USART2 and refuse init while `REMOTE_UI_PAIR_ENABLE == 0` |
+| 66.9 | `hal_uart_stm32_f7.c` called `HAL_UART_AbortReceive_IT`, which does not exist in the F7 HAL (would not have linked) | API assumed from the F4 HAL | replaced with the legacy-F7 equivalent (`__HAL_UART_DISABLE_IT` + `RxState`) |
+| 66.10 | `drivers/ui/ui_driver_remote.c` was missing from `files.mak` | added in a phase without the build wiring | added |
+| 66.11 | `sd`/`ads`/`adb`/`mmb`/`ts` declared without `__MCHF_SPECIALMEM` while their definitions carry it | header drift | declarations now match definitions. **Note:** this is correct hygiene but did **not** silence the `-Wlto-type-mismatch` family — see Phase 67 |
+
+### Size / regression
+
+F4 before Phase 66: 422 785 text. F4 after: 426 961 text (**+4 176 B, +0.99 %** — just inside the
+project's own < 1 % tolerance). The increase is the UART HAL driver, which had never been
+compiled. Remote control itself costs almost nothing when idle: in `MODE_MAIN` it drains an
+empty queue.
+
+### What this session explicitly did **not** do
+
+- No `-Wlto-type-mismatch` fix (57 left). Root cause not isolated; `-fcommon` and
+  attribute-consistency were both tried and neither removed it. GCC's own note
+  ("code may be misoptimized unless -fno-strict-aliasing is used") points at strict
+  aliasing rather than declaration drift. Tracked as T67.
+- No remote-control hardware validation. It compiles, links and is now called on
+  every main-loop iteration on mcHF, but it has never been exercised on two real
+  boards. Tracked as T69.
+
+> **Correction of record (same session).** While fixing 66.7 the mode-detect pin was
+> wrongly relocated from PB14 to PB5, based on an *earlier* table in ARCH.md 3.1.
+> ARCH.md 16 — the later, authoritative decision table — selects PB14 and states
+> explicitly that PB5 is `ENC_ONE_CH2` (frequency encoder channel B), so the move
+> would have broken the main tuning knob on real hardware. It was reverted the
+> same session, and `board_configs` now carries a comment forbidding the change.
+> This is the concrete argument for T69: every remaining hardware-facing change
+> needs a board to test on, because ARCH.md itself is internally inconsistent
+> (3.1 says PB5, 16 says PB14) and the code cannot arbitrate.
+- No VLA removal in `drivers/freedv/` (8 warnings).
+- No coverage measurement.
+
+---
+
+## Next Plan (evidence-ordered)
+
+Ordered by measured risk, not by how visible the task is.
+
+| # | Task | Why now | Priority |
+|---|---|---|---|
+| T67 | Isolate the 57 `-Wlto-type-mismatch` warnings | Symbols are a mix of functions (`UiDriver_UpdateFrequency`, `RadioManagement_Tune`) and globals (`ts`, `ks`, `sc`). GCC hints strict aliasing. Until the cause is known this class is opaque and cannot be triaged | P1 |
+| T68 | Wire `gcov` into `test/Makefile` and publish coverage | 670 tests with unknown coverage cannot guide further work | P1 |
+| T69 | Validate remote control on 2x mcHF UI + UART cable | The feature was dead until Phase 66; it is now live but untested on hardware | P1 |
+| T70 | Move CI to GitHub Actions, make `cppcheck` a gate | `scripts/static_analysis.sh` ends in `\|\| true`, so nothing blocks; Travis CI is dead for OSS | P0 |
+| T71 | Remove 8 VLAs from `drivers/freedv/` | Unbounded stack; must never reach an ISR | P1 |
+| T72 | Reduce the 188 `-Wmissing-prototypes` | Hides real declaration defects like 66.3 | P2 |
+| T73 | Continue `ui_driver.c` split (6 430 L) | Long-standing, already partially done | P2 |
+| T74 | License decision (GPL-3.0) | Blocks commercial distribution of firmware | P0 (business) |
 
 ---
 

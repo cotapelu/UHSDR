@@ -176,6 +176,18 @@
 // pin 12
 #define RED_LED                 GPIO_PIN_12
 #define RED_LED_PIO             GPIOB
+
+/* -------------------------------------------------------------------------
+ * Remote control (mcHF UI pair over USART) — see ARCH.md 3.1 / 3.2
+ *
+ * The remote UI-pair feature has only ever been specified and validated for
+ * the mcHF UI board. The pin below is a placeholder so that product code
+ * compiles on OVI40; REMOTE_UI_PAIR_ENABLE stays 0 until the OVI40 pinout
+ * and a free USART are confirmed.
+ * ------------------------------------------------------------------------- */
+#define REMOTE_MODE_DETECT       GPIO_PIN_14
+#define REMOTE_MODE_DETECT_PIO   GPIOB
+#define REMOTE_UI_PAIR_ENABLE    0
 // pin 13
 #define LCD_SCK                 GPIO_PIN_13
 #define LCD_SCK_PIO             GPIOB

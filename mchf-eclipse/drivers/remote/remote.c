@@ -18,13 +18,18 @@
 #include "hal_gpio.h"
 #include "hal_uart.h"
 #include "uhsdr_board.h"
-#include "board_configs/UHSDR_UI_mchf_config.h"
+/* Board-agnostic: resolve board config from UI_BRD_* macro (AGENTS.md 5.3).
+ * Must NOT name a specific board config directly. */
+#include "board_configs/UHSDR_UI_board.h"
 
+/* Board-agnostic UI / RF APIs used by Remote_InjectIntoUI() on every board. */
+#include "drivers/ui/ui_driver.h"
+#include "drivers/ui/radio_management.h"
+
+/* mcHF UI board specific: remote unit input capture + encoder deltas. */
 #ifdef UI_BRD_MCHF
 #include "drivers/ui/ui_driver_remote.h"
 #include "drivers/ui/encoder/ui_rotary.h"
-#include "drivers/ui/ui_driver.h"
-#include "drivers/ui/radio_management.h"
 #endif
 
 #include <string.h>
@@ -321,14 +326,22 @@ static void Remote_RxByte(uint8_t byte)
 
 /* -------------------------------------------------------------------------
  * Mode detection via GPIO jumper
+ *
+ * REMOTE_MODE_DETECT / REMOTE_MODE_DETECT_PIO are defined per-board in
+ * hardware/board_configs/UHSDR_UI_<board>_config.h (see ARCH.md 3.1/3.2).
+ * Product code must not hardcode pin numbers (AGENTS.md 9.3).
  * ------------------------------------------------------------------------- */
-#define REMOTE_MODE_DETECT_PIN  GPIO_PIN_14
-#define REMOTE_MODE_DETECT_PIO  GPIOB
+#ifndef REMOTE_MODE_DETECT
+    #error "REMOTE_MODE_DETECT is not defined for this UI board (see board_configs)"
+#endif
+#ifndef REMOTE_MODE_DETECT_PIO
+    #error "REMOTE_MODE_DETECT_PIO is not defined for this UI board (see board_configs)"
+#endif
 
 remote_mode_t Remote_DetectMode(void)
 {
     hal_gpio_config_t cfg = {
-        .pin = REMOTE_MODE_DETECT_PIN,
+        .pin = REMOTE_MODE_DETECT,
         .mode = HAL_GPIO_MODE_INPUT,
         .pull = HAL_GPIO_PULL_DOWN,
         .speed = HAL_GPIO_SPEED_LOW,
@@ -339,7 +352,7 @@ remote_mode_t Remote_DetectMode(void)
     /* Settle delay for pin */
     for (volatile int i = 0; i < 10000; i++);
 
-    if (hal_gpio_read_pin(REMOTE_MODE_DETECT_PIO, REMOTE_MODE_DETECT_PIN) == HAL_GPIO_PIN_SET) {
+    if (hal_gpio_read_pin(REMOTE_MODE_DETECT_PIO, REMOTE_MODE_DETECT) == HAL_GPIO_PIN_SET) {
         return MODE_REMOTE;
     }
     return MODE_MAIN;

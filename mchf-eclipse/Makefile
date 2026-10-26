@@ -113,6 +113,16 @@ MACHFLAGS_F4 := -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mthumb -DARM
 MACHFLAGS_F7 := -mcpu=cortex-m7 -mfloat-abi=hard -mfpu=fpv5-d16    -mthumb -DARM_MATH_CM7 -DCORTEX_M7 -DSTM32F767xx -D__FPU_PRESENT=1
 MACHFLAGS_H7 := -mcpu=cortex-m7 -mfloat-abi=hard -mfpu=fpv5-d16    -mthumb -DARM_MATH_CM7 -DCORTEX_M7 -DSTM32H743xx -D__FPU_PRESENT=1
 
+# The STM32 UART HAL driver source (stm32f*xx_hal_uart.c) is entirely wrapped in
+# "#ifdef HAL_UART_MODULE_ENABLED" and every basesw stm32f*xx_hal_conf.h ships
+# that macro commented out, so the driver compiles to an EMPTY object. hal_uart
+# therefore had no implementation to link against. basesw is vendor-owned and
+# must not be edited (AGENTS.md 5.2), so the module is enabled from here instead.
+HALUARTFLAGS := -DHAL_UART_MODULE_ENABLED
+MACHFLAGS_F4 += $(HALUARTFLAGS)
+MACHFLAGS_F7 += $(HALUARTFLAGS)
+MACHFLAGS_H7 += $(HALUARTFLAGS)
+
 BASECFLAGS_F4  = $(MACHFLAGS_F4)  $(COMPILEFLAGS) $(EXTRACFLAGS)
 BASECFLAGS_F7  = $(MACHFLAGS_F7)  $(COMPILEFLAGS) $(EXTRACFLAGS) -DFREEDV_MODE_700D_EN=1 -DCODEC2_MODE_700C_EN=1
 BASECFLAGS_H7  = $(MACHFLAGS_H7)  $(COMPILEFLAGS) $(EXTRACFLAGS) -DFREEDV_MODE_700D_EN=1 -DCODEC2_MODE_700C_EN=1

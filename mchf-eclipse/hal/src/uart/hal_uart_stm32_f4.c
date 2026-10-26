@@ -15,6 +15,7 @@
 
 #include "hal_uart.h"
 
+#include <stdbool.h>
 #include <stddef.h>
 
 #include "stm32f4xx_hal.h"
@@ -25,8 +26,64 @@
  * ------------------------------------------------------------------------- */
 static UART_HandleTypeDef g_uart_inst;
 
+/* -------------------------------------------------------------------------
+ * Which STM32 peripheral backs this shim.
+ *
+ * ARCH.md 3.1/3.2 specifies USART2 on PA2(TX)/PA3(RX), AF7, IRQ priority 7
+ * (below the audio ISR) for the mcHF UI remote pair. The handle used to be
+ * left zero-initialised, i.e. Instance == NULL, so HAL_UART_Init() walked off
+ * a NULL pointer inside UART_SetConfig(). It is now bound explicitly and the
+ * peripheral is enabled once, here, because the vendor MSP layer
+ * (basesw/.../stm32f4xx_hal_msp.c) contains no USART2 configuration for this
+ * board and must not be modified.
+ * ------------------------------------------------------------------------- */
+#define UART_BACKEND_INSTANCE      USART2
+#define UART_BACKEND_TX_PIN        GPIO_PIN_2
+#define UART_BACKEND_RX_PIN        GPIO_PIN_3
+#define UART_BACKEND_PORT          GPIOA
+#define UART_BACKEND_AF            GPIO_AF7_USART2
+#define UART_BACKEND_IRQn          USART2_IRQn
+#define UART_BACKEND_IRQ_PRIO      7   /* below audio ISR (1-3), see ARCH.md 3.2 */
+
+static bool g_uart_hw_ready = false;
+
+static void UartBackend_MspInit(void)
+{
+    GPIO_InitTypeDef gpio = {0};
+
+    /* USART2 is on APB1; GPIOA carries TX/RX. */
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    __HAL_RCC_USART2_CLK_ENABLE();
+
+    gpio.Pin       = UART_BACKEND_TX_PIN | UART_BACKEND_RX_PIN;
+    gpio.Mode      = GPIO_MODE_AF_PP;
+    gpio.Pull      = GPIO_PULLUP;
+    gpio.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
+    gpio.Alternate = UART_BACKEND_AF;
+    HAL_GPIO_Init(UART_BACKEND_PORT, &gpio);
+
+    HAL_NVIC_SetPriority(UART_BACKEND_IRQn, UART_BACKEND_IRQ_PRIO, 0);
+    HAL_NVIC_EnableIRQ(UART_BACKEND_IRQn);
+
+    g_uart_hw_ready = true;
+}
+
+/* -------------------------------------------------------------------------
+ * Vendor IRQ entry point for the bound peripheral (basesw has no USART2
+ * handler for this use case).
+ * ------------------------------------------------------------------------- */
+void USART2_IRQHandler(void)
+{
+    HAL_UART_IRQHandler(&g_uart_inst);
+}
+
 hal_uart_handle_t hal_uart_create(void)
 {
+    g_uart_inst.Instance = UART_BACKEND_INSTANCE;
+    if (!g_uart_hw_ready)
+    {
+        UartBackend_MspInit();
+    }
     return &g_uart_inst;
 }
 

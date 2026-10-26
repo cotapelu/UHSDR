@@ -728,7 +728,8 @@ typedef struct TransceiverState
  */
 /* T23.4: guard against silent struct layout drift across translation units */
 _Static_assert(sizeof(TransceiverState) > 0, "TransceiverState must be a complete type");
-extern __IO TransceiverState ts;
+/* __MCHF_SPECIALMEM matches definition in uhsdr_board.c (fixes -Wlto-type-mismatch) */
+extern __IO __MCHF_SPECIALMEM TransceiverState ts;
 
 #define	POWERDOWN_DELAY_COUNT	30	// Delay in main service loop for the "last second" before power-down - to allow EEPROM write to complete
 

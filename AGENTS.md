@@ -379,39 +379,57 @@ HAL backends (hal/src/*/):
 
 ---
 
-## 10. Current State (Verified 2026-08-21)
+## 10. Current State (Verified 2026-10-24, ARM GCC 13.2.1)
 
-### Implemented
-- ✅ Watchdog: `HAL_IWDG_Init()` + refresh every 1s
-- ✅ Fault handlers: F4/F7/H7 register dump via `FaultHandler_Common()`
-- ✅ Stack guard: static buffer, main loop check
-- ✅ Cache maintenance: LCD + FFT DMA buffers
-- ✅ Audio vtable: I2S (F4) vs SAI (F7/H7)
-- ✅ H7 RAM detection: 128KB/256KB/512KB/1024KB
-- ✅ I2C timing: F4/F7/H7 abstraction
-- ✅ H7 RTC: LSE/LSI init
-- ✅ Bootloader safety: CRC32 + anti-rollback + 3-strike
-- ✅ Low-power idle: `__WFI()` in main loop
-- ✅ CI + unit tests + size regression detection
+> All figures below were measured by building every target on a clean tree.
+> `docs/TODO.md` Phase 66 holds the commands and the defect list.
 
-### Remaining (STM32-specific)
-- 🔄 HAL shim layer: 15 abstract APIs for GPIO/SPI/I2S/DMA etc. (Phase 1)
-- 🟡 Large file splits: `ui_driver.c` (6637L), `audio_driver.c` (2799L), `ui_lcd_hy28.c` (2683L)
-- 🟡 Global state: encapsulate in context structs
-- 🟡 `#ifdef` reduction: 730 total; ~27 platform guards remain in hardware abstraction
+### Implemented — verified
+- ✅ **Firmware builds:** F4, F4-512KB, F7, H7 — 0 errors each
+  (F7/H7 previously failed to link entirely; fixed in Phase 66)
+- ✅ **Bootloader builds:** F4, F7, H7 — 0 errors each
+- ✅ **Host tests:** 670 passing / 0 failing (53 files, 11 475 LOC)
+- ✅ *Vendor HAL `#include` in product code:* **0 files** — architecture goal met
+- ✅ *`HAL_*` calls in product code:* delay path now 0 (`HAL_Delay` → `hal_delay_ms`)
+- ✅ **HAL shim layer:** 14 abstract APIs in `hal/include`, backends per MCU
+- ✅ Board config selection is now centralised in
+  `hardware/board_configs/UHSDR_UI_board.h` (no product code names a board config)
+- ✅ Watchdog, fault dump, stack canary, cache maintenance, CRC32 bootloader
+- ✅ UART HAL driver now actually compiled (was an empty object on every target)
+- ✅ Remote control module wired into the main loop (`REMOTE_UI_PAIR_ENABLE`)
+
+### Remaining — measured, not estimated
+- 🔴 **57 `-Wlto-type-mismatch`** — root cause not isolated (T67)
+- 🔴 **Test coverage unknown** — `gcov` never invoked (T68)
+- 🔴 **Static analysis does not gate CI** — `scripts/static_analysis.sh` ends `|| true`
+  and there is no `.github/workflows` (T70)
+- 🟡 **260 product-code warnings total** (188 `missing-prototypes`, 8 VLA, 3 `absolute-value`)
+- 🟡 **8 VLAs in `drivers/freedv/`** — unbounded stack (T71)
+- 🟡 **542 `#ifdef`/`#if defined` in product code** (the earlier "730" figure was wrong)
+- 🟡 **184 `TODO`/`FIXME`/`HACK`**
+- 🟡 Large file splits still open: `ui_driver.c` 6 430 L, `ui_lcd_hy28.c` 2 671 L
+- 🔴 **Remote control unproven on hardware.** It was dead code until Phase 66; it now
+  compiles, links and runs every main-loop iteration, but has never touched a real board.
+- 🔴 **License is GPL-3.0** — blocks commercial redistribution of firmware
 
 ---
 
 ## 11. Success Metrics
 
-| Metric | Current | Target |
+| Metric | Measured (2026-10-24) | Target |
 |---|---|---|
-| Vendor HAL includes in product code | 10+ files | 0 |
-| Direct HAL calls in product code | 50+ | 0 |
-| Platform `#ifdef` in product code | ~27 | <10 |
-| Time to add new STM32 MCU | 2-3 weeks | 1 week (HAL shim only) |
-| Time to add new board | 1-2 days | 1 day (config header only) |
-| Host test coverage | 5 tests | 30+ tests |
+| Vendor HAL includes in product code | **0** | 0 ✅ |
+| Direct `HAL_*` calls in product code (delay) | **0** (was 26) | 0 ✅ |
+| Platform `#ifdef` in product code | 542 | <50 feature flags |
+| Firmware targets building | **4 / 4** (was 2 / 4) | 4 ✅ |
+| Bootloader targets building | **3 / 3** | 3 ✅ |
+| Host tests | **670 passing** | 30+ ✅ |
+| Host test coverage | **unknown** | >90% measured |
+| Product-code compiler warnings | 260 | <25 |
+| `-Wlto-type-mismatch` | 57 | 0 |
+| F4 binary (text) | 426 961 B | < 1 % regression/step |
+| Time to add new STM32 MCU | 1 week (HAL backend + `uhsdr_mcu.h`) | ≤ 1 week ✅ |
+| Time to add new board | 1 config header + `UI_BRD_*` flag | ≤ 1 day ✅ |
 | Binary size regression tolerance | — | < 1% |
 | Build time (all targets) | ~5 min | <10 min |
 

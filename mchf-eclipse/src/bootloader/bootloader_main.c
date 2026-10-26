@@ -18,6 +18,7 @@
 #include "gpio.h"
 
 #include "uhsdr_board.h"
+#include "hal_delay.h"
 #include "flash_if.h"
 #include "uhsdr_boot_hw.h"
 #include "command.h"
@@ -313,7 +314,7 @@ int Bootloader_Main()
     BSP_Init();
 
     Bootloader_PowerHoldOn();
-    HAL_Delay(50);
+    hal_delay_ms(50);
 
     if (boot_failed == true)
     {
@@ -360,7 +361,7 @@ int Bootloader_Main()
     Bootloader_InfoScreen();
     mchfBl_PinOn(BACKLIGHT);
     // now give user a chance to let go off the BAND- button
-    HAL_Delay(3000);
+    hal_delay_ms(3000);
     return 0;
 }
 

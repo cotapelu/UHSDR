@@ -3,27 +3,32 @@
   "phases": [
     {
       "id": "phase-1",
-      "name": "Autonomous Cycle 12+",
+      "name": "Phase B: Fix P0 Build Defects",
       "tasks": [
         {
           "id": "task-1",
-          "content": "Continue proactive analysis: scan for next high-priority untested modules or code quality issues",
+          "content": "P0.1 Create board-agnostic board config selector header",
           "status": "in_progress"
         },
         {
           "id": "task-2",
-          "content": "Add tests for next module with pure logic (e.g., ui_menu.c menu rendering helpers, audio_driver_power.c)",
+          "content": "P0.2 Fix remote.c: board-agnostic includes + UFM_LARGE scope",
           "status": "pending"
         },
         {
           "id": "task-3",
-          "content": "Update docs/AGENT_METRICS.md and docs/TODO.md after each completed task",
+          "content": "P0.3 Fix ui_driver_remote.c board config include",
+          "status": "pending"
+        },
+        {
+          "id": "task-4",
+          "content": "content",
           "status": "pending"
         }
       ]
     }
   ],
-  "nextTaskId": 4,
+  "nextTaskId": 5,
   "nextPhaseId": 2,
-  "updatedAt": "2026-08-29T00:17:21.749Z"
+  "updatedAt": "2026-10-24T08:33:29.674Z"
 }

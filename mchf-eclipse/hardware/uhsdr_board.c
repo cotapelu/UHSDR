@@ -13,6 +13,7 @@
 ************************************************************************************/
 
 #include "uhsdr_board.h"
+#include "hal_delay.h"
 #include "uhsdr_fault.h"
 #include "ui_configuration.h"
 #include "ui_lcd_hy28.h"
@@ -545,7 +546,7 @@ static void Board_BandFilterPulseRelays()
     // FIXME: Replace non_os_delay with HAL_Delay
     GPIO_ResetBits(BAND2_PIO, BAND2);
     // TODO: Check if we can go down to 10ms as per datasheet
-    // HAL_Delay(20);
+    // hal_delay_ms(20);
     non_os_delay();
     GPIO_SetBits(BAND2_PIO, BAND2);
 }

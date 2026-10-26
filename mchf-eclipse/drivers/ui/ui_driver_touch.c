@@ -16,6 +16,7 @@
 #include "ui_driver_touch.h"
 #include "ui_driver_utils.h"
 #include "uhsdr_keypad.h"
+#include "hal_delay.h"
 
 #define CrossCheckCount 3
 //cross size definitions, must be odd
@@ -181,7 +182,7 @@ bool UiDriver_TouchscreenCalibration(void)
     if (UiDriver_IsButtonPressed(TOUCHSCREEN_ACTIVE))
     {
         //wait for a moment to filter out some unwanted spikes
-        HAL_Delay(500);
+        hal_delay_ms(500);
         Keypad_Scan();
 
         if(UiDriver_IsButtonPressed(TOUCHSCREEN_ACTIVE))
@@ -199,7 +200,7 @@ bool UiDriver_TouchscreenCalibration(void)
                         ,clr_fg,clr_bg,0);
 
                 // delay a bit...
-                HAL_Delay(3000);
+                hal_delay_ms(3000);
 
                 // add this for emphasis
                 UiLcdHy28_PrintTextCentered(2, 195, MAX_X-4, "Press BAND+ and BAND-\n"
@@ -211,7 +212,7 @@ bool UiDriver_TouchscreenCalibration(void)
                 {
                     UiLcdHy28_LcdClear(Black);							// clear the screen
                     UiLcdHy28_PrintTextCentered(2,108,MAX_X-4,"      ...performing normal start...",White,Black,0);
-                    HAL_Delay(3000);
+                    hal_delay_ms(3000);
                 }
                 else
                 {
@@ -226,7 +227,7 @@ bool UiDriver_TouchscreenCalibration(void)
                         "Calibration cannot be executed!"
                         ,clr_fg,clr_bg,0);
                 // delay a bit...
-                HAL_Delay(3000);
+                hal_delay_ms(3000);
             }
 		}
 	}
@@ -248,13 +249,13 @@ bool UiDriver_TouchscreenCalibration(void)
 
 	    UiLcdHy28_LcdClear(clr_bg);
 	    UiLcdHy28_PrintTextCentered(2,100,MAX_X-4,"Wait one moment please...",Yellow,clr_bg,0);
-	    HAL_Delay(1000);
+	    hal_delay_ms(1000);
 
 	    UiDriver_TouchscreenCalibrationRun();
 
 	    UiLcdHy28_LcdClear(clr_bg);
 
-	    HAL_Delay(2000);
+	    hal_delay_ms(2000);
 	    retval = true;
 	    ts.menu_var_changed = true;
 	}
@@ -314,7 +315,7 @@ void UiDriver_DoCrossCheck(int16_t cross[])
 	*xt_corr/=CrossCheckCount; //average the data
 	*yt_corr/=CrossCheckCount;
 
-	HAL_Delay(2000);
+	hal_delay_ms(2000);
 }
 
 void UiDriver_HandleTouchScreen(bool is_long_press)

@@ -174,6 +174,19 @@
 // pin 12
 #define RED_LED                 GPIO_PIN_12
 #define RED_LED_PIO             GPIOB
+
+/* -------------------------------------------------------------------------
+ * Remote control (mcHF UI pair over USART2) — see ARCH.md 3.1 / 3.2
+ *
+ * REMOTE_MODE_DETECT is the jumper a user wears to select REMOTE unit mode.
+ * Pin choice per ARCH.md 16 "Mode detect pin": PB14, freed when USB Host was
+ * removed in Phase 17. Do NOT change this to PB5 — PB5 is ENC_ONE_CH2, the
+ * frequency encoder channel B (see this file), and sampling it as a mode
+ * jumper would break the main tuning knob.
+ * ------------------------------------------------------------------------- */
+#define REMOTE_MODE_DETECT       GPIO_PIN_14
+#define REMOTE_MODE_DETECT_PIO   GPIOB
+#define REMOTE_UI_PAIR_ENABLE    1
 // pin 13
 #define LCD_SCK                 GPIO_PIN_13
 #define LCD_SCK_PIO             GPIOB

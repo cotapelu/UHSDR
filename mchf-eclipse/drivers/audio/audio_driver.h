@@ -527,10 +527,11 @@ typedef enum
 #define	FREQ_IQ_CONV_MODE_MAX		4
 
 // Public Audio
-extern AudioDriverState	ads;
+/* __MCHF_SPECIALMEM matches definition in audio_driver.c (fixes -Wlto-type-mismatch) */
+extern __MCHF_SPECIALMEM AudioDriverState	ads;
 extern SMeter       sm;
 
-extern AudioDriverBuffer adb;
+extern __MCHF_SPECIALMEM AudioDriverBuffer adb;
 
 typedef struct SnapCarrier
 {

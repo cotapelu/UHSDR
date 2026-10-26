@@ -14,6 +14,7 @@
 
 // Common
 #include "uhsdr_board.h"
+#include "hal_delay.h"
 #include "codec.h"
 //
 #include <math.h>
@@ -729,7 +730,7 @@ void Si570_Init()
 		}
 
 		// we wait a little and then reset again
-		HAL_Delay(40);
+		hal_delay_ms(40);
 		Si570_ResetConfiguration();
 	}
 	osc = os.present?&osc_si570:NULL;

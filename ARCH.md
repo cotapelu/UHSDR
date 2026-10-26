@@ -779,6 +779,31 @@ remote_error_t Remote_GetLastError(void);
 | Button command encoding | Separate 0x03/0x04 press/release vs single cmd with flag | **Separate 0x03/0x04** — matches ARCH.md Section 5.2 command table |
 | Encoder injection | Direct GPIO quadrature vs TIM counter manipulation | **TIM counter via `UiDriverEncoderSetDelta()`** — reuses existing encoder interface |
 
+> **⚠ Inconsistency warning.** The pinout table in 3.1 lists **PB5** as "Mode Detect",
+> while the decision table above (16) selects **PB14** and records that
+> PB5 is `ENC_ONE_CH2` (frequency encoder channel B on mcHF UI). These two sections
+> contradict each other. **Section 16 is authoritative** — the code uses PB14, and
+> PB5 must not be used because it would break the main tuning knob.
+> See `docs/TODO.md` Phase 66 for the note about this being wrongly "fixed" to PB5
+> and then reverted.
+
+---
+
+## 17. Implementation status (verified 2026-10-24)
+
+| Item | Status |
+|---|---|
+| Protocol, framing, CRC8 | implemented and host-tested (`remote_protocol.c`) |
+| State machines, command queue | implemented (`remote.c`) |
+| Board config / mode detect pin | **PB14**, now defined per-board in `hardware/board_configs/` (was hard-coded in product code) |
+| UART transport | ⚠ **was never compiled**: every `basesw` `hal_conf.h` ships `HAL_UART_MODULE_ENABLED` commented out, so `stm32f*xx_hal_uart.c` built to an empty object. Now enabled from the Makefile (`HALUARTFLAGS`) — basesw untouched |
+| F4 UART binding | bound to **USART2 on PA2/PA3, AF7, NVIC priority 7** in `hal/src/uart/hal_uart_stm32_f4.c`; `USART2_IRQHandler` supplied there because `basesw` has no USART2 handler for this use |
+| Module invocation | `Remote_Init()` + `Remote_Process()` now called from `uhsdr_main.c`, gated by `REMOTE_UI_PAIR_ENABLE` (1 on mcHF, 0 on OVI40) |
+| Symbols in `fw-mchf.elf` (F4) | 6 live — was 0 before the wiring above |
+| Hardware validation | ❌ **none** — never exercised on two real boards |
+
+Until that last row is closed, treat remote control as "wired but unproven".
+
 ## 17. Implementation Notes (Phase 43-45)
 
 ### 17.1 Mode Detection

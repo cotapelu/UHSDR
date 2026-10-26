@@ -38,6 +38,9 @@
 //cat
 #include "drivers/cat/cat_driver.h"
 
+// Remote control (mcHF UI pair over UART) — see ARCH.md
+#include "drivers/remote/remote.h"
+
 // UI Driver
 #include "drivers/ui/ui_driver.h"
 #include "drivers/ui/lcd/ui_lcd_hy28.h"
@@ -459,6 +462,13 @@ int mchfMain(void)
     // Start watchdog before entering main loop
     Board_WatchdogInit();
 
+#if REMOTE_UI_PAIR_ENABLE
+    /* Remote control takes over this unit's input (REMOTE mode) or makes it
+     * answer a remote unit (MAIN mode). Must be armed before the loop so the
+     * mode jumper is sampled and the UART RX callback is live. */
+    (void)Remote_Init();
+#endif
+
     Board_RedLed(LED_STATE_OFF);
 
     // Transceiver main loop
@@ -482,6 +492,12 @@ int mchfMain(void)
 
         // UI events processing
         UiDriver_TaskHandler_MainTasks();
+
+#if REMOTE_UI_PAIR_ENABLE
+        /* Non-blocking: either drives the remote state machine or drains the
+         * command queue from a paired remote unit. */
+        Remote_Process();
+#endif
 
         // Enter low-power idle mode when no work is pending
         // WFI wakes on audio ISR, SysTick, encoders, keys, USB, etc.

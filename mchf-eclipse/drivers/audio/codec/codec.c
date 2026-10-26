@@ -14,6 +14,7 @@
 
 // Common
 #include "uhsdr_board.h"
+#include "hal_delay.h"
 #include "audio_driver.h"
 #include "radio_management.h"
 
@@ -361,7 +362,7 @@ void Codec_PrepareTx(uint8_t current_txrx_mode)
 
 	if (uses_mic_input)
 	{
-		HAL_Delay(10);
+		hal_delay_ms(10);
 		// pause an instant because the codec chip has its own delay before tasks complete when we use the microphone input!
 		// otherwise audible noise will be transmitted
 	}

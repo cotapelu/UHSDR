@@ -271,7 +271,8 @@ typedef struct SpectrumDisplay
 } SpectrumDisplay;
 
 // Spectrum display
-extern SpectrumDisplay      sd;
+/* __MCHF_SPECIALMEM matches definition in ui_spectrum.c (fixes -Wlto-type-mismatch) */
+extern __MCHF_SPECIALMEM SpectrumDisplay      sd;
 
 #define MinimumScopeSize 24
 #define MinimumWaterfallSize 16
