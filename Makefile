@@ -31,11 +31,18 @@ BUILDFOR ?= F4
 # Hardware Board: mchf, ovi40
 BOARD = mchf
 
-# Transceiver ID (max 5 chars)
+# Transceiver ID (max 5 chars). Also the release artifact and DFU file base
+# name ("fw-<TRX_ID>.bin"), so it stays board independent.
 TRX_ID ?= mchf
 
-# Transceiver Name (will use TRX_ID if not set)
-TRX_NAME ?= $(TRX_ID)
+# Transceiver name. Empty means: the board configuration header owns it
+# (hardware/board_configs/UHSDR_UI_*_config.h). Set it to override the board
+# default, e.g. "make TRX_NAME='My Radio' firmware".
+TRX_NAME ?=
+
+# Display helper: an empty TRX_NAME means the board configuration header owns
+# the product name.
+TRX_NAME_DISPLAY := $(if $(strip $(TRX_NAME)),$(TRX_NAME),<board config default>)
 
 # Build type: release (default) or debug
 DEBUG ?= 0
@@ -73,11 +80,16 @@ SUBMAKE_FLAGS := \
 	BUILDFOR=$(BUILDFOR) \
 	CONFIGFLAGS="$(CONFIGFLAGS)" \
 	TRX_ID=$(TRX_ID) \
-	TRX_NAME="$(TRX_NAME)" \
 	DEBUG=$(DEBUG) \
 	VERBOSE=$(VERBOSE) \
 	OPT_GCC_ARM=$(OPT_GCC_ARM) \
 	ROOTLOC=.
+
+# Only forward an explicitly requested TRX_NAME. An empty value would replace
+# the board configuration identity with an empty string (T80).
+ifneq ($(strip $(TRX_NAME)),)
+SUBMAKE_FLAGS += TRX_NAME="$(TRX_NAME)"
+endif
 
 # Helper macro for building firmware/bootloader in sub-make with explicit variables
 # Usage: $(call BUILD_CMD,<BUILDFOR>,<BOARD>,<CONFIGFLAGS>,<target>)
@@ -136,7 +148,7 @@ help:
 	@echo "  BUILDFOR=F4|F4-512KB|F7|H7   - Target MCU (default: F4)"
 	@echo "  BOARD=mchf|ovi40             - Hardware board (default: mchf)"
 	@echo "  TRX_ID=xxxxx                 - Transceiver ID, max 5 chars (default: mchf)"
-	@echo "  TRX_NAME='name'              - Transceiver name (default: TRX_ID)"
+	@echo "  TRX_NAME='name'              - Override the board transceiver name"
 	@echo "  DEBUG=1                      - Enable debug build (default: 0)"
 	@echo "  VERBOSE=1                    - Verbose output (default: 0)"
 	@echo "  OPT_GCC_ARM=/path/to/gcc     - Custom toolchain path"
@@ -155,7 +167,7 @@ help:
 	@echo "  BUILDFOR = $(BUILDFOR)"
 	@echo "  BOARD    = $(BOARD)"
 	@echo "  TRX_ID   = $(TRX_ID)"
-	@echo "  TRX_NAME = $(TRX_NAME)"
+	@echo "  TRX_NAME = $(TRX_NAME_DISPLAY)"
 	@echo "  DEBUG    = $(DEBUG)"
 	@echo "  CONFIGFLAGS = $(CONFIGFLAGS)"
 	@echo ""
@@ -314,7 +326,7 @@ config:
 	@echo "BUILDFOR    = $(BUILDFOR)"
 	@echo "BOARD       = $(BOARD)"
 	@echo "TRX_ID      = $(TRX_ID)"
-	@echo "TRX_NAME    = $(TRX_NAME)"
+	@echo "TRX_NAME    = $(TRX_NAME_DISPLAY)"
 	@echo "DEBUG       = $(DEBUG)"
 	@echo "VERBOSE     = $(VERBOSE)"
 	@echo "OPT_GCC_ARM = $(OPT_GCC_ARM)"
@@ -387,6 +399,20 @@ ci-bootloaders:
 	@$(MAKE) BUILDFOR=H7 BOARD=mchf bootloader
 	@$(MAKE) BUILDFOR=H7 BOARD=ovi40 bootloader
 	@echo "All bootloader builds completed!"
+
+# Regression check for configuration-safe builds on a dirty tree (Phase 68, T75).
+build-switch-test:
+	@bash scripts/check_build_switch.sh
+
+# Print the identity macros (TRX_NAME/TRX_ID) as resolved for a configuration.
+# The board configuration headers own the defaults; this only forwards the
+# configuration exactly like a real build does.
+print-identity:
+	@$(MAKE) -C $(BUILD_DIR) -f Makefile $(SUBMAKE_FLAGS) BOARD="$(BOARD)" print-identity
+
+# Regression check for the per-board transceiver identity (Phase 68, T80).
+check-identity:
+	@bash scripts/check_identity.sh
 
 # =============================================================================
 # Phony declarations
@@ -510,5 +536,5 @@ stack-report:
 	f4-mchf f4-ovi40 f7-mchf f7-ovi40 h7-mchf h7-ovi40 \
 	debug-f4 debug-f7 debug-h7 \
 	config list-targets check-toolchain \
-	ci-build-all ci-bootloaders both \
+	ci-build-all ci-bootloaders both build-switch-test check-identity print-identity \
 	doctor check size-summary stack-report

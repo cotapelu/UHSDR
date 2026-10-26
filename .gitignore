@@ -13,6 +13,8 @@
 build/
 *.o
 *.d
+mchf-eclipse/.uhsdr_build_config
+mchf-eclipse/.uhsdr_build_config.tmp
 
 # Coverage (T68 — `make -C mchf-eclipse/test coverage`)
 *.gcda

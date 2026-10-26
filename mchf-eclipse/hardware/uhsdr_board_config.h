@@ -42,6 +42,18 @@
 
 //************DEFAULT_VALUES_IF_NOT_SET_IN_BOARD_CONFIG_FILES**********//
 
+// Identity ownership (Phase 68, T80):
+//   TRX_NAME is the human readable product name and is owned by the board
+//   configuration headers (hardware/board_configs/UHSDR_UI_*_config.h). The
+//   build system only injects it when the user explicitly asks for an
+//   override ("make TRX_NAME='...'"), so every board reports its own name
+//   instead of a generic one.
+//
+//   TRX_ID is supplied by the build system (-DTRX_ID=...). It is the release
+//   artifact and DFU file base name ("fw-<TRX_ID>.bin" on the SD card) and
+//   therefore stays board independent on purpose. The board specific values
+//   below are kept as documentation of the intended hardware identity.
+
 #if !defined(TRX_NAME)
     #define TRX_NAME "mcHF QRP"
 #endif //TRX_NAME

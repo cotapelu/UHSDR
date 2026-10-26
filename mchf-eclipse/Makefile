@@ -45,17 +45,21 @@ else
   FW_LINKERFILE_F4=arm-gcc-link_f4_flash1024k.ld
 endif
 
-ifdef DEBUG
+# DEBUG is numeric (0/1). Using ifdef here treated the default DEBUG=0 as
+# enabled because the variable was defined. Keep release builds truly release.
+ifeq ($(DEBUG),1)
   override CONFIGFLAGS += -DDEBUG -DUSE_FULL_ASSERT -DTRACE
 else
   override CONFIGFLAGS += -DNDEBUG
 endif
 
 ifeq ($(BUILDFOR),F7)
-  TRX_NAME="OVI40 F7"
+  # NOTE: the transceiver name is not decided here. The board configuration
+  # headers own it (hardware/board_configs/UHSDR_UI_*_config.h), see T80.
 endif
 ifeq ($(BUILDFOR),H7)
-  TRX_NAME="OVI40 H7"
+  # NOTE: the transceiver name is not decided here. The board configuration
+  # headers own it (hardware/board_configs/UHSDR_UI_*_config.h), see T80.
 endif
 
 ROOTLOC=.
@@ -65,14 +69,19 @@ vpath %.S $(ROOTLOC)
 
 # you can set these environment to your individual values here or via environment variables
 # TRX_ID maximum lenght is 5 characters!!
+#
+# TRX_ID is the release artifact / DFU file base name ("fw-<TRX_ID>.bin" on the
+# SD card) and therefore stays board independent. TRX_NAME is the human
+# readable product name and is owned by the board configuration headers. Only
+# an explicitly requested TRX_NAME is injected into the compilation (T80).
 ifndef TRX_ID
   TRX_ID=mchf
 endif
-ifeq ($(TRX_NAME),mcHF)
-  TRX_NAME='mcHF QRP'
-endif
-ifndef TRX_NAME
-  TRX_NAME='mcHF QRP'
+
+ifneq ($(strip $(TRX_NAME)),)
+  # Single quotes keep a name containing spaces in one shell word. The double
+  # quotes belong to the macro body, so the C code sees a string literal.
+  override CONFIGFLAGS += -D'TRX_NAME="$(TRX_NAME)"'
 endif
 
 # If you want to hold different toolchains on Linux in /opt you can get them from
@@ -99,7 +108,7 @@ ifeq ($(OS),Darwin)
   SED = gsed
 endif
 
-COMPILEFLAGS := -D_GNU_SOURCE -DTRX_ID=\"$(TRX_ID)\" -DTRX_NAME=\"$(TRX_NAME)\" $(CONFIGFLAGS) -DUSE_HAL_DRIVER\
+COMPILEFLAGS := -D_GNU_SOURCE -D'TRX_ID="$(TRX_ID)"' $(CONFIGFLAGS) -DUSE_HAL_DRIVER\
 	-DFDV_ARM_MATH -DFREEDV_MODE_EN_DEFAULT=0 -DFREEDV_MODE_1600_EN=1 -DCODEC2_MODE_EN_DEFAULT=0 -DCODEC2_MODE_1300_EN=1\
 	-ffunction-sections -fdata-sections -flto -Wall -Wuninitialized -Wextra -Wimplicit-function-declaration -Wno-unused-parameter -Wmissing-prototypes -Wno-unused-function -Wno-sign-compare -g3 -fstack-usage
 
@@ -227,6 +236,46 @@ OC      = $(VPRE)$(PREFIX)arm-none-eabi-objcopy
 SZ      = $(VPRE)$(PREFIX)arm-none-eabi-size
 HEX2DFU = $(VPRE)python3 $(ROOTLOC)/support/hex2dfu/hex2dfu.py
 
+# ---------------------------------------------------------------------------
+# Configuration fingerprint / dirty-tree build safety (Phase 68, T75)
+# ---------------------------------------------------------------------------
+# Objects are emitted in-tree for historical reasons, so their names do not
+# encode MCU/compiler flags. Without an explicit fingerprint, switching from
+# F4 to H7 can leave the old ELF in place and report success. Hash every input
+# that can change generated code, then invalidate all current objects when the
+# fingerprint changes. An unchanged fingerprint does not touch the stamp, so
+# normal incremental builds remain incremental.
+BUILD_CONFIG_STAMP := .uhsdr_build_config
+
+ifeq ($(BUILDFOR),F4)
+  BUILD_CONFIG_CFLAGS := $(BASECFLAGS_F4)
+  BUILD_CONFIG_LDFLAGS := $(LDFLAGS_F4)
+  BUILD_CONFIG_LINKER := $(FW_LINKERFILE_F4)
+else ifeq ($(BUILDFOR),F7)
+  BUILD_CONFIG_CFLAGS := $(BASECFLAGS_F7)
+  BUILD_CONFIG_LDFLAGS := $(LDFLAGS_F7)
+  BUILD_CONFIG_LINKER := $(LINKERLOC)/arm-gcc-link_f7.ld
+else ifeq ($(BUILDFOR),H7)
+  BUILD_CONFIG_CFLAGS := $(BASECFLAGS_H7)
+  BUILD_CONFIG_LDFLAGS := $(LDFLAGS_H7)
+  BUILD_CONFIG_LINKER := $(LINKERLOC)/arm-gcc-link_h7.ld
+endif
+
+BUILD_CONFIG_TOOLCHAIN := $(shell $(PREFIX)arm-none-eabi-gcc --version 2>/dev/null | head -1)
+BUILD_CONFIG_FINGERPRINT := $(shell { \
+  printf '%s\n' \
+    'BUILDFOR=$(BUILDFOR)' \
+    'BOARD=$(BOARD)' \
+    'DEBUG=$(DEBUG)' \
+    'TRX_ID=$(TRX_ID)' \
+    'TRX_NAME=$(TRX_NAME)' \
+    'CONFIGFLAGS=$(CONFIGFLAGS)' \
+    'CFLAGS=$(BUILD_CONFIG_CFLAGS)' \
+    'LDFLAGS=$(BUILD_CONFIG_LDFLAGS)' \
+    'LINKER=$(BUILD_CONFIG_LINKER)' \
+    'TOOLCHAIN=$(BUILD_CONFIG_TOOLCHAIN)'; \
+} | sha256sum | cut -d ' ' -f 1)
+
 POSTCOMPILE = @mv -f $*.Td $*.d && touch $@
 DEPFLAGS = -MT $@ -MMD -MP -MF $*.Td
 
@@ -247,10 +296,28 @@ ALL_SRC:=$(SRC) $(DSPLIB_SRC) $(HAL_SRC) $(BL_SRC) $(BL_HAL_SRC)
 OBJS := $(patsubst %.S,%.o,$(patsubst %.c,%.o,$(SRC:.cpp=.o)))
 DSPLIB_OBJS := $(patsubst %.S,%.o,$(patsubst %.c,%.o,$(DSPLIB_SRC:.cpp=.o)))
 HAL_OBJS := $(patsubst %.S,%.o,$(patsubst %.c,%.o,$(HAL_SRC:.cpp=.o)))
-BL_OBJS := $(patsubst %.S,%.o,$(patsubst %.cpp,%.o,$(BL_SRC:.c=.o)))
-BL_HAL_OBJS := $(patsubst %.S,%.o,$(patsubst %.cpp,%.o,$(BL_HAL_SRC:.c=.o)))
+# Bootloader objects live in a separate tree. Several bootloader sources have
+# the same paths as firmware sources (for example ui_lcd_hy28.c); using the
+# same .o path made a firmware object silently satisfy a bootloader link.
+BL_OBJ_DIR := build/bootloader
+BL_OBJS := $(addprefix $(BL_OBJ_DIR)/,$(patsubst %.S,%.o,$(patsubst %.c,%.o,$(BL_SRC:.cpp=.o))))
+BL_HAL_OBJS := $(addprefix $(BL_OBJ_DIR)/,$(patsubst %.S,%.o,$(patsubst %.cpp,%.o,$(BL_HAL_SRC:.c=.o))))
 
-ALL_OBJS := $(patsubst %.S,%.o,$(patsubst %.c,%.o,$(ALL_SRC:.cpp=.o)))
+ALL_OBJS := $(OBJS) $(DSPLIB_OBJS) $(HAL_OBJS) $(BL_OBJS) $(BL_HAL_OBJS)
+
+# ---------------------------------------------------------------------------
+# Identity introspection (Phase 68, T80)
+# ---------------------------------------------------------------------------
+# Print the identity macros (TRX_NAME/TRX_ID) exactly as the preprocessor
+# resolves them for the current configuration. scripts/check_identity.sh uses
+# this to guard the per board product identity without running a full build.
+# The probe is never linked into a firmware or bootloader.
+IDENTITY_PROBE ?= $(ROOTLOC)/../scripts/identity_probe.c
+
+.PHONY: print-identity
+print-identity:
+	@$(CC) $(BUILD_CONFIG_CFLAGS) -std=gnu11 $(INC_DIRS) -E -dM $(IDENTITY_PROBE) \
+		| grep -E '^#define (TRX_NAME|TRX_ID) '
 
 
 $(DSPLIB_OBJS): EXTRA_CFLAGS:= -Wno-strict-aliasing
@@ -285,6 +352,37 @@ basesw/%stm32h7xx_ll_usb.o: CFLAGS += -Wno-attributes
 	@mkdir -p $(subst $(ROOTLOC)/,,$(shell dirname $<))
 	$(CXX) $(CFLAGS) $(CXXFLAGS) $(DEPFLAGS) -std=gnu++11 -c ${INC_DIRS} $< -o $@
 	$(POSTCOMPILE)
+
+# Bootloader-only object tree. The source stem remains relative to ROOTLOC,
+# so vpath can find it, while $@ keeps firmware and bootloader objects apart.
+$(BL_OBJ_DIR)/%.o: %.c
+	$(ECHO) "  [CC-BL] $@"
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(DEPFLAGS) -std=gnu11 -c ${INC_DIRS} $< -o $@
+	$(POSTCOMPILE)
+
+$(BL_OBJ_DIR)/%.o: %.S
+	$(ECHO) "  [AS-BL] $@"
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(DEPFLAGS) -std=gnu11 -c ${INC_DIRS} $< -o $@
+	$(POSTCOMPILE)
+
+.PHONY: FORCE
+FORCE:
+
+$(BUILD_CONFIG_STAMP): FORCE
+	@current=""; \
+	if [ -f "$@" ]; then current="$$(cat "$@")"; fi; \
+	if [ "$$current" != "$(BUILD_CONFIG_FINGERPRINT)" ]; then \
+	  echo "[CFG] configuration changed; invalidating stale objects"; \
+	  rm -f $(ALL_OBJS) $(FIRMWARE).elf $(FIRMWARE).bin $(FIRMWARE).hex $(FIRMWARE).dfu $(FIRMWARE).map \
+	        $(BOOTLOADER).elf $(BOOTLOADER).bin $(BOOTLOADER).hex $(BOOTLOADER).dfu $(BOOTLOADER).map \
+	        *.ltrans*; \
+	  printf '%s\n' "$(BUILD_CONFIG_FINGERPRINT)" > "$@.tmp"; \
+	  mv -f "$@.tmp" "$@"; \
+	fi
+
+$(ALL_OBJS): $(BUILD_CONFIG_STAMP)
 
 %.bin: %.elf
 	$(ECHO) "  [OBJC] $@"
@@ -391,8 +489,14 @@ clean-libs:
 	$(RM) $(call FixPath,$(HAL_OBJS))
 
 clean:  clean-firmware clean-bootloader clean-libs
-	# remove the executables, map, dmp and all object files (.o)
+	# remove the executables, map, dmp and all generated object/dependency files
 	$(RM) $(call FixPath,*~)
+	$(RM) -r $(call FixPath,$(BL_OBJ_DIR))
+	$(RM) $(call FixPath,$(BUILD_CONFIG_STAMP))
+	@find $(ROOTLOC) -type f \( \
+	  -name '*.o' -o -name '*.d' -o -name '*.Td' -o \
+	  -name '*.su' -o -name '*.ltrans*' \
+	\) -delete
 
 docs:  
 	# generate source docs as per "Doxyfile"

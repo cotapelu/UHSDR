@@ -29,6 +29,10 @@ jobs:
         run: make -j"$(nproc)" all-firmware
       - name: Build all bootloaders
         run: make -j"$(nproc)" all-bootloader
+      - name: Transceiver identity regression (T79)
+        run: make check-identity
+      - name: Configuration-switch regression (T75)
+        run: make build-switch-test
       - name: Sanity (doctor/check)
         run: |
           make doctor
