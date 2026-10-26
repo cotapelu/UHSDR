@@ -1,7 +1,7 @@
 # UHSDR Platform TODO — STM32 Optimization Roadmap
 
 > **Architecture:** AGENTS.md v6.0  
-> **Last updated:** 2026-10-26 (Phase 67: T67 closed — `-Wlto-type-mismatch` 57→0)  
+> **Last updated:** 2026-10-26 (Phase 68: build-integrity fix (T75/T79) + identity fix (T80))
 > **Scope:** STM32F4/F7/H7 — mcHF, OVI40
 
 ---
@@ -36,7 +36,14 @@
 | UART HAL driver compiled? | ✅ yes (Phase 66) | ⚠️ was compiling to an **empty object** (all targets) |
 | Remote control module live in ELF | ✅ 6 symbols | ⚠️ was 0 (dead code) before Phase 66 |
 | Test coverage measured? | ✅ gcov wired (Phase 67.2) | `cd test && make coverage` → `coverage.txt`; see note on what it covers |
-| CI platform | ⚠️ Travis only | GitHub Actions workflow added (Phase 67.3); static analysis is now gating via `--error-exitcode` |
+| CI platform | ✅ GitHub Actions workflow present | Phase 67.3; static analysis uses `--error-exitcode` (runtime concern tracked as T78) |
+| Cross-target dirty-tree build | ✅ **fixed (T75)** | config fingerprint/stamp invalidates stale objects; `make build-switch-test` passes 7/7 |
+| Root `make clean` completeness | ✅ **fixed (T79)** | `make clean` now leaves **0** `.o` files, including `basesw/` and `build/bootloader/` |
+| Transceiver identity per board | ✅ **fixed (T80)** | was: every target reported `mchf Transceiver`; now `mcHF QRP` / `OVI40 F7` / `OVI40 H7`; `make check-identity` passes 23/23 |
+| Release artifact size baseline | ⚠️ **re-baselined (T81)** | the old "release" builds were actually DEBUG builds; corrected true-release sizes are below |
+| Vendor HAL boundary claim | ❌ **not zero in all product-owned files** | Phase 68 found vendor includes/direct HAL calls in RTC, flash, UI and bootloader paths; tracked as T77 |
+| Static-analysis gate runtime | ⚠️ **>600 s locally** | the product-code gate did not finish in 600 s; tracked as T78 |
+| SDR extension implementation | ❌ not started | no `drivers/modem`, `drivers/mesh`, or `drivers/video` directories; Phases 80–84 remain design-only |
 
 ### Health claim
 
@@ -203,8 +210,181 @@ Pay down the product baseline (T76) to tighten the gate: fix the `%u/%lu/%ld` vs
 - No remote-control hardware validation (T69), no license decision (T74).
 - Coverage metric measures the *test shim* logic, not `drivers/` line coverage; a
   true per-file gate needs the audio/UI modules made host-linkable (T34.1 family).
+
 ---
 
+## Phase 68: Repository-Wide Audit + Build-Integrity Fix (2026-10-26)
+
+### 68.1 Audit scope
+
+The requested architecture documents were read in order: `AGENTS.md`, `ARCH.md`,
+`SDR-HARDWARE.md`, then `docs/TODO.md`. `DEMO.md` does **not** exist in this
+checkout, so there was no additional demo specification to apply.
+
+The audit covered the root build orchestration, MCU-specific make fragments,
+HAL shim/product boundaries, host-test and static-analysis infrastructure,
+current source inventory, remote-control wiring, and the unimplemented SDR
+extension roadmap. Git state before this phase had no tracked product-source
+changes; only agent context/task state was modified.
+
+### 68.2 Measured findings
+
+| Finding | Evidence | Assessment |
+|---|---|---|
+| **T75 is worse than “fails to link”** | After a clean F4 build (`text=434897`), `make h7-ovi40` without clean returned **rc=0 in 0.18 s**, compiled nothing, and left the F4 ELF untouched. After `clean-firmware`, the same H7 command produced the expected H7 ELF (`text=490617`). | **P0 build-integrity defect:** a target switch can silently publish the wrong MCU binary. |
+| Root clean is incomplete | Before clean: 936 objects total / 742 under `basesw/`; after `make clean`: 768 total / **742 under `basesw/`**. | Vendor objects from other MCU configurations remain. The current target's objects are rebuilt, but `clean` does not mean clean. |
+| “Zero vendor HAL includes in product code” is not true for the whole product-owned tree | Found vendor includes in `hardware/uhsdr_rtc.c`, `misc/v_eprom/uhsdr_flash.c`, `src/bootloader/flash_if.c`, and device headers in both board configs. Compiled firmware/bootloader paths also call `HAL_*` directly (RTC, flash, ADC, DAC, timer, UI/bootloader). | The HAL shim exists and is used broadly, but the AGENTS.md zero-direct-HAL goal is **not complete**. This must be re-baselined, not reported as achieved. |
+| Static-analysis gate is too slow for interactive use | `scripts/static_analysis.sh` did not complete its product-code gate within **600 s** and was terminated. | The CI gate is configured, but its runtime must be bounded and measured before it can be treated as a practical quality gate. |
+| Host tests are healthy | `make -C mchf-eclipse/test test` completed with **670 passed / 0 failed**. | Keep the suite as the immediate regression gate. |
+| SDR extension is still design-only | No `drivers/modem`, `drivers/mesh`, or `drivers/video` implementation directories exist. | Phases 80–84 remain pending; do not report them as partially implemented. |
+
+### 68.3 Corrected next plan (authoritative for Phase 68)
+
+| # | Task | Why now | Priority / status |
+|---|---|---|---|
+| **T75** | Make single-target builds configuration-safe on a dirty tree | Current behavior can silently label an F4 ELF as H7. This is a release-integrity risk, not merely a convenience issue. | ✅ **done in Phase 68** (68.4) |
+| **T77** | Re-baseline and finish the HAL boundary migration | The documented zero-vendor-HAL state is false. Inventory compiled paths, add HAL shims where needed, then remove direct calls/includes product by product. | **P0 architecture debt** |
+| **T78** | Bound and optimize the cppcheck gate | A >600 s local gate is not usable; CI needs a deterministic timeout and a usable scan scope. | P1 — **next actionable** |
+| **T79** | Make `make clean` remove every generated object | 742 vendor objects survived root clean. | ✅ **done in Phase 68** (68.4) |
+| **T80** | Make each build report its own transceiver identity | Every target reported `mchf Transceiver` regardless of board. | ✅ **done in Phase 68** (68.5) |
+| **T81** | Re-baseline release artifact sizes and reclaim the CMSIS-DSP tables | The old "release" numbers were DEBUG builds; the corrected release keeps unused DSP twiddle tables. | P2 — open (68.6) |
+| T69 | Validate remote control on 2x mcHF UI + UART cable | Live but untested on hardware | P1, hardware-blocked |
+| T71 | Clean up the 8 `-Wvla-parameter` in `drivers/freedv/` | They are pointer-decay parameters, not stack VLAs; lower risk than previously stated. | P2 |
+| T72 | Reduce the 206 `-Wmissing-prototypes` | Hides real declaration defects like 66.3 | P2 |
+| T73 | Continue `ui_driver.c` split (6 431 L measured) | Long-standing structural debt | P2 |
+| T74 | License decision (GPL-3.0) | Blocks commercial distribution of firmware | P0 (business) |
+| T76 | Pay down the committed cppcheck product baseline | Remove printf-format debt and tighten the gate | P2 |
+
+### 68.4 T75 implementation and verification
+
+- [x] **T75.1** Add a configuration fingerprint/stamp to the MCU sub-build.
+  - Fingerprint MCU, board/config flags, debug mode, radio identity, and toolchain.
+  - When the fingerprint changes, invalidate objects and generated firmware/bootloader artifacts before compiling.
+  - A repeated build of the same configuration must remain incremental.
+  - **Done:** `mchf-eclipse/Makefile` computes `BUILD_CONFIG_FINGERPRINT` (sha256 over
+    `BUILDFOR`, `BOARD`, `DEBUG`, `TRX_ID`, `TRX_NAME`, `CONFIGFLAGS`, effective
+    `CFLAGS`/`LDFLAGS`/linker script and the toolchain version) and stores it in
+    `mchf-eclipse/.uhsdr_build_config`. Every object depends on the stamp. A changed
+    fingerprint deletes the current object list plus firmware/bootloader artifacts
+    before rebuilding; an unchanged fingerprint does **not** touch the stamp, so
+    incremental builds stay incremental.
+  - The same work also fixed `ifdef DEBUG` (the root always passes `DEBUG=0`, so
+    every "release" build was compiled with `-DDEBUG -DUSE_FULL_ASSERT -DTRACE` and
+    without `-DNDEBUG`). It is now `ifeq ($(DEBUG),1)`.
+- [x] **T75.2** Make root `clean` remove generated objects from all MCU families.
+  - **Done:** root `clean` now removes `build/bootloader/`, the fingerprint stamp and
+    every `*.o`, `*.d`, `*.Td`, `*.su`, `*.ltrans*` under the tree. Measured after
+    clean: **0** object files remain (was 768, of which 742 under `basesw/`).
+  - Caveat: the rule is POSIX (`rm -rf`, `find -delete`); the old Windows
+    `del /Q -r` path no longer applies.
+- [x] **T75.3** Add an automated dirty-tree switch regression check.
+  - Build F4, switch to H7 without clean, and assert the artifact is actually H7 (not merely that make exits 0).
+  - Repeat the same configuration and assert no unnecessary full rebuild.
+  - **Done:** `scripts/check_build_switch.sh` (7 steps: clean → F4 → switch to H7 →
+    repeat H7 → switch back to F4 → F4 bootloader → bootloader must not overwrite
+    firmware objects). It asserts the FP architecture through `readelf` and compares
+    ELF sha256 + mtime. Wired as `make build-switch-test` and as a CI step.
+  - **Measured:** `PASS: configuration switches are safe and unchanged builds remain
+    incremental` (7/7, 3 m 54 s).
+- [x] **T75.4** Verify all four firmware targets and all three bootloaders, host tests, and artifact sizes.
+  - **Done:** `make -j4 all-firmware` → rc=0, `make -j4 all-bootloader` → rc=0,
+    `make -C mchf-eclipse/test test` → **670 passed / 0 failed**, `make doctor` → PASSED,
+    `make check` → only the expected "tracked files have uncommitted changes" warning.
+  - The bootloader objects now live in `mchf-eclipse/build/bootloader/` with
+    `-DBOOTLOADER_BUILD`, because firmware and bootloader share source paths
+    (e.g. `drivers/ui/lcd/ui_lcd_hy28.c`) and the same `.o` path let a firmware
+    object silently satisfy a bootloader link.
+  - Bootloader header dependency tracking was verified intact (`.d` files live next
+    to the sources in `src/bootloader/` and are pulled in by the `ALL_SRC` wildcard);
+    no fix was needed.
+
+### 68.5 T80 — per-board transceiver identity
+
+**Defect (measured):** the root `Makefile` defaulted `TRX_NAME ?= $(TRX_ID)` and
+forwarded `TRX_NAME="mchf"` on the sub-make command line, which overrode the
+per-MCU values in `mchf-eclipse/Makefile` and the `#ifndef TRX_NAME` guards in the
+board configuration headers. Every firmware therefore reported `mchf Transceiver`
+in `DEVICE_STRING` (UI), in the FreeDV beacon (`FREEDV_TX_MESSAGE`), in the USB
+product strings and in the bootloader banner — independent of the board it was
+built for. Bootloaders were unaffected, because the root only forwards `TRX_NAME`
+on the firmware path.
+
+**Fix:**
+
+- The board configuration headers own the identity
+  (`hardware/board_configs/UHSDR_UI_mchf_config.h` → `mcHF QRP`,
+  `UHSDR_UI_ovi40_config.h` → `OVI40 F7` / `OVI40 H7`), as required by
+  AGENTS.md §5.3 (board-specific code only in `board_configs/`).
+- The root `Makefile` no longer defaults `TRX_NAME`; it forwards it **only** when
+  the user sets it explicitly (`make TRX_NAME='My Radio' firmware`).
+- `mchf-eclipse/Makefile` injects `-DTRX_NAME` only for a non-empty value and the
+  MCU-specific `TRX_NAME="OVI40 F7"` / `"OVI40 H7"` make logic was removed
+  (duplicated board knowledge in the build system).
+- The macro is now passed as `-D'TRX_NAME="$(TRX_NAME)"'`. The previous form
+  `-DTRX_NAME=\"$(TRX_NAME)\"` split at the first space, so any override
+  containing a space broke the compilation (`gcc: error: Radio": linker input file
+  not found`). The old makefile default happened to work only because its value
+  was single-quoted (`'mcHF QRP'`), which the shell consumed.
+
+**`TRX_ID` deliberately stays `mchf` in every configuration:** it is the release
+artifact and DFU file base name (`fw-<TRX_ID>.bin` on the SD card, see
+`src/bootloader/command.h`), and the USB product strings use it as well. Making it
+board-specific would change the DFU contract and the USB identity string of
+shipping hardware without any way to test it on real boards. The intent is now
+documented in `hardware/uhsdr_board_config.h`.
+
+**Verification (new `scripts/check_identity.sh`, wired as `make check-identity`
+and as a CI step):**
+
+- Red phase before the fix: **12/25 checks passed, 13 failed**.
+- Green phase after the fix: **23/23 checks passed**.
+- The check resolves `TRX_NAME`/`TRX_ID` per configuration through the real build
+  path with the real compiler flags (`scripts/identity_probe.c` is preprocessed,
+  never linked), verifies that an explicit override still wins, and verifies the
+  identity strings inside the built `.bin` artifacts.
+- False positive found and corrected during the run: the mcHF firmware legitimately
+  contains `OVI40 RF Board` (runtime Si5351a RF-board detection,
+  `drivers/ui/menu/ui_menu.c:559`), so the forbidden pattern is the full identity
+  string, not the bare board name.
+
+### 68.6 T81 — release artifact size baseline
+
+The sizes recorded before Phase 68 were produced by builds that were **not**
+release builds: the root always passes `DEBUG=0`, and `mchf-eclipse/Makefile`
+tested it with `ifdef DEBUG`, so every build got `-DDEBUG -DUSE_FULL_ASSERT
+-DTRACE` and no `-DNDEBUG`. After fixing the condition (68.4/T75.1) the measured
+true-release sizes are:
+
+| Target | Old "release" (actually debug) | Corrected release | Delta |
+|---|---|---|---|
+| F4 mcHF | 434 897 B | **427 073 B** | −7 824 B (−1.80 %) |
+| F4-512KB | — | **281 441 B** | fits 512 KB flash |
+| F7 OVI40 | — | **539 153 B** | fits 1 MB flash |
+| H7 OVI40 | 490 617 B | **547 857 B** | +57 240 B (+11.7 %) |
+
+The H7/F7 growth is not a code regression but an LTO/IPA-CP decision flip:
+`-DNDEBUG` removes ~19 `assert()` calls in `drivers/freedv/codec2.c`, which changes
+the inlining estimates and flips IPA-CP from a specialised
+`codec2_fftr_alloc.constprop.0` (only the `twiddleCoef_rfft_512` table retained) to
+the generic `arm_rfft_fast_init_f32.isra.0`, whose `switch` over `fftLen` keeps
+**every** twiddle/bit-reversal table (≈60 kB: `twiddleCoef_rfft_4096` 16 384 B,
+`twiddleCoef_2048` 16 384 B, `twiddleCoef_rfft_2048` 8 192 B,
+`twiddleCoef_1024` 8 192 B, `armBitRevIndexTable2048` 7 616 B, …).
+
+Experiments that did **not** recover the size: `-flto-partition=one` → 550 273 B
+(slightly larger), `--param=ipa-cp-eval-threshold=0` → 547 841 B (unchanged). The
+deterministic lever is the runtime-sized `arm_rfft_fast_init_f32` call in
+`drivers/freedv/dct2.c:39,49`; its sizes (60 and 16, from `c2wideband.c:415-418`
+with `C2WB_K=30`, `C2WB_NT=8`) are **not supported** by CMSIS-DSP (valid: 32, 64,
+128, 256, 512, 1024, 2048, 4096), so the wideband path (`CODEC2_MODE_700C`,
+selected at `drivers/freedv/codec2.c:341-342`) currently gets an uninitialised
+FFT instance. Fixing the wideband FFT lengths and removing the runtime-sized
+initialisation would reclaim the tables deterministically — that is a separate,
+scoped task, because it changes DSP behaviour.
+
+**Open decision:** accept 547 857 B as the corrected true-release H7 baseline
+(H7 has 1 MB+ flash, so this is not a functional problem) or implement the wideband
+FFT-length fix together with the table reclaim.
 
 ---
 

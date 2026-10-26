@@ -1,6 +1,6 @@
 # Evolution Roadmap (3-6 months)
 
-> **Last updated:** 2026-08-29  
+> **Last updated:** 2026-10-26  
 > **Agent:** JF Autonomous Agent  
 > **Project:** UHSDR STM32 Optimization Baseline v6.0
 
@@ -8,10 +8,14 @@
 
 ## Current Trajectory
 
-> **Last verified:** 2026-10-24, ARM GCC 13.2.1, clean tree.
+> **Last verified:** 2026-10-26, ARM GCC 13.2.1, clean tree (Phase 68).
 > Every number here is measured. Previous revisions of this file claimed
 > "Build Status: 0 warnings" and quoted three different test counts
 > (372 / 586 / 670) at once; both were wrong and are corrected below.
+>
+> **Phase 68 correction:** the numbers below were re-measured after the
+> build-integrity fix (T75/T79) and the identity fix (T80). Several claims in
+> the previous revision were stale and are marked as such.
 
 - **Firmware builds:** F4, F4-512KB, F7, H7 — **0 errors each**.
   F7 and H7 previously failed to link entirely (11 errors); fixed in Phase 66.
@@ -19,23 +23,43 @@
 - **Host test suite:** **670 passing, 0 failing** (53 test files, 11 475 LOC).
   This is the single most valuable asset in the repo — the audio/DSP logic is
   host-testable without hardware.
-- **Compiler warnings:** 295 total on F4, of which **260 are in product code**.
-  Breakdown: 188 `-Wmissing-prototypes`, **57 `-Wlto-type-mismatch` (unresolved)**,
-  8 `-Wvla-parameter`, 3 `-Wabsolute-value`, 1 each unused-variable / cpp.
-- **Binary regression (F4):** 422 785 -> 426 961 text = **+4 176 B (+0.99 %)**.
-  Just inside the < 1 % tolerance. The cost is the UART HAL driver, which had
-  never actually been compiled (see Phase 66.5).
+- **Compiler warnings (re-measured 2026-10-26):** the 57 `-Wlto-type-mismatch`
+  warnings are **closed** (Phase 67). What remains in the full 4-target build is
+  812 `-Wmissing-prototypes`, 32 `-Wvla-parameter`, 10 `-Wmaybe-uninitialized`,
+  4 `-Wcpp`, 3 `-Wimplicit-function-declaration`; in product code the
+  `-Wmissing-prototypes` count is **206** (T72) and the `-Wvla-parameter`
+  count is **8**, all of them pointer-decay parameters in `drivers/freedv/`,
+  not stack VLAs (T71).
+- **Binary sizes (corrected *release* baseline, 2026-10-26):** F4 427 073 B,
+  F4-512KB 281 441 B, F7 539 153 B, H7 547 857 B. The previously quoted
+  "release" figures were **debug** builds (the `ifdef DEBUG` bug, fixed in
+  Phase 68). H7 grew +57 240 B (+11.7 %) because `-DNDEBUG` flips an IPA-CP
+  clone decision and keeps every CMSIS-DSP twiddle table; the deterministic
+  reclaim is tracked as T81.
+- **Build integrity (new in Phase 68):** a configuration switch on a dirty tree
+  can no longer publish the wrong MCU binary — `make build-switch-test` passes
+  7/7, `make clean` leaves **0** objects, and `make check-identity` passes
+  23/23 so every target reports its own board name.
 - **Key strengths (genuinely):**
-  - Zero vendor HAL `#include` in product code — verified, not just documented.
   - HAL shim layer is real (4 243 LOC) and product code compiles against it.
   - Audio/DSP logic is covered by host tests with a mock HAL layer.
   - Safety net is real: watchdog, fault dump, stack canary, CRC32 bootloader.
+  - Build outputs are now verified by two executable regression gates instead of
+    by "make exited 0".
 - **Key weaknesses (now documented):**
-  - Remote control module was dead code (0 symbols in the ELF) until Phase 66.
-  - The UART HAL driver compiled to an empty object on every target.
-  - Coverage is unknown — `gcov` is installed but never invoked.
-  - Static analysis does not gate CI (`scripts/static_analysis.sh` ends `|| true`).
-  - Only Travis CI; no GitHub Actions workflow exists.
+  - ~~Zero vendor HAL `#include` in product code~~ — **no longer true**:
+    Phase 68 found vendor includes/direct `HAL_*` calls in
+    `hardware/uhsdr_rtc.c`, `misc/v_eprom/uhsdr_flash.c`,
+    `src/bootloader/flash_if.c` and several UI/bootloader paths. Tracked as
+    T77 (P0 architecture debt).
+  - Static analysis gates CI, but the product-code cppcheck pass does not
+    finish within 600 s locally — the gate is not yet usable (T78).
+  - Remote control module was dead code (0 symbols in the ELF) until Phase 66
+    and is still **unproven on hardware**.
+  - Coverage is measured now (gcov wired in Phase 67.2) but not yet gated.
+  - The SDR extension roadmap (Phases 80–84: modem, mesh, video) is
+    **design-only** — no `drivers/modem`, `drivers/mesh` or `drivers/video`
+    directory exists.
 
 ---
 
@@ -141,16 +165,27 @@
 | Health score | **not scored** (see TODO.md) | score only after T67+T68 close | ≥95/100 |
 | TODO/FIXME count | 184 | <100 | <50 |
 | Largest file | 6 430 lines | <4000 | <3000 |
-| Build warnings (product code) | 260 | <100 | <25 |
-| `-Wlto-type-mismatch` | 57 | root cause closed | 0 |
-| Binary regression | +0.99 % | <1% | <1% |
+| Build warnings (product code) | 206 `-Wmissing-prototypes`, 8 `-Wvla-parameter` | <100 | <25 |
+| `-Wlto-type-mismatch` | **0** (closed in Phase 67) | 0 | 0 |
+| Firmware size, F4 release | 427 073 B | < 1 % regression/step | < 1 % |
+| Firmware size, H7 release | 547 857 B (corrected baseline, T81) | reclaim DSP tables | < 550 kB |
+| Build-output verification | 2 executable gates (switch 7/7, identity 23/23) | 4 gates | artifact attestation |
+| Static-analysis gate runtime | **>600 s, unbounded** (T78) | < 120 s | < 60 s |
 
 ---
 
 ## Next Actions
 
-1. **Week 1-2:** Create reusable mock HAL layer (I2C/SPI/UART stubs) — UART mock completed
-2. **Week 3-4:** Begin `ui_driver.c` incremental split (extract `ui_driver_input.c`)
-3. **Week 5-6:** Add `cppcheck`/`clang-tidy` to CI pipeline
-4. **Week 7-8:** Expand tests to 450+ with new mocking infrastructure
-5. **Ongoing:** Reduce TODO/FIXME count by 20/month through proactive fixes; complete T47.1 integration tests when hardware available
+1. **Now (P0):** T77 — finish the HAL boundary migration for the product-owned
+   paths that still include vendor headers or call `HAL_*` directly (RTC, flash,
+   UI, bootloader), then re-state the AGENTS.md claim truthfully.
+2. **Now (P1):** T78 — bound and parallelise the cppcheck gate so it finishes
+   locally in a usable time and gets a deterministic timeout in CI.
+3. **Next (P1):** T81 — decide the H7/F7 DSP table reclaim: fix the wideband
+   FFT lengths (60/16 are unsupported by CMSIS-DSP) and remove the
+   runtime-sized `arm_rfft_fast_init_f32` call.
+4. **Week 1-2:** Create reusable mock HAL layer (I2C/SPI/UART stubs) — UART mock completed
+5. **Week 3-4:** Begin `ui_driver.c` incremental split (extract `ui_driver_input.c`)
+6. **Week 5-6:** Add `cppcheck`/`clang-tidy` to CI pipeline — cppcheck gate exists, runtime still unbounded (T78)
+7. **Week 7-8:** Expand tests with new mocking infrastructure
+8. **Ongoing:** Reduce TODO/FIXME count by 20/month through proactive fixes; complete T47.1 integration tests when hardware available

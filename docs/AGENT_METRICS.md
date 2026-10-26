@@ -1,6 +1,6 @@
 # Agent Metrics — UHSDR Autonomous Improvement
 
-> **Last updated:** 2026-08-28  
+> **Last updated:** 2026-10-26  
 > **Agent:** JF Autonomous Agent  
 > **Project:** UHSDR STM32 Optimization Baseline v6.0
 
@@ -3043,3 +3043,55 @@
   - Tests cover: spike cancel OFF mode (always false), SPIKE mode (duration <= 8 threshold), SHORT mode (3*t < dot_avg with initialized check), edge cases at boundaries, zero duration handling, different dot_avg values
   - Logic reimplemented inline with configurable `spikecancel` mode, `dot_avg`, and `initialized` parameters
   - Verified: `make test` passes 670/670 with 0 warnings; F4/F7/H7 firmware builds clean
+
+## [2026-10-26 14:35] Cycle 49 - Task: T75/T79 Configuration-safe dirty-tree builds + complete clean
+- **Type**: Violation Fix (build integrity)
+- **Priority**: P0 (Critical — a target switch could silently publish the wrong MCU binary)
+- **Duration**: ~95 min
+- **Status**: ✅ Success
+- **Test Delta**: +0 host tests (670 → 670); +1 build regression script (`scripts/check_build_switch.sh`, 7 assertions)
+- **Coverage Delta**: N/A (build system, not C code)
+- **Performance**: unchanged build time; a configuration switch now performs the correct rebuild instead of reusing the previous MCU's objects
+- **Security**: N/A
+- **Notes**:
+  - **Root cause**: objects are emitted in-tree with names that do not encode the MCU, so `make h7-ovi40` after `make f4-mchf` returned rc=0 in 0.18 s, compiled nothing and left the F4 ELF in place.
+  - **Fix**: `mchf-eclipse/Makefile` computes a `BUILD_CONFIG_FINGERPRINT` (sha256 over BUILDFOR, BOARD, DEBUG, TRX_ID, TRX_NAME, CONFIGFLAGS, effective CFLAGS/LDFLAGS/linker and toolchain version) stored in `mchf-eclipse/.uhsdr_build_config`; a changed fingerprint invalidates the current objects and firmware/bootloader artifacts, an unchanged fingerprint does not touch the stamp, so incremental builds stay incremental.
+  - Also fixed `ifdef DEBUG` → `ifeq ($(DEBUG),1)`: the root always passes `DEBUG=0`, so every "release" build was compiled with `-DDEBUG -DUSE_FULL_ASSERT -DTRACE` and without `-DNDEBUG`.
+  - Bootloader objects moved to `mchf-eclipse/build/bootloader/` with `-DBOOTLOADER_BUILD`; firmware and bootloader share source paths (e.g. `drivers/ui/lcd/ui_lcd_hy28.c`), so the same `.o` path let a firmware object satisfy a bootloader link.
+  - `clean` now removes `build/bootloader/`, the stamp and every `*.o/*.d/*.Td/*.su/*.ltrans*`: measured **0** objects remain (was 768, of which 742 under `basesw/`).
+  - **Verified**: `make build-switch-test` → PASS (7/7, 3 m 54 s); `make -j4 all-firmware` → rc=0; `make -j4 all-bootloader` → rc=0; host tests 670/670; `make doctor` PASSED; `make check` only reports the expected uncommitted-changes warning.
+  - Warning profile unchanged by this task (firmware: 812 `-Wmissing-prototypes`, 32 `-Wvla-parameter`, 10 `-Wmaybe-uninitialized`, 4 `-Wcpp`, 3 `-Wimplicit-function-declaration`).
+
+## [2026-10-26 15:20] Cycle 50 - Task: T80 Per-board transceiver identity
+- **Type**: Violation Fix (product correctness)
+- **Priority**: P1 (High — every firmware mis-identified itself to the user)
+- **Duration**: ~45 min
+- **Status**: ✅ Success
+- **Test Delta**: +23 build regression checks (0 → 23) in `scripts/check_identity.sh`; host tests 670 → 670
+- **Coverage Delta**: N/A (build system / identity configuration)
+- **Performance**: N/A
+- **Security**: N/A
+- **Notes**:
+  - **Root cause**: the root `Makefile` defaulted `TRX_NAME ?= $(TRX_ID)` and forwarded `TRX_NAME="mchf"` on the sub-make command line, overriding both the per-MCU make values and the `#ifndef TRX_NAME` guards in the board configuration headers. Every firmware reported `mchf Transceiver` (UI `DEVICE_STRING`, FreeDV beacon, USB product strings, bootloader banner) regardless of the board. Bootloaders were unaffected because the root only forwards `TRX_NAME` on the firmware path.
+  - **Fix**: board configuration headers own the identity (AGENTS.md §5.3); the root forwards `TRX_NAME` only when explicitly set; `mchf-eclipse/Makefile` injects `-DTRX_NAME` only for a non-empty value and the duplicated MCU-specific make logic was removed.
+  - **Second defect found while fixing**: `-DTRX_NAME=\"$(TRX_NAME)\"` split at the first space, so any override containing a space broke the build (`gcc: error: Radio": linker input file not found`). The old default only worked because its makefile value was single-quoted (`'mcHF QRP'`), which the shell consumed. Now passed as `-D'TRX_NAME="$(TRX_NAME)"'`.
+  - `TRX_ID` deliberately stays `mchf`: it is the release artifact and DFU file base name (`fw-<TRX_ID>.bin`, `src/bootloader/command.h`) and is used in the USB product strings. Changing it per board would break the DFU contract of shipping hardware without a way to test it. Intent documented in `hardware/uhsdr_board_config.h`.
+  - **Verified**: `scripts/check_identity.sh` red phase 12/25 (13 failures) → green phase **23/23**; new `make check-identity` target + CI step; artifacts contain `mcHF QRP Transceiver` / `OVI40 F7 Transceiver` / `OVI40 H7 Transceiver` and the matching bootloader banners.
+  - **False positive corrected during the run**: the mcHF firmware legitimately contains `OVI40 RF Board` (runtime Si5351a RF-board detection), so the forbidden pattern is the full identity string, not the bare board name.
+  - Artifact sizes changed by exactly the identity string delta: F4 427 065 → 427 073 B, F4-512KB 281 437 → 281 441 B, F7 539 137 → 539 153 B, H7 547 841 → 547 857 B.
+
+## [2026-10-26 15:30] Cycle 51 - Task: T81 Release artifact size re-baseline
+- **Type**: Proactive Improvement (measurement / documentation)
+- **Priority**: P2 (Medium)
+- **Duration**: ~40 min
+- **Status**: ✅ Success
+- **Test Delta**: +0 (measurement task; host tests 670 → 670)
+- **Coverage Delta**: N/A
+- **Performance**: F4 release −7 824 B (−1.80 %); H7 release +57 240 B (+11.7 %); all targets still fit their flash (F4 427 k < 512 k, F7 539 k, H7 548 k < 1 MB)
+- **Security**: N/A
+- **Notes**:
+  - The previously recorded "release" sizes were **debug** builds (the `ifdef DEBUG` bug, fixed in Cycle 49). Corrected true-release baseline: F4 427 073 B, F4-512KB 281 441 B, F7 539 153 B, H7 547 857 B.
+  - **Root cause of the H7/F7 growth**: `-DNDEBUG` removes ~19 `assert()` calls in `drivers/freedv/codec2.c`, which flips the IPA-CP decision from a specialised `codec2_fftr_alloc.constprop.0` (only `twiddleCoef_rfft_512` retained) to the generic `arm_rfft_fast_init_f32.isra.0`, whose `switch` over `fftLen` retains every twiddle/bit-reversal table (~60 kB).
+  - **Experiments that did not help**: `-flto-partition=one` → 550 273 B (larger), `--param=ipa-cp-eval-threshold=0` → 547 841 B (unchanged). Hypothesis of an IPA-CP threshold effect disproved.
+  - **Related upstream defect**: `drivers/freedv/dct2.c:39,49` initialises the FFT with runtime sizes 60 and 16 (`c2wideband.c:415-418`, `C2WB_K=30`, `C2WB_NT=8`), which CMSIS-DSP does not support (valid: 32…4096). The wideband path is live (`codec2.c:341-342`), so it currently receives an uninitialised FFT instance.
+  - **Open decision (tracked as T81 in docs/TODO.md §68.6)**: accept the corrected baseline, or fix the wideband FFT lengths and remove the runtime-sized initialisation to reclaim the tables deterministically.
