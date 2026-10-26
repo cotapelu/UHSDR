@@ -3095,3 +3095,19 @@
   - **Experiments that did not help**: `-flto-partition=one` → 550 273 B (larger), `--param=ipa-cp-eval-threshold=0` → 547 841 B (unchanged). Hypothesis of an IPA-CP threshold effect disproved.
   - **Related upstream defect**: `drivers/freedv/dct2.c:39,49` initialises the FFT with runtime sizes 60 and 16 (`c2wideband.c:415-418`, `C2WB_K=30`, `C2WB_NT=8`), which CMSIS-DSP does not support (valid: 32…4096). The wideband path is live (`codec2.c:341-342`), so it currently receives an uninitialised FFT instance.
   - **Open decision (tracked as T81 in docs/TODO.md §68.6)**: accept the corrected baseline, or fix the wideband FFT lengths and remove the runtime-sized initialisation to reclaim the tables deterministically.
+
+## [2026-10-26 16:10] Cycle 52 - Task: T82 Root Makefile hygiene (quality gate)
+- **Type**: Violation Fix (build system / documentation truthfulness)
+- **Priority**: P2 (Medium — documented commands did not exist)
+- **Duration**: ~35 min
+- **Status**: ✅ Success
+- **Test Delta**: +0 (no new C tests; +5 root Makefile targets)
+- **Coverage Delta**: N/A
+- **Performance**: `make quality` runs the switch test (~4 min) plus tests (~30 s), identity (~5 s) and doctor (~1 s)
+- **Security**: N/A
+- **Notes**:
+  - `make test` was documented in AGENTS.md §8 but did not exist (`make: *** No rule to make target 'test'`). Added `test`, `coverage`, `build`, `quality` and `static-analysis`.
+  - `make quality` is the local pre-commit gate required by GOAL.md §15.4. The steps run in a fixed order (build-switch-test → test → check-identity → doctor) because the switch check starts with a clean, which also deletes the host test objects.
+  - Help text quoted a build matrix that does not exist ("ALL firmware (5) + ALL bootloader (4)"); corrected to 4/3. `make info` listed `h7-mchf` twice.
+  - A bare `make` built all seven targets although the file header promised help; `.DEFAULT_GOAL := help` now matches the header. Verified that neither CI nor `scripts/` rely on a bare `make`.
+  - **Verified**: `make` → help; `make test` → 670/670; `make coverage` → report written; `make quality` → switch 7/7, tests 670/670, identity 23/23, doctor PASSED; `make config` shows `TRX_NAME = <board config default>`.

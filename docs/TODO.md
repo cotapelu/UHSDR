@@ -37,6 +37,7 @@
 | Remote control module live in ELF | ✅ 6 symbols | ⚠️ was 0 (dead code) before Phase 66 |
 | Test coverage measured? | ✅ gcov wired (Phase 67.2) | `cd test && make coverage` → `coverage.txt`; see note on what it covers |
 | CI platform | ✅ GitHub Actions workflow present | Phase 67.3; static analysis uses `--error-exitcode` (runtime concern tracked as T78) |
+| Local quality gate | ✅ `make quality` (Phase 68.7) | switch test 7/7, host tests 670/670, identity 23/23, doctor PASSED |
 | Cross-target dirty-tree build | ✅ **fixed (T75)** | config fingerprint/stamp invalidates stale objects; `make build-switch-test` passes 7/7 |
 | Root `make clean` completeness | ✅ **fixed (T79)** | `make clean` now leaves **0** `.o` files, including `basesw/` and `build/bootloader/` |
 | Transceiver identity per board | ✅ **fixed (T80)** | was: every target reported `mchf Transceiver`; now `mcHF QRP` / `OVI40 F7` / `OVI40 H7`; `make check-identity` passes 23/23 |
@@ -385,6 +386,24 @@ scoped task, because it changes DSP behaviour.
 **Open decision:** accept 547 857 B as the corrected true-release H7 baseline
 (H7 has 1 MB+ flash, so this is not a functional problem) or implement the wideband
 FFT-length fix together with the table reclaim.
+
+### 68.7 Root Makefile hygiene
+
+The root `Makefile` did not implement several commands that the project
+documents, and its help text quoted a build matrix that does not exist.
+
+| Defect | Evidence | Fix |
+|---|---|---|
+| `make test` failed | AGENTS.md §8 documents `make test` → host unit tests, but the root Makefile had no such target: `make: *** No rule to make target 'test'` | `test` and `coverage` targets added (delegating to `mchf-eclipse/test`) |
+| No local quality gate | GOAL.md §15.4 requires `make quality`; the repo had only `doctor`/`check`, and neither verifies *what* was built | `quality` target: build-switch-test → test → check-identity → doctor, in that order (the switch test cleans, which also removes the host test objects) |
+| Wrong matrix counts in the help text | help said "ALL firmware (5) + ALL bootloader (4)" and "all 5 firmware combinations"; the matrix is 4 firmware and 3 bootloader targets | corrected to 4/3 |
+| Bare `make` did not show help | the file header says `make` → "Show help", but the default goal was `all`, i.e. a silent seven-target build | `.DEFAULT_GOAL := help`; no bare `make` invocation exists in CI or `scripts/` |
+| Duplicated invalid combo | `make info` listed `h7-mchf` twice | corrected to `f4-ovi40, f7-mchf, h7-mchf` |
+| `make build` / `make static-analysis` missing | GOAL.md §15.4 target list | `build` (production firmware for the current config) and `static-analysis` (cppcheck, still slow — T78) added |
+
+**Verified:** `make` → help; `make test` → 670/670; `make coverage` → report
+written; `make quality` → switch test 7/7, tests 670/670, identity 23/23,
+doctor PASSED; `make config` → `TRX_NAME = <board config default>`.
 
 ---
 

@@ -8,9 +8,11 @@ SHELL := /bin/bash
 #
 # Usage:
 #   make                    # Show help
-#   make all                # Build firmware for default target (F4, mchf)
+#   make all                # Build ALL firmware + bootloader combinations
 #   make firmware           # Build firmware only
 #   make bootloader         # Build bootloader only
+#   make test               # Run the host unit test suite
+#   make quality            # Run all local quality gates
 #   make BUILDFOR=F7 all    # Build for STM32F7
 #   make BOARD=ovi40 all    # Build for OVI40 hardware
 #   make BUILDFOR=H7 BOARD=ovi40 all  # Build for H7 on OVI40
@@ -20,6 +22,10 @@ SHELL := /bin/bash
 #   make clean-bootloader   # Clean bootloader only
 #   make TRX_ID=myradio     # Build with custom TRX_ID
 #
+
+# A bare "make" shows the help text instead of silently starting a seven
+# target build.
+.DEFAULT_GOAL := help
 
 # =============================================================================
 # Default Configuration
@@ -119,16 +125,25 @@ help:
 	@echo "Usage: make [target] [options]"
 	@echo ""
 	@echo "Main Targets:"
-	@echo "  all              - Build ALL firmware (5) + ALL bootloader (4)"
+	@echo "  all              - Build ALL firmware (4) + ALL bootloader (3)"
 	@echo "  firmware         - Build firmware only for current config"
 	@echo "  bootloader       - Build bootloader only for current config"
 	@echo "  both             - Build firmware + bootloader for current config"
-	@echo "  all-firmware     - Build all 5 firmware combinations"
-	@echo "  all-bootloader   - Build all 4 bootloader combinations"
+	@echo "  build            - Production build (firmware for current config)"
+	@echo "  all-firmware     - Build all 4 firmware combinations"
+	@echo "  all-bootloader   - Build all 3 bootloader combinations"
 	@echo "  clean            - Clean all build artifacts"
 	@echo "  clean-firmware   - Clean firmware build artifacts"
 	@echo "  clean-bootloader - Clean bootloader build artifacts"
 	@echo "  clean-libs       - Clean library object files"
+	@echo ""
+	@echo "Quality Gates:"
+	@echo "  test             - Run the host unit test suite"
+	@echo "  coverage         - Run host tests and write the coverage report"
+	@echo "  quality          - Run all local quality gates"
+	@echo "  check-identity   - Verify every target reports its own board identity"
+	@echo "  build-switch-test- Verify configuration switches on a dirty tree"
+	@echo "  static-analysis  - Run cppcheck (slow, see T78)"
 	@echo ""
 	@echo "Documentation:"
 	@echo "  docs             - Generate Doxygen documentation"
@@ -318,6 +333,35 @@ debug-h7:
 	$(call BUILD_CMD,H7,ovi40,-DUI_BRD_OVI40 -DRF_BRD_OVI40 -DDEBUG -DUSE_FULL_ASSERT -DTRACE,firmware)
 
 # =============================================================================
+# Quality Gates
+# =============================================================================
+
+# Host unit test suite (documented as "make test" in AGENTS.md).
+test:
+	@$(MAKE) -C $(BUILD_DIR)/test test
+
+# Host tests plus the gcov coverage report (docs/coverage.txt).
+coverage:
+	@$(MAKE) -C $(BUILD_DIR)/test coverage
+
+# Production build of the current configuration.
+build: firmware
+
+# Local pre-commit gate. The steps run in a fixed order because the
+# configuration switch check starts with a clean, which also removes the
+# host test objects.
+quality:
+	@$(MAKE) build-switch-test
+	@$(MAKE) test
+	@$(MAKE) check-identity
+	@$(MAKE) doctor
+	@echo "PASS: all local quality gates succeeded"
+
+# Static analysis gate. The product code pass is slow (over 600 s, T78).
+static-analysis:
+	@bash scripts/static_analysis.sh
+
+# =============================================================================
 # Utility Targets
 # =============================================================================
 
@@ -349,7 +393,7 @@ info:
 	@echo "  bl-mchf H7  — STM32H7 OVI40 bootloader"
 	@echo ""
 	@echo "Invalid combos (intentional, guarded by board_config #error):"
-	@echo "  f4-ovi40, f7-mchf, h7-mchf, h7-mchf"
+	@echo "  f4-ovi40, f7-mchf, h7-mchf"
 	@echo ""
 	@echo "Current default: BUILDFOR=$(BUILDFOR) BOARD=$(BOARD)"
 	@echo "  CONFIGFLAGS=$(CONFIGFLAGS)"
@@ -537,4 +581,5 @@ stack-report:
 	debug-f4 debug-f7 debug-h7 \
 	config list-targets check-toolchain \
 	ci-build-all ci-bootloaders both build-switch-test check-identity print-identity \
+	test coverage build quality static-analysis \
 	doctor check size-summary stack-report

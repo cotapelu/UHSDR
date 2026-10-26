@@ -170,6 +170,7 @@
 | Firmware size, F4 release | 427 073 B | < 1 % regression/step | < 1 % |
 | Firmware size, H7 release | 547 857 B (corrected baseline, T81) | reclaim DSP tables | < 550 kB |
 | Build-output verification | 2 executable gates (switch 7/7, identity 23/23) | 4 gates | artifact attestation |
+| Local quality gate | `make quality` (switch + tests + identity + doctor) | CI parity | signed artifacts |
 | Static-analysis gate runtime | **>600 s, unbounded** (T78) | < 120 s | < 60 s |
 
 ---

@@ -315,6 +315,11 @@ make check                # Repo sanity check
 make info                 # Build matrix summary
 make size-summary         # Flash/RAM usage report
 make test                 # Host unit tests
+make coverage             # Host tests + gcov report (test/coverage.txt)
+make quality              # Local pre-commit gate (switch test, tests, identity, doctor)
+make check-identity       # Verify every target reports its own board identity
+make build-switch-test    # Verify configuration switches on a dirty tree
+make static-analysis      # cppcheck gate (slow, see docs/TODO.md T78)
 ```
 
 ---
