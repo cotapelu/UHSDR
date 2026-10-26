@@ -1,0 +1,31 @@
+# cppcheck suppression baseline for the product-code GATE (scripts/static_analysis.sh).
+# Generated at Phase 67.3. Gate = FAIL on findings NOT covered here.
+# Sections:
+#  1) vendored third-party dirs — never gate, suppressed wholesale.
+#  2) product-code (drivers/ ui/,audio/, hardware/, misc/, src/) findings baselined
+#     as CURRENT DEBT. Remove a line only after fixing the finding; the gate then
+#     turns red until the fix lands. Do NOT use this to hide a NEW defect.
+
+# ---- 1) vendored third-party (suppress whole dirs) ----
+# NOTE: `*basesw/*` (not `*/basesw/*`) so it matches the path whether cppcheck is
+# invoked from the repo root or from mchf-eclipse/. Product drivers/freedv_uhsdr.c
+# (note the underscore) does NOT match `*freedv/*` and still gates.
+*:*basesw/*
+*:*freedv/*
+*:*Middlewares/*
+
+# ---- 2) product-code baseline (current debt) ----
+arrayIndexThenCheck:drivers/ui/ui_driver.c
+invalidFunctionArg:drivers/ui/radio_management.c
+invalidPrintfArgType_sint:drivers/audio/freedv_uhsdr.c
+invalidPrintfArgType_sint:drivers/ui/menu/ui_menu.c
+invalidPrintfArgType_sint:drivers/ui/ui_driver.c
+invalidPrintfArgType_sint:drivers/ui/ui_driver_power.c
+invalidPrintfArgType_uint:drivers/ui/lcd/ui_spectrum.c
+invalidPrintfArgType_uint:drivers/ui/menu/ui_menu.c
+invalidPrintfArgType_uint:drivers/ui/ui_driver.c
+invalidPrintfArgType_uint:misc/profiling.c
+negativeIndex:drivers/ui/lcd/ui_spectrum.c
+nullPointerRedundantCheck:drivers/ui/menu/ui_menu.c
+nullPointer:src/bootloader/bootloader_main.c
+objectIndex:drivers/audio/audio_driver_filters.c

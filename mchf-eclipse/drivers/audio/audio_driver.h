@@ -228,8 +228,12 @@ typedef struct AudioDriverState
     //
     // Lock audio filter flag
     //
-    volatile bool					af_disabled;			// if TRUE, audio filtering is disabled (used during filter bandwidth changing, etc.)
-    volatile bool					tx_filter_adjusting;	// used to disable TX I/Q filter during phase adjustment
+    // NOTE: these are integer *nesting-depth counters* (they are ++/-- 'd around
+    // setup/teardown), NOT booleans. Declaring them as bool was a latent bug that
+    // only worked while uhsdr_types.h typedef'd bool to int; now that bool is the
+    // real _Bool (see uhsdr_types.h), ++/-- on a bool clamps to 1 and breaks nesting.
+    volatile uint8_t				af_disabled;			// if non-zero, audio filtering is disabled (used during filter bandwidth changing, etc.)
+    volatile uint8_t				tx_filter_adjusting;	// used to disable TX I/Q filter during phase adjustment
 
     float					codec_gain_calc;    // spectrum gain value
 

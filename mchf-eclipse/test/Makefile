@@ -12,9 +12,14 @@
 ##  Licence:		GNU GPLv3                                                      ##
 ####################################################################################
 
-CC      = gcc
-CFLAGS  = -Wall -Wextra -std=c11 -O2 -I. -I mocks -I ../drivers/remote -I ../hal/include
-LDFLAGS = -lm
+CC          = gcc
+CFLAGS      = -Wall -Wextra -std=c11 -O2 -I. -I mocks -I ../drivers/remote -I ../hal/include
+LDFLAGS    = -lm
+# Coverage (T68). Use -O0 so line counts map cleanly to source.
+COVFLAGS   = -O0 -fprofile-arcs -ftest-coverage
+COVREPORT  = coverage.txt
+GCOVR      = $(shell command -v gcovr 2>/dev/null)
+LCOV       = $(shell command -v lcov  2>/dev/null)
 
 SRCS    = test.c \
           audio_driver_filters_standalone.c \
@@ -48,7 +53,7 @@ SRCS    = test.c \
 
 TARGET  = test_runner
 
-.PHONY: all clean test
+.PHONY: all clean test coverage
 
 all: $(TARGET)
 
@@ -60,5 +65,26 @@ test: $(TARGET)
 	@echo "Running unit tests..."
 	@./$(TARGET)
 
+# T68: build with coverage instrumentation, run the suite, emit a text/summary report.
+# Honest scope note: the suite mostly re-implements pure helpers inline, so this is
+# coverage of the test shim + audio_driver_filters_standalone + mocks, NOT line
+# coverage of drivers/. See docs/TODO.md Phase 67.2/67.4.
+coverage:
+	$(MAKE) clean
+	$(CC) $(CFLAGS) $(COVFLAGS) -o $(TARGET) $(SRCS) $(LDFLAGS)
+	@echo "=== running instrumented suite ==="
+	@./$(TARGET)
+	@echo "" > $(COVREPORT)
+	@echo "UHSDR host-suite coverage — $(shell date -u +%Y-%m-%dT%H:%M:%SZ)" >> $(COVREPORT)
+ifdef GCOVR
+	@gcovr -r .. --txt-summary >> $(COVREPORT) 2>/dev/null || true
+else ifdef LCOV
+	@$(LCOV) --capture --directory . --output-file $(COVREPORT).info --quiet 2>/dev/null || true
+	@$(LCOV) --summary $(COVREPORT).info >> $(COVREPORT) 2>/dev/null || true
+else
+	@gcov -b -c $(SRCS:.c=.c) >/dev/null 2>&1 || true
+endif
+	@echo "Report written to $(COVREPORT)"
+
 clean:
-	rm -f $(TARGET) *.o
+	rm -f $(TARGET) *.o *.gcda *.gcno coverage.txt coverage.txt.info *.gcov

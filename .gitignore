@@ -14,6 +14,15 @@ build/
 *.o
 *.d
 
+# Coverage (T68 — `make -C mchf-eclipse/test coverage`)
+*.gcda
+*.gcno
+*.gcov
+coverage.txt
+
+# Static analysis report (scripts/static_analysis.sh)
+cppcheck_report.txt
+
 # IDE/editor
 .vscode/
 .idea/

@@ -129,7 +129,7 @@ int run(int cumulativeOutput, int numberOfRuns, int currentRun, int next_nin)
     rx_fdm_filter_log_index = 0;
     rx_filt_log_col_index = 0;
 
-    printf("sizeof FDMDV states: %zd bytes\n", sizeof(struct FDMDV));
+    printf("sizeof FDMDV states: %zu bytes\n", sizeof(struct FDMDV));
 
 
     for(r=0; r<numberOfRuns; r++) {

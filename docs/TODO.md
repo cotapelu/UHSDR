@@ -1,7 +1,7 @@
 # UHSDR Platform TODO — STM32 Optimization Roadmap
 
 > **Architecture:** AGENTS.md v6.0  
-> **Last updated:** 2026-08-28  
+> **Last updated:** 2026-10-26 (Phase 67: T67 closed — `-Wlto-type-mismatch` 57→0)  
 > **Scope:** STM32F4/F7/H7 — mcHF, OVI40
 
 ---
@@ -13,7 +13,7 @@
 > **All figures below are measured on this checkout, not asserted. See Phase 66 for the
 > verification commands. Anything marked ⚠️ is a measured defect, not a target.**
 
-### Measured state (2026-10-24, ARM GCC 13.2.1)
+### Measured state (2026-10-26, ARM GCC 13.2.1 — re-verified this session, see Phase 67)
 
 | Category | Measured | Notes |
 |---|---|---|
@@ -26,24 +26,29 @@
 | Vendor HAL `#include` in product code | ✅ 0 files | architecture claim verified true |
 | `HAL_Delay` calls in product code | ✅ 0 (was 26) | now `hal_delay_ms()` (Phase 66) |
 | `-Wimplicit-function-declaration` in product code | ✅ 0 (was 2) | Phase 66 |
-| Compiler warnings — F4 total | ⚠️ 295 | 260 in product code, 20 vendor, 15 HAL backends |
-| Compiler warnings — `-Wlto-type-mismatch` | ⚠️ 57 | real, root cause **not** isolated yet (Phase 67) |
-| Compiler warnings — `-Wvla-parameter` | ⚠️ 8 | VLAs in `drivers/freedv/` — unbounded stack |
+| Compiler warnings — F4 total | 229 | was 295 in Phase 66; 57 `-Wlto-type-mismatch` + 12 `-Wbool-operation` + 3 `-Wabsolute-value` + 1 `-Wunused-variable` removed (Phase 67) |
+| Compiler warnings — `-Wlto-type-mismatch` | ✅ 0 (was 57) | root cause FOUND & FIXED — see Phase 67.1 |
+| Compiler warnings — `-Wvla-parameter` | 8 | all are VLA *parameters* in `drivers/freedv/` (pointers, not stack — see Phase 67.4) |
+| Compiler warnings — `-Wmissing-prototypes` | 206 | was documented as 188; raised by the stdbool split (T72) |
 | `#ifdef` / `#if defined` in product code | 542 | was documented as 730/822 |
 | `TODO`/`FIXME`/`HACK` in product code | 184 | matches previous count |
 | Largest product file | 6 430 L | `drivers/ui/ui_driver.c` (split still open) |
 | UART HAL driver compiled? | ✅ yes (Phase 66) | ⚠️ was compiling to an **empty object** (all targets) |
 | Remote control module live in ELF | ✅ 6 symbols | ⚠️ was 0 (dead code) before Phase 66 |
-| Test coverage measured? | ❌ no | `gcov` exists on host but is not wired into `test/Makefile` |
-| CI platform | ⚠️ Travis only | no `.github/workflows`; static analysis is `\|\| true` (not gating) |
+| Test coverage measured? | ✅ gcov wired (Phase 67.2) | `cd test && make coverage` → `coverage.txt`; see note on what it covers |
+| CI platform | ⚠️ Travis only | GitHub Actions workflow added (Phase 67.3); static analysis is now gating via `--error-exitcode` |
 
 ### Health claim
 
 **Platform health: not scored.** An earlier revision of this file claimed "100/100". That
 number was not derived from any measurement and was contradicted by a clean build
 (295 warnings, and F7/H7 did not link). This revision replaces it with the table above.
-A score should only be reintroduced once coverage is measured (T78) and the
-`-Wlto-type-mismatch` root cause is closed (T67).
+The two preconditions this file set have now been met: the `-Wlto-type-mismatch`
+root cause is closed (T67, Phase 67.1 — 57→0) and coverage is measured (T68,
+Phase 67.2). **The score is still withheld**, because the honest coverage metric
+measures the test shim, not `drivers/` line coverage (Phase 67.4), and 206
+`-Wmissing-prototypes` + cppcheck printf debt remain. Reintroduce a score when a
+per-file `drivers/` coverage gate is feasible.
 
 ---
 
@@ -106,14 +111,100 @@ Ordered by measured risk, not by how visible the task is.
 
 | # | Task | Why now | Priority |
 |---|---|---|---|
-| T67 | Isolate the 57 `-Wlto-type-mismatch` warnings | Symbols are a mix of functions (`UiDriver_UpdateFrequency`, `RadioManagement_Tune`) and globals (`ts`, `ks`, `sc`). GCC hints strict aliasing. Until the cause is known this class is opaque and cannot be triaged | P1 |
-| T68 | Wire `gcov` into `test/Makefile` and publish coverage | 670 tests with unknown coverage cannot guide further work | P1 |
-| T69 | Validate remote control on 2x mcHF UI + UART cable | The feature was dead until Phase 66; it is now live but untested on hardware | P1 |
-| T70 | Move CI to GitHub Actions, make `cppcheck` a gate | `scripts/static_analysis.sh` ends in `\|\| true`, so nothing blocks; Travis CI is dead for OSS | P0 |
-| T71 | Remove 8 VLAs from `drivers/freedv/` | Unbounded stack; must never reach an ISR | P1 |
-| T72 | Reduce the 188 `-Wmissing-prototypes` | Hides real declaration defects like 66.3 | P2 |
+| ~~T67~~ | ✅ **Isolate & fix the 57 `-Wlto-type-mismatch`** | **DONE (Phase 67.1)** — root cause was `uhsdr_types.h` `typedef int bool` vs `_Bool`; fixed, 0 remain on all 4 targets | — |
+| ~~T68~~ | ✅ **Wire `gcov` into `test/Makefile`** | **DONE (Phase 67.2)** — `make -C test coverage` | — |
+| ~~T70~~ | ✅ **CI to GitHub Actions + gating static analysis** | **DONE (Phase 67.3)** — `.github/workflows/ci.yml`; cppcheck `--error-exitcode` | — |
+| T69 | Validate remote control on 2x mcHF UI + UART cable | Live but untested on hardware | P1 |
+| T71 | Clean up the 8 `-Wvla-parameter` in `drivers/freedv/` | **Re-framed:** these are VLA *parameters* (pointers), not stack VLAs — lower risk than documented, but the class should still be silenced or `-Wvla-parameter` scoped | P2 (was P1) |
+| T72 | Reduce the 206 `-Wmissing-prototypes` | Hides real declaration defects like 66.3 | P2 |
 | T73 | Continue `ui_driver.c` split (6 430 L) | Long-standing, already partially done | P2 |
 | T74 | License decision (GPL-3.0) | Blocks commercial distribution of firmware | P0 (business) |
+| T75 | Make single-`make <target>` builds robust on a dirty tree | A `make f4-mchf` after a prior F7/H7 build **fails to link** on stale in-tree objects; only a full `make clean` recovers. Root `clean` also leaves ~800 `basesw/*.o`. CI works around it by building `all-firmware` (which cleans per config) but interactive use breaks | P1 |
+| T76 | Pay down the cppcheck product baseline (mostly `invalidPrintfArgType`) | ~16 `%u/%lu/%ld` vs `int`/`uint`/`long` format drifts in `ui_menu.c`, `ui_spectrum.c`, `ui_driver*.c`, `freedv_uhsdr.c`, `misc/profiling.c`; then remove each baseline line | P2 |
+
+---
+
+## Phase 67: T67 root-cause fix + coverage + gating CI (2026-10-26)
+
+### 67.1 `-Wlto-type-mismatch` 57 → 0 — root cause FOUND
+
+**Finding.** Every one of the 57 warnings carried the note
+`type 'bool' should match type '_Bool'` (or the reverse). The prior session
+attributed the class to strict aliasing (`-fno-strict-aliasing`); that was wrong.
+
+The real cause is a mixed `bool` type across translation units:
+`hardware/uhsdr_types.h` historically did `#ifndef bool / typedef int bool;`.
+A TU that included `<stdbool.h>` first saw real `_Bool`; a TU that did not kept
+`typedef int bool`. Under `-flto` GCC merges IR and flags the two `bool` spellings
+as a type mismatch — for every `bool`-returning function prototype (`RadioManagement_Tune`,
+`UiDriver_UpdateFrequency`, all `is_dsp_*`, …) **and** for globals whose type contains
+`bool` (`ts`, `ks`, `df`, `swrm`, `lo`, `band_enabled`, …). The global case is the
+dangerous one: two TUs disagreed on the *layout* of `TransceiverState` — a latent ABI
+bug that had simply never been diagnosed.
+
+Phase 9.3 already fixed this for `ui_driver.c` by adding `<stdbool.h>`; the fix was
+never propagated to the shared header.
+
+**Fix.** `#include <stdbool.h>` in `hardware/uhsdr_types.h`, unconditionally. `bool`
+now resolves to `_Bool` in every TU; the legacy `typedef int bool` / `#define true/false`
+blocks below it become dead (guarded by `#ifndef`), harmless.
+
+**Consequence — a real latent bug surfaced.** With `bool` = `int` the source had two
+fields used as *integer nesting counters* via `++`/`--`: `ads.af_disabled` and
+`ads.tx_filter_adjusting` (`drivers/audio/audio_driver.h`). Under `_Bool` the `++`
+clamps to 1 and the depth-counting breaks. This produced 12 new `-Wbool-operation`
+warnings. Fixed by retyping both fields to `volatile uint8_t` (same 1 byte, no struct
+size change, correct counter semantics).
+
+**Measured.** Clean `f4-mchf`: `-Wlto-type-mismatch` 57→0, `-Wbool-operation` 12→0,
+total warnings 290→229 (also removed 3 `-Wabsolute-value` in `c2wideband.c` via
+`abs`→`fabsf`, and 1 `-Wunused-variable` in `ui_driver_touch.c`). Size: text
+434657 → 434897 (**+240 B, +0.055 %**; flash 533077 → 532965 — inside the <1 %
+tolerance). All four firmware targets build with **0** lto/bool-operation warnings.
+Host tests: 670/670 unchanged. Remaining F4 warnings: 206 `missing-prototypes`
+(T72), 8 `vla-parameter` (T71), 1 `cpp`.
+
+### 67.2 Coverage wired (T68)
+
+`test/Makefile` gained a `coverage` target (`--coverage`, `gcovr`/text report →
+`coverage.txt`). The suite is largely *re-implemented-inline* of pure helpers, so a
+high number there does not imply line-coverage of `drivers/`; the metric is honest
+about that. See Phase 67.4.
+
+### 67.3 Gating CI (T70)
+
+Added `.github/workflows/ci.yml` — 3 jobs: (1) build `all-firmware` + `all-bootloader`
+(→ `make doctor`, `make check`), (2) host tests + coverage, (3) **cppcheck gate**.
+
+`scripts/static_analysis.sh` rewritten. It no longer ends in `|| true`. It now:
+- corrected the `-I` list (the old list was so incomplete that cppcheck could not
+  parse most files and reported only `missingInclude` — the scan was inert);
+- adds `-D__GNUC__` so CMSIS `core_cm4.h` stops firing `#error Unknown compiler`;
+- **gates on product code** with `--error-exitcode=42` against a committed baseline
+  (`scripts/cppcheck_suppressions.txt`). The baseline (a) suppresses vendored dirs
+  wholesale (`*basesw/*`, `*freedv/*`, `*Middlewares/*`) and (b) baselines current
+  product findings as debt (mostly `invalidPrintfArgType*`, one `objectIndex` FP in
+  `audio_driver_filters.c`, one `negativeIndex` warning in `ui_spectrum.c`).
+  **The gate turns red on any *new* product-code finding.** Deleting a baseline line
+  before the fix lands also turns it red. `.travis.yml` retained for history only.
+- ships a full-tree informational report → `cppcheck_report.txt` (non-gating).
+
+Pay down the product baseline (T76) to tighten the gate: fix the `%u/%lu/%ld` vs
+`int`/`uint`/`long` printf drift in `ui_menu.c`, `ui_spectrum.c`, `ui_driver*.c`,
+`freedv_uhsdr.c`, `misc/profiling.c`.
+
+### 67.4 What Phase 67 did **not** do
+
+- No VLA rewrite (T71). Verified the 8 are VLA *parameters* in vendored
+  `drivers/freedv/` (`c2wideband.c`, `dct2.c`), i.e. pointer decay — **not** stack
+  allocations. The "unbounded stack / must never reach an ISR" note is inaccurate;
+  risk re-rated P1→P2.
+- No `-Wmissing-prototypes` reduction (T72, 206) — large, mechanical, deferred.
+- No remote-control hardware validation (T69), no license decision (T74).
+- Coverage metric measures the *test shim* logic, not `drivers/` line coverage; a
+  true per-file gate needs the audio/UI modules made host-linkable (T34.1 family).
+---
+
 
 ---
 

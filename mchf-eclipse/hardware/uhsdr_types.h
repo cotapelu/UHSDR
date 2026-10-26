@@ -16,6 +16,15 @@
 #define __MCHF_TYPES_H
 
 #include <stdint.h>
+// Guarantee bool == _Bool in *every* translation unit that includes this header.
+// Without this, the legacy `typedef int bool` below survives in TUs that have
+// NOT already included <stdbool.h>, while TUs that did include it see real
+// `_Bool` — LTO then reports ~57 `-Wlto-type-mismatch` ("type 'bool' should match
+// type '_Bool'") and any bool-holding struct (e.g. TransceiverState) is read with
+// a different layout in different TUs (latent ABI bug). Including <stdbool.h>
+// here makes the legacy typedef/defines below dead (bool/true/false become
+// macros) and unifies the type everywhere. See docs/TODO.md T67.
+#include <stdbool.h>
 #include "arm_math.h"
 // defines float32_t
 

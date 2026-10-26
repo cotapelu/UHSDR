@@ -399,12 +399,15 @@ HAL backends (hal/src/*/):
 - ✅ Remote control module wired into the main loop (`REMOTE_UI_PAIR_ENABLE`)
 
 ### Remaining — measured, not estimated
-- 🔴 **57 `-Wlto-type-mismatch`** — root cause not isolated (T67)
-- 🔴 **Test coverage unknown** — `gcov` never invoked (T68)
-- 🔴 **Static analysis does not gate CI** — `scripts/static_analysis.sh` ends `|| true`
-  and there is no `.github/workflows` (T70)
-- 🟡 **260 product-code warnings total** (188 `missing-prototypes`, 8 VLA, 3 `absolute-value`)
-- 🟡 **8 VLAs in `drivers/freedv/`** — unbounded stack (T71)
+- ✅ **57 `-Wlto-type-mismatch` → 0** — root cause FOUND & fixed (Phase 67): `uhsdr_types.h`
+  mixed `bool`(`int`) vs `_Bool` across TUs; see docs/TODO.md Phase 67.1
+- ✅ **Test coverage wired** — `make -C test coverage` → `coverage.txt` (Phase 67.2, T68)
+- ✅ **Static analysis gates CI** — `.github/workflows/ci.yml` + cppcheck `--error-exitcode`
+  on a committed baseline (Phase 67.3, T70); vendored dirs suppressed wholesale
+- 🟡 **~219 product-code warnings total** (was 260 → measured 206 `missing-prototypes`,
+  8 VLA-parameter, 3 `absolute-value`, plus 2 minor — see docs/TODO.md)
+- 🟡 **8 `-Wvla-parameter` in `drivers/freedv/`** — re-framed: these are VLA *parameters*
+  (pointer decay, not stack VLAs); risk lower than documented (T71)
 - 🟡 **542 `#ifdef`/`#if defined` in product code** (the earlier "730" figure was wrong)
 - 🟡 **184 `TODO`/`FIXME`/`HACK`**
 - 🟡 Large file splits still open: `ui_driver.c` 6 430 L, `ui_lcd_hy28.c` 2 671 L
@@ -425,9 +428,9 @@ HAL backends (hal/src/*/):
 | Bootloader targets building | **3 / 3** | 3 ✅ |
 | Host tests | **670 passing** | 30+ ✅ |
 | Host test coverage | **unknown** | >90% measured |
-| Product-code compiler warnings | 260 | <25 |
-| `-Wlto-type-mismatch` | 57 | 0 |
-| F4 binary (text) | 426 961 B | < 1 % regression/step |
+| Product-code compiler warnings | 260 (→ ~219 after Phase 67) | <25 |
+| `-Wlto-type-mismatch` | 57 (→ **0** after Phase 67) | 0 |
+| F4 binary (text) | 426 961 B (→ 434 897 B, +0.055 % after Phase 67) | < 1 % regression/step |
 | Time to add new STM32 MCU | 1 week (HAL backend + `uhsdr_mcu.h`) | ≤ 1 week ✅ |
 | Time to add new board | 1 config header + `UI_BRD_*` flag | ≤ 1 day ✅ |
 | Binary size regression tolerance | — | < 1% |

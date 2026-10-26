@@ -1,0 +1,68 @@
+name: ci
+
+# Phase 67.3 (T70): real gating CI on GitHub Actions.
+# Travis (.travis.yml) is retained for history only and is authoritative for nothing.
+#
+# Ubuntu 24.04 ships arm-none-eabi-gcc 13.2.1, matching the pinned toolchain in
+# docs/reproducible_builds.md, so the versions below are intentional.
+
+on:
+  push:
+    branches: [main, active-devel]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: firmware + bootloader (all targets)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi python3
+          arm-none-eabi-gcc --version | head -1
+      - name: Build all firmware
+        run: make -j"$(nproc)" all-firmware
+      - name: Build all bootloaders
+        run: make -j"$(nproc)" all-bootloader
+      - name: Sanity (doctor/check)
+        run: |
+          make doctor
+          make check
+
+  host-tests:
+    name: host unit tests + coverage
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run host tests
+        run: make -C mchf-eclipse/test test
+      - name: Coverage report (informational, T68)
+        run: |
+          make -C mchf-eclipse/test coverage || true
+          gcovr -r mchf-eclipse --txt-summary 2>/dev/null | tail -20 || true
+
+  static-analysis:
+    name: cppcheck gate (product code)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cppcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cppcheck
+          cppcheck --version
+      - name: Static analysis gate
+        # Exits non-zero on NEW findings in product code (vendored freedv noise is baselined).
+        run: bash scripts/static_analysis.sh
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cppcheck-report
+          path: cppcheck_report.txt
+          if-no-files-found: warn
