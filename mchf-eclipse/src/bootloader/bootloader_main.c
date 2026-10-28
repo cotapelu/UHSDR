@@ -19,6 +19,9 @@
 
 #include "uhsdr_board.h"
 #include "hal_delay.h"
+#include "hal_gpio.h"
+#include "hal_clock.h"
+#include "hal_flash.h"
 #include "flash_if.h"
 #include "uhsdr_boot_hw.h"
 #include "command.h"
@@ -64,14 +67,14 @@ static void Bootloader_DisplayInit()
 
     // we need to set the touch screen CS signal to high, otherwise SPI displays
     // will not be detectable
-    GPIO_InitTypeDef GPIO_InitStructure;
+    hal_gpio_config_t tpCsConfig;
 
-    GPIO_InitStructure.Pull     = GPIO_PULLUP;
-    GPIO_InitStructure.Speed    = GPIO_SPEED_FREQ_VERY_HIGH;
-    GPIO_InitStructure.Mode     = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStructure.Pin = TP_CS;
+    tpCsConfig.pin   = TP_CS;
+    tpCsConfig.mode  = HAL_GPIO_MODE_OUTPUT_PP;
+    tpCsConfig.pull  = HAL_GPIO_PULL_UP;
+    tpCsConfig.speed = HAL_GPIO_SPEED_VERY_HIGH;
 
-    HAL_GPIO_Init(TP_CS_PIO, &GPIO_InitStructure);
+    (void)hal_gpio_init(TP_CS_PIO, &tpCsConfig);
 
     GPIO_SetBits(TP_CS_PIO, TP_CS);
 
@@ -112,7 +115,7 @@ static void Bootloader_UsbHost_Idle()
 {
     static bool power_was_up = false;
     static uint32_t tick;
-    uint32_t now = HAL_GetTick();
+    uint32_t now = hal_get_tick();
 
     if (now >= tick)
     {
@@ -276,10 +279,10 @@ void UhsdrBl_JumpToApplication(uint32_t ApplicationAddress)
         __disable_irq();
 
         // disable systick irq
-        HAL_SuspendTick();
+        (void)hal_suspend_tick();
 
         // set clocks to default state
-        HAL_RCC_DeInit();
+        (void)hal_clock_deinit();
 
         // clear Interrupt Enable Register & Interrupt Pending Register
         const size_t icer_count = sizeof(NVIC->ICER)/sizeof(NVIC->ICER[0]);
@@ -406,7 +409,7 @@ void Bootloader_CheckAndGoForBootTarget()
     {
         *(uint32_t*)(SRAM2_BASE) = BOOT_CLEARED;
 #if defined(STM32F4)
-        __HAL_REMAPMEMORY_SYSTEMFLASH();
+        MCU_JumpToSystemFlash();
 
         const uint32_t dfu_boot_start = 0x00000000;
 #elif defined(STM32F7)
@@ -416,12 +419,12 @@ void Bootloader_CheckAndGoForBootTarget()
     #if defined (FLASH_OPTCR_nDBANK)
         if ((FLASH->OPTCR & (FLASH_OPTCR_nDBANK_Msk|FLASH_OPTCR_nDBOOT_Msk)) != FLASH_OPTCR_nDBOOT)
         {
-            if (HAL_FLASH_OB_Unlock() == HAL_OK)
+            if (hal_flash_ob_unlock() == HAL_STATUS_OK)
             {
                 FLASH->OPTCR |= FLASH_OPTCR_nDBOOT; // set == disable dual boot
                 FLASH->OPTCR &= ~FLASH_OPTCR_nDBANK; // unset == enabled dual bank mode
-                HAL_FLASH_OB_Launch();
-                HAL_FLASH_OB_Lock();
+                (void)hal_flash_ob_launch();
+                (void)hal_flash_ob_lock();
             }
         }
     #endif

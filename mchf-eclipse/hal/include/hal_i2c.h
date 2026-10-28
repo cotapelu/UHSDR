@@ -38,4 +38,10 @@ hal_status_t hal_i2c_deinit(hal_i2c_handle_t handle);
 hal_status_t hal_i2c_init(hal_i2c_handle_t handle);
 hal_status_t hal_i2c_change_speed(hal_i2c_handle_t handle, uint16_t speed);
 
+/* Reports whether the given bus is currently free (no transfer in progress).
+ * Product code uses this to decide whether a busy-waiting driver may touch a
+ * device from an interrupt context; 'is_free' is set to 1 when the bus is
+ * free and to 0 otherwise. */
+hal_status_t hal_i2c_is_bus_free(hal_i2c_handle_t handle, uint8_t* is_free);
+
 #endif /* __HAL_I2C_H */

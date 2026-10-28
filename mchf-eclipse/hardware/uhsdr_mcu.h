@@ -40,6 +40,40 @@ inline static mchf_cpu_t MchfHW_Cpu()
 #define STM32_GetSignature()    ((*(uint16_t *) (DBGMCU_BASE)) & 0x0FFF)
 #define STM32_UUID ((uint32_t *)UID_BASE)
 
+/* -------------------------------------------------------------------------
+ * Device identifier and revision from the DBGMCU IDCODE register.
+ *
+ * This is the MCU abstraction equivalent of the vendor HAL_GetDEVID() /
+ * HAL_GetREVID() macros and uses the same register fields on every supported
+ * family, so no vendor HAL include is needed in product code.
+ * ------------------------------------------------------------------------- */
+inline static uint16_t MCU_GetDeviceId(void)
+{
+    return (uint16_t)((*(uint32_t *)DBGMCU_BASE) & 0x00000FFF);
+}
+
+inline static uint16_t MCU_GetRevision(void)
+{
+    return (uint16_t)((*(uint32_t *)DBGMCU_BASE) >> 16);
+}
+
+/* -------------------------------------------------------------------------
+ * Remaps address 0x00000000 to the ST system memory (the factory bootloader
+ * in ROM) instead of the user flash, so that a jump to 0 jumps into the
+ * system bootloader (DFU entry).
+ *
+ * This is the MCU abstraction equivalent of the vendor
+ * __HAL_REMAPMEMORY_SYSTEMFLASH() macro and uses the same register bits on
+ * the STM32F4, so no vendor HAL include is needed in product code.
+ * ------------------------------------------------------------------------- */
+#if defined(STM32F4)
+inline static void MCU_JumpToSystemFlash(void)
+{
+    SYSCFG->MEMRMP &= ~(uint32_t)SYSCFG_MEMRMP_MEM_MODE;
+    SYSCFG->MEMRMP |= (uint32_t)SYSCFG_MEMRMP_MEM_MODE_0;
+}
+#endif
+
 #if defined(STM32F4) || defined(STM32F7)
     #define STM32_GetFlashSize()    (*(uint16_t *) (FLASHSIZE_BASE))
 #elif defined(STM32H7)

@@ -15,6 +15,8 @@
 // Common
 #include "uhsdr_board.h"
 #include "hal_delay.h"
+#include "hal_dac.h"
+#include "hal_i2c.h"
 #include "audio_driver.h"
 #include "radio_management.h"
 
@@ -124,7 +126,7 @@ __IO mchf_codec_t mchf_codecs[CODEC_NUM];
 static void AudioPA_Volume(uint8_t vol)
 {
     uint32_t lv = vol>CODEC_SPEAKER_MAX_VOLUME?CODEC_SPEAKER_MAX_VOLUME:vol;
-    HAL_DAC_SetValue(&hdac,DAC_CHANNEL_1,DAC_ALIGN_12B_R, (lv * 4095)/CODEC_SPEAKER_MAX_VOLUME);
+    (void)hal_dac_set_value(&hdac, HAL_DAC_CHANNEL_1, HAL_DAC_ALIGN_12B_R, (lv * 4095)/CODEC_SPEAKER_MAX_VOLUME);
 }
 /**
  * @brief controls sound delivery on "external" PA via DAC
@@ -156,11 +158,11 @@ static uint32_t Codec_WriteRegister(I2C_HandleTypeDef* hi2c, uint8_t RegisterAdd
 
 static uint32_t Codec_ResetCodec(I2C_HandleTypeDef* hi2c, uint32_t AudioFreq, CodecSampleWidth_t word_size)
 {
-    uint32_t retval = HAL_OK;
+    uint32_t retval = UHSDR_HW_I2C_OK;
 
     retval = Codec_WriteRegister(hi2c, W8731_RESET, 0);
     // Reset register
-    if( retval == HAL_OK)
+    if( retval == UHSDR_HW_I2C_OK)
     {
         // Reg 00: Left Line In (0dB, mute off)
         Codec_WriteRegister(hi2c, W8731_LEFT_LINE_IN,0x001F);
@@ -593,5 +595,11 @@ void Codec_IQInGainAdj(uint8_t gain)
  */
 bool Codec_ReadyForIrqCall()
 {
-    return (CODEC_ANA_I2C->Lock == HAL_UNLOCKED) && (CODEC_IQ_I2C->Lock == HAL_UNLOCKED);
+    uint8_t ana_bus_free = 0;
+    uint8_t iq_bus_free = 0;
+
+    (void)hal_i2c_is_bus_free(CODEC_ANA_I2C, &ana_bus_free);
+    (void)hal_i2c_is_bus_free(CODEC_IQ_I2C, &iq_bus_free);
+
+    return (ana_bus_free != 0U) && (iq_bus_free != 0U);
 }

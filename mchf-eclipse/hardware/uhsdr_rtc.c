@@ -2,7 +2,7 @@
 /************************************************************************************
 **                                                                                 **
 **                               mcHF QRP Transceiver                              **
-**                             K Atanassov - M0NKA 2014                            **
+**                             K Atanassiev - M0NKA 2014                            **
 **                                                                                 **
 **---------------------------------------------------------------------------------**
 **                                                                                 **
@@ -11,106 +11,35 @@
 #include "uhsdr_board.h"
 #include "uhsdr_rtc.h"
 
-#ifdef STM32F4
-#include "stm32f4xx_hal_rtc.h"
-#include "stm32f4xx_hal_rtc_ex.h"
-#include "stm32f4xx_hal_rcc.h"
-#elif defined(STM32H7)
-#include "stm32h7xx_hal_rtc.h"
-#include "stm32h7xx_hal_rtc_ex.h"
-#include "stm32h7xx_hal_rcc.h"
-#elif defined(STM32F7)
-#include "stm32f7xx_hal_rtc.h"
-#include "stm32f7xx_hal_rtc_ex.h"
-#include "stm32f7xx_hal_rcc.h"
-#endif
-
-#include "rtc.h"
+#include "hal_rtc.h"
 
 /* Private macros */
 /* Internal status registers for RTC */
-#define RTC_PRESENCE_REG                   RTC_BKP_DR1
-// previously we used DR0 which is also used by the HAL Layer, so we move to DR1
+/* previously we used DR0 which is also used by the HAL Layer, so we moved to DR1;
+ * the current API addresses the backup domain by register index, see
+ * RTC_PRESENCE_BKP_INDEX in uhsdr_rtc.h */
 
 #define RTC_PRESENCE_INIT_VAL              0x0001       // if we find this value after power on, we assume battery is available
-#define RTC_PRESENCE_OK_VAL                0x0002       // then we set this value to rembember a clock is present
+#define RTC_PRESENCE_OK_VAL                0x0002       // then we set this value to remember a clock is present
 //#define RTC_PRESENCE_ACK_VAL               0x0003       // if we find this value after power on, we assume user enabled RTC
 //#define RTC_PRESENCE_NACK_VAL              0x0004       // if we find this value after power on, we assume user decided against using RTC
 #ifdef USE_RTC_LSE
 
-static void RTC_LSE_Config() {
-
-    RCC_OscInitTypeDef RCC_OscInitStruct;
-    RCC_PeriphCLKInitTypeDef PeriphClkInitStruct;
-
-    PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_RTC;
-
-    RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
-
-    RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSE;
-    RCC_OscInitStruct.LSEState = RCC_LSE_ON;
-
-    PeriphClkInitStruct.RTCClockSelection = RCC_RTCCLKSOURCE_LSE;
-
-    HAL_RCC_OscConfig(&RCC_OscInitStruct);
-
-    HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct);
-
-    __HAL_RCC_RTC_ENABLE();
-
-    HAL_RTCEx_BKUPWrite(&hrtc,RTC_PRESENCE_REG,RTC_PRESENCE_OK_VAL);
-
-
-}
-
 void Rtc_FullReset() {
-    __HAL_RCC_BACKUPRESET_FORCE();
+    (void)hal_rtc_backup_reset_force();
 }
-#if 0
-static void RTC_LSI_Config() {
-
-    RCC_OscInitTypeDef RCC_OscInitStruct;
-    RCC_PeriphCLKInitTypeDef PeriphClkInitStruct;
-
-    PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_RTC;
-
-    RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
-
-    RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSI;
-    RCC_OscInitStruct.LSIState = RCC_LSI_ON;
-
-    PeriphClkInitStruct.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;
-
-    HAL_RCC_OscConfig(&RCC_OscInitStruct);
-
-    HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct);
-
-    __HAL_RCC_RTC_ENABLE();
-
-    HAL_RTCEx_BKUPWrite(&hrtc,RTC_PRESENCE_REG,RTC_PRESENCE_OK_VAL);
-
-}
-#endif
 
 static void Rtc_StartInternal(bool doClock)
 {
-
-
-    if (doClock)
+    if (doClock == true)
     {
         // ok, there is a battery, so let us now start the oscillator
-        RTC_LSE_Config();
+        // and remember that a clock is present
+        (void)hal_rtc_enable_lse_clock();
+        (void)hal_rtc_bkp_write(RTC_PRESENCE_BKP_INDEX, RTC_PRESENCE_OK_VAL);
     }
     // very first start of rtc
-    hrtc.Instance = RTC;
-    hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
-    hrtc.Init.AsynchPrediv = 127;
-    hrtc.Init.SynchPrediv = 255;
-    hrtc.Init.OutPut = RTC_OUTPUT_DISABLE;
-    hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
-    hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
-
-    HAL_RTC_Init(&hrtc);
+    (void)hal_rtc_init();
 }
 
 
@@ -125,29 +54,28 @@ bool Rtc_isEnabled()
     bool retval = false;
 #ifdef USE_RTC_LSE
 
-#if defined(STM32H7)
-    // H7: PWR clock is already enabled by HAL, no explicit enable needed
-#else
-    __HAL_RCC_PWR_CLK_ENABLE();
-#endif
+    uint8_t lse_ready = 0;
+    uint32_t presence = 0;
 
-    HAL_PWR_EnableBkUpAccess();
+    (void)hal_rtc_enable_backup_access();
 
-    __HAL_RCC_RTC_ENABLE();
+    (void)hal_rtc_lse_is_ready(&lse_ready);
 
-    if (__HAL_RCC_GET_FLAG(RCC_FLAG_LSERDY) != RESET)
+    if (lse_ready != 0)
     {
         // we detected most likely a running RTC or a system capable of running an RTC since the external oscillator is running;
         retval = true;
     }
 
-    switch(HAL_RTCEx_BKUPRead(&hrtc,RTC_PRESENCE_REG))
+    (void)hal_rtc_bkp_read(RTC_PRESENCE_BKP_INDEX, &presence);
+
+    switch(presence)
     {
     case 0:
         // 0 -> cleared backup ram -> no battery or reset
         // if we find the RTC_PRESENCE_INIT_VAL in the backup register next time we boot
         // we know there is a battery present.
-        HAL_RTCEx_BKUPWrite(&hrtc,RTC_PRESENCE_REG,RTC_PRESENCE_INIT_VAL);
+        (void)hal_rtc_bkp_write(RTC_PRESENCE_BKP_INDEX, RTC_PRESENCE_INIT_VAL);
         break;
     case RTC_PRESENCE_OK_VAL:
         retval = true;
@@ -170,12 +98,12 @@ bool Rtc_SetPpm(int16_t ppm)
     if (ppm >= RTC_CALIB_PPM_MIN && ppm <= RTC_CALIB_PPM_MAX)
     {
         uint32_t calm;
-        uint32_t calp;
+        hal_rtc_calib_pulses_t calp;
         float64_t ppm2pulses = rint((float64_t)ppm * 1.048576); //  = (32 * 32768) / 1000.0000
         if (ppm2pulses <= 0.0) // important, we must make sure to not set calp if 0ppm
         {
             calm = - ppm2pulses;
-            calp = RTC_SMOOTHCALIB_PLUSPULSES_RESET;
+            calp = HAL_RTC_CALIB_MINUS_PULSES;
         }
         else
         {
@@ -184,9 +112,9 @@ bool Rtc_SetPpm(int16_t ppm)
             {
                 calm = 0;
             }
-            calp = RTC_SMOOTHCALIB_PLUSPULSES_SET;
+            calp = HAL_RTC_CALIB_PLUS_PULSES;
         }
-        HAL_RTCEx_SetSmoothCalib(&hrtc,RTC_SMOOTHCALIB_PERIOD_32SEC,calp,calm);
+        (void)hal_rtc_set_smooth_calib(calp, calm);
 
         retval = true;
     }
@@ -194,60 +122,41 @@ bool Rtc_SetPpm(int16_t ppm)
 }
 
 /**
-  * @brief  Gets RTC current time. THIS A replacement for the not working HAL_RTC_GetTime() function/
-  * @param  hrtc: pointer to a RTC_HandleTypeDef structure that contains
-  *                the configuration information for RTC.
-  * @param  sTime: Pointer to Time structure
-  * @param  Format: Specifies the format of the entered parameters.
-  *          This parameter can be one of the following values:
-  *            @arg RTC_FORMAT_BIN: Binary data format
-  *            @arg RTC_FORMAT_BCD: BCD data format
-  * @note  You cannot use SubSeconds etc since these are not read due to an apparent bug in some STM32F407 silicon.
-  *        On my STM32F407 reading the SSR will for sure stop the RTC shadow registers and cause also other troubles.
-  *        Probably different hardware does not have this problem but we don't need subseconds anyway.
-  * @note You must call HAL_RTC_GetDate() after HAL_RTC_GetTime() to unlock the values
-  *        in the higher-order calendar shadow registers to ensure consistency between the time and date values.
-  *        Reading RTC current time locks the values in calendar shadow registers until current date is read.
-  * @retval HAL status
+  * @brief  Reads the current calendar time in binary format.
+  * @param  time: pointer to a uhsdr_rtc_time_t structure filled with the
+  *               hours, minutes and seconds of the RTC
+  * @note   The sub second register is deliberately not read (see the note in
+  *         hal_rtc.h): on STM32F407 silicon reading the SSR stops the RTC
+  *         shadow registers and causes also other troubles. The product does
+  *         not need sub seconds.
   */
-
-// we need this to keep the compiler happy and keep the read of the DR
-static volatile uint32_t dr_dummy ;
-
-void Rtc_GetTime(RTC_HandleTypeDef *hrtc, RTC_TimeTypeDef *sTime, uint32_t Format)
+void Rtc_GetTime(uhsdr_rtc_time_t* time)
 {
-  uint32_t tmpreg = 0U;
+    uint8_t hours = 0, minutes = 0, seconds = 0;
 
+    if (time == NULL)
+    {
+        return;
+    }
 
-  /* Check the parameters */
-  assert_param(IS_RTC_FORMAT(Format));
+    (void)hal_rtc_get_time(&hours, &minutes, &seconds);
 
-  /* Get subseconds structure field from the corresponding register */
-  // See above:
-  sTime->SubSeconds = (uint32_t)(hrtc->Instance->SSR);
-  //sTime->SubSeconds = 0;
+    time->hours   = hours;
+    time->minutes = minutes;
+    time->seconds = seconds;
+}
 
-  /* Get SecondFraction structure field from the corresponding register field*/
-  sTime->SecondFraction = (uint32_t)(hrtc->Instance->PRER & RTC_PRER_PREDIV_S);
-  // sTime->SecondFraction = 0;
+/**
+  * @brief  Writes the calendar time.
+  * @param  time: pointer to a uhsdr_rtc_time_t structure with the new time in
+  *               binary format (hours 0-23, minutes 0-59, seconds 0-59)
+  */
+void Rtc_SetTime(const uhsdr_rtc_time_t* time)
+{
+    if (time == NULL)
+    {
+        return;
+    }
 
-  /* Get the TR register */
-  tmpreg = (uint32_t)(hrtc->Instance->TR & RTC_TR_RESERVED_MASK);
-
-  dr_dummy = (uint32_t)hrtc->Instance->DR;
-
-  /* Fill the structure fields with the read parameters */
-  sTime->Hours = (uint8_t)((tmpreg & (RTC_TR_HT | RTC_TR_HU)) >> 16U);
-  sTime->Minutes = (uint8_t)((tmpreg & (RTC_TR_MNT | RTC_TR_MNU)) >>8U);
-  sTime->Seconds = (uint8_t)(tmpreg & (RTC_TR_ST | RTC_TR_SU));
-  sTime->TimeFormat = (uint8_t)((tmpreg & (RTC_TR_PM)) >> 16U);
-
-  /* Check the input parameters format */
-  if(Format == RTC_FORMAT_BIN)
-  {
-    /* Convert the time structure parameters to Binary format */
-    sTime->Hours = (uint8_t)RTC_Bcd2ToByte(sTime->Hours);
-    sTime->Minutes = (uint8_t)RTC_Bcd2ToByte(sTime->Minutes);
-    sTime->Seconds = (uint8_t)RTC_Bcd2ToByte(sTime->Seconds);
-  }
+    (void)hal_rtc_set_time(time->hours, time->minutes, time->seconds);
 }

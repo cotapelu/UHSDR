@@ -42,3 +42,80 @@ hal_status_t hal_resume_tick(void)
 
     return HAL_STATUS_OK;
 }
+
+hal_status_t hal_clock_gpio_enable(void* port)
+{
+    if (port == NULL)
+    {
+        return HAL_STATUS_ERR_INVALID_PARAM;
+    }
+
+    /* The vendor clock enable macros are static inline register writes; the
+     * port handle is the GPIO_TypeDef* the GPIO shim receives. */
+    if (port == (void*)GPIOA)
+    {
+        __HAL_RCC_GPIOA_CLK_ENABLE();
+    }
+    else if (port == (void*)GPIOB)
+    {
+        __HAL_RCC_GPIOB_CLK_ENABLE();
+    }
+    else if (port == (void*)GPIOC)
+    {
+        __HAL_RCC_GPIOC_CLK_ENABLE();
+    }
+#ifdef __HAL_RCC_GPIOD_CLK_ENABLE
+    else if (port == (void*)GPIOD)
+    {
+        __HAL_RCC_GPIOD_CLK_ENABLE();
+    }
+#endif
+#ifdef __HAL_RCC_GPIOE_CLK_ENABLE
+    else if (port == (void*)GPIOE)
+    {
+        __HAL_RCC_GPIOE_CLK_ENABLE();
+    }
+#endif
+#ifdef __HAL_RCC_GPIOF_CLK_ENABLE
+    else if (port == (void*)GPIOF)
+    {
+        __HAL_RCC_GPIOF_CLK_ENABLE();
+    }
+#endif
+#ifdef __HAL_RCC_GPIOG_CLK_ENABLE
+    else if (port == (void*)GPIOG)
+    {
+        __HAL_RCC_GPIOG_CLK_ENABLE();
+    }
+#endif
+#ifdef __HAL_RCC_GPIOH_CLK_ENABLE
+    else if (port == (void*)GPIOH)
+    {
+        __HAL_RCC_GPIOH_CLK_ENABLE();
+    }
+#endif
+#ifdef __HAL_RCC_GPIOI_CLK_ENABLE
+    else if (port == (void*)GPIOI)
+    {
+        __HAL_RCC_GPIOI_CLK_ENABLE();
+    }
+#endif
+#ifdef __HAL_RCC_GPIOJ_CLK_ENABLE
+    else if (port == (void*)GPIOJ)
+    {
+        __HAL_RCC_GPIOJ_CLK_ENABLE();
+    }
+#endif
+#ifdef __HAL_RCC_GPIOK_CLK_ENABLE
+    else if (port == (void*)GPIOK)
+    {
+        __HAL_RCC_GPIOK_CLK_ENABLE();
+    }
+#endif
+    else
+    {
+        return HAL_STATUS_ERR_NOT_SUPPORTED;
+    }
+
+    return HAL_STATUS_OK;
+}

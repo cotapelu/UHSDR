@@ -1,7 +1,7 @@
 # UHSDR Platform TODO — STM32 Optimization Roadmap
 
 > **Architecture:** AGENTS.md v6.0  
-> **Last updated:** 2026-10-26 (Phase 68: build-integrity fix (T75/T79) + identity fix (T80))
+> **Last updated:** 2026-10-28 (Phase 69: HAL boundary migration finished — T77)
 > **Scope:** STM32F4/F7/H7 — mcHF, OVI40
 
 ---
@@ -23,7 +23,10 @@
 | Firmware build — H7 | ✅ 0 errors | ⚠️ **was failing to build** before Phase 66 (11 errors) |
 | Bootloader build — F4 / F7 / H7 | ✅ 0 errors | all three |
 | Host unit tests | ✅ 670/670 pass | 53 test files, 11 475 LOC, no hardware needed |
-| Vendor HAL `#include` in product code | ✅ 0 files | architecture claim verified true |
+| Vendor HAL `#include` in compiled product code | ✅ **0 files** | Phase 69 closed the 5 remaining files (`uhsdr_rtc.c`, `uhsdr_flash.c`, bootloader `flash_if.c`, …); only the CMSIS device headers in `board_configs/` remain, deliberately |
+| Direct `HAL_*` calls in compiled product code | ✅ **0** (was 57 across 12 files) | the only `HAL_*` name left is the vendor-mandated `HAL_GPIO_EXTI_Callback`; all others are comments |
+| `__HAL_*` macros / vendor field access (`->Lock`) in product code | ✅ **0** | Phase 69 |
+| Vendor status constants (`HAL_OK`/`HAL_ERROR`/…) in product code | ✅ **0** | replaced with `UHSDR_HW_I2C_OK` / `FLASH_ERROR_*` (Phase 69) |
 | `HAL_Delay` calls in product code | ✅ 0 (was 26) | now `hal_delay_ms()` (Phase 66) |
 | `-Wimplicit-function-declaration` in product code | ✅ 0 (was 2) | Phase 66 |
 | Compiler warnings — F4 total | 229 | was 295 in Phase 66; 57 `-Wlto-type-mismatch` + 12 `-Wbool-operation` + 3 `-Wabsolute-value` + 1 `-Wunused-variable` removed (Phase 67) |
@@ -42,9 +45,10 @@
 | Root `make clean` completeness | ✅ **fixed (T79)** | `make clean` now leaves **0** `.o` files, including `basesw/` and `build/bootloader/` |
 | Transceiver identity per board | ✅ **fixed (T80)** | was: every target reported `mchf Transceiver`; now `mcHF QRP` / `OVI40 F7` / `OVI40 H7`; `make check-identity` passes 23/23 |
 | Release artifact size baseline | ⚠️ **re-baselined (T81)** | the old "release" builds were actually DEBUG builds; corrected true-release sizes are below |
-| Vendor HAL boundary claim | ❌ **not zero in all product-owned files** | Phase 68 found vendor includes/direct HAL calls in RTC, flash, UI and bootloader paths; tracked as T77 |
+| Vendor HAL boundary claim | ✅ **true for the compiled product tree** | was ❌ in Phase 68; closed by Phase 69 — see §69.5/§69.6 for the measurement and the 4 documented residuals |
 | Static-analysis gate runtime | ✅ **4 m 15 s** (was ~25 min) | parallel `-j$(nproc)` + no duplicate scan + hard timeout; tracked as T78 |
 | SDR extension implementation | ❌ not started | no `drivers/modem`, `drivers/mesh`, or `drivers/video` directories; Phases 80–84 remain design-only |
+| HAL shim API | 19 abstract headers | Phase 69 added `hal_rtc`, `hal_nvic`, `hal_tim` and completed `hal_adc`, `hal_dac`, `hal_i2c`, `hal_clock`, `hal_delay`, `hal_tim` |
 
 ### Health claim
 
@@ -127,8 +131,9 @@ Ordered by measured risk, not by how visible the task is.
 | T72 | Reduce the 206 `-Wmissing-prototypes` | Hides real declaration defects like 66.3 | P2 |
 | T73 | Continue `ui_driver.c` split (6 430 L) | Long-standing, already partially done | P2 |
 | T74 | License decision (GPL-3.0) | Blocks commercial distribution of firmware | P0 (business) |
-| T75 | Make single-`make <target>` builds robust on a dirty tree | A `make f4-mchf` after a prior F7/H7 build **fails to link** on stale in-tree objects; only a full `make clean` recovers. Root `clean` also leaves ~800 `basesw/*.o`. CI works around it by building `all-firmware` (which cleans per config) but interactive use breaks | P1 |
-| T76 | Pay down the cppcheck product baseline (mostly `invalidPrintfArgType`) | ~16 `%u/%lu/%ld` vs `int`/`uint`/`long` format drifts in `ui_menu.c`, `ui_spectrum.c`, `ui_driver*.c`, `freedv_uhsdr.c`, `misc/profiling.c`; then remove each baseline line | P2 |
+| T75 | Make single-`make <target>` builds robust on a dirty tree | A `make f4-mchf` after a prior F7/H7 build **fails to link** on stale in-tree objects; only a full `make clean` recovers. Root `clean` also leaves ~800 `basesw/*.o`. CI works around it by building `all-firmware` (which cleans per config) but interactive use breaks | ✅ done (Phase 68) |
+| T76 | Pay down the cppcheck product baseline (mostly `invalidPrintfArgType`) | ~16 `%u/%lu/%ld` vs `int`/`uint`/`long` format drifts in `ui_menu.c`, `ui_spectrum.c`, `ui_driver*.c`, `freedv_uhsdr.c`, `misc/profiling.c`; then remove each baseline line | ✅ done (Phase 68.9) |
+| ~~T77~~ | ✅ **Finish the HAL boundary migration** — **DONE (Phase 69)** | 19 sites were only the first wave; the complete list was 57 sites / 12 files including the bootloader, TIM counters, oscillator lock fields and vendor status constants | — |
 
 ---
 
@@ -244,7 +249,7 @@ changes; only agent context/task state was modified.
 | # | Task | Why now | Priority / status |
 |---|---|---|---|
 | **T75** | Make single-target builds configuration-safe on a dirty tree | Current behavior can silently label an F4 ELF as H7. This is a release-integrity risk, not merely a convenience issue. | ✅ **done in Phase 68** (68.4) |
-| **T77** | Re-baseline and finish the HAL boundary migration | The documented zero-vendor-HAL state is false. Inventory compiled paths, add HAL shims where needed, then remove direct calls/includes product by product. | **P0 architecture debt** |
+| ~~T77~~ | ✅ **Re-baseline and finish the HAL boundary migration** | The documented zero-vendor-HAL state is false. Inventory compiled paths, add HAL shims where needed, then remove direct calls/includes product by product. | ✅ **done in Phase 69** — 0 vendor includes, 0 direct calls, 4 documented residuals |
 | **T78** | Bound and optimize the cppcheck gate | A >600 s local gate is not usable; CI needs a deterministic timeout and a usable scan scope. | ✅ **done in Phase 68** (68.8) — 25 min → 4 m 15 s |
 | **T79** | Make `make clean` remove every generated object | 742 vendor objects survived root clean. | ✅ **done in Phase 68** (68.4) |
 | **T80** | Make each build report its own transceiver identity | Every target reported `mchf Transceiver` regardless of board. | ✅ **done in Phase 68** (68.5) |
@@ -538,6 +543,162 @@ after the `#`.
 **Result:** the product-code part of `scripts/cppcheck_suppressions.txt` is
 now empty. The gate covers the whole product tree with **zero known debt**;
 the only remaining suppressions are the three vendored-directory rules.
+
+---
+
+## Phase 69: Finish the HAL Boundary Migration (T77) — 2026-10-28
+
+### 69.1 Entry measurements (this session, ARM GCC 13.2.1)
+
+| Check | Measured |
+|---|---|
+| `make -j4 all-firmware` (with uncommitted tree) | 4/4 targets, **0 errors** (F4 429 088 B .bin, F4-512KB 283 444 B, F7 541 920 B, H7 550 628 B) |
+| `make -j4 all-bootloader` (with uncommitted tree) | 3/3 targets, **0 errors** |
+| `make -C mchf-eclipse/test test` | **671 passed / 0 failed** |
+| Uncommitted tree state | flash migration (**T77.1**, below) complete in the working tree, builds clean, not yet committed |
+
+**What Phase 68 left open, re-measured here.** The naive grep over
+`drivers/ hardware/ misc/ src/` reports ~25 direct `HAL_*` call sites. Filtering by
+what is *actually compiled* (`files.mak` + `f4/f7/h7-files.mak`) changes the answer
+materially:
+
+- `drivers/audio/codec/uhsdr_hw_i2s.c` — 284 lines, ~20 `HAL_SAI_*`/`HAL_I2S_*`
+  calls, vendor includes — is **not listed in any `*.mak`**: the file is dead.
+  Its content was copied into `hal/src/i2s/hal_i2s_stm32_{f4,f7,h7}.c`, which is
+  where the compiled audio DMA ISR and the vendor callbacks now live (allowed by
+  AGENTS.md §5.1). Nothing includes `uhsdr_hw_i2s.h`. Deleted under T77.7.
+- `src/uhsdr_main.c` `HAL_GPIO_EXTI_Callback` is a vendor-mandated callback name,
+  not a call — it stays (the shim cannot rename a vendor entry point).
+
+The compiled surface of T77 is therefore 9 files / 19 call sites:
+
+| File | Direct vendor calls (compiled) | Migration |
+|---|---|---|
+| `drivers/ui/radio_management.c` | `HAL_ADC_GetValue` ×5 (SWR meter) | T77.2 |
+| `drivers/ui/ui_driver_power.c` | `HAL_ADC_GetValue` ×1 (voltage) | T77.2 |
+| `drivers/ui/ui_driver.c` | `HAL_ADC_GetValue` ×1 (VSWR boot check; one further occurrence is inside a comment) | T77.2 |
+| `drivers/ui/encoder/ui_rotary.c` | `HAL_TIM_Encoder_Start` ×1 | T77.3 (new `hal_tim.h`) |
+| `drivers/audio/codec/codec.c` | `HAL_DAC_SetValue` ×1 (OVI40 only) + `CODEC_ANA_I2C->Lock == HAL_UNLOCKED` (vendor field access) | T77.4 |
+| `drivers/ui/menu/ui_menu.c` | `HAL_GetDEVID`, `HAL_GetREVID`, `HAL_RTC_SetTime` ×3 | T77.5, T77.6 |
+| `hardware/uhsdr_rtc.c` | `HAL_RCC_OscConfig`, `HAL_RCCEx_PeriphCLKConfig`, `HAL_RTC_Init`, `HAL_PWR_EnableBkUpAccess`, `HAL_RTCEx_BKUPRead`, `HAL_RTCEx_BKUPWrite` ×2, `HAL_RTCEx_SetSmoothCalib`, plus `__HAL_RCC_RTC_ENABLE` / `__HAL_RCC_PWR_CLK_ENABLE` / `__HAL_RCC_GET_FLAG(RCC_FLAG_LSERDY)` / `__HAL_RCC_BACKUPRESET_FORCE` / `RTC_BKP_DR1`, plus vendor includes `stm32{f4,f7,h7}xx_hal_rtc{,_ex}.h` and `stm32{f4,f7,h7}xx_hal_rcc.h` | T77.6 (new `hal_rtc.h`) |
+| `hardware/board_configs/UHSDR_UI_mchf_config.h` | `#include "stm32f4xx.h"` (CMSIS device header, supplies the register bases `uhsdr_mcu.h` dereferences) | T77.5 documents the residual; **not** an ST-HAL-driver include |
+| `drivers/ui/ui_driver.c` (clock draw) | `Rtc_GetTime(&hrtc,…)` with vendor `RTC_TimeTypeDef` | T77.6 (`uhsdr_rtc_time_t`) |
+
+### 69.2 Plan (authoritative for this phase)
+
+| # | Task | Priority | Status |
+|---|---|---|---|
+| **T77.1** | Commit the flash migration that is already in the working tree (`hal_flash.h` extended: banks, word/sector constants, RDP enum, `hal_flash_program_flashword`, `hal_flash_erase_sector`, `hal_flash_get_rdp_level`, `hal_flash_set_single_bank_mode`; `misc/v_eprom/uhsdr_flash.c` and `src/bootloader/flash_if.c` migrated). Verified above. | P0 | ✅ done — build gates passed before commit |
+| **T77.2** | `hal_adc_get_value()` in `hal_adc.h` + all 3 backends; migrate the 7 ADC sites. | P0 | ⏳ this phase |
+| **T77.3** | New `hal_tim.h` shim (`hal_tim_encoder_start`) + f4/f7/h7 backends; migrate `ui_rotary.c`; wire into the three `*-files.mak`. | P1 | ⏳ this phase |
+| **T77.4** | Normalised DAC constants in `hal_dac.h`; `hal_i2c_is_bus_free()` in `hal_i2c.h`; migrate `codec.c`. | P1 | ⏳ this phase |
+| **T77.5** | `MCU_GetDeviceId()` / `MCU_GetRevision()` as inline statics in `uhsdr_mcu.h` (raw `DBGMCU_BASE` access, same style as the existing `STM32_GetSignature`); migrate `ui_menu.c` `INFO_CPU`. | P1 | ⏳ this phase |
+| **T77.6** | New `hal_rtc.h` shim + f4/f7/h7 backends (LSE enable, backup-domain access, backup register read/write, init, set/get time in binary, smooth calibration, backup reset); migrate `uhsdr_rtc.c` completely (includes and all calls); replace the vendor `RTC_TimeTypeDef` in the public API with `uhsdr_rtc_time_t`; migrate `ui_menu.c` ×3 and `ui_driver.c` ×1. | P1 | ⏳ this phase |
+| **T77.7** | Delete the orphaned `drivers/audio/codec/uhsdr_hw_i2s.c` (dead duplicate of the shim backend, ~20 phantom `HAL_*` sites that distorted every earlier boundary measurement). | P2 | ⏳ this phase |
+| **T77.8** | Verify and re-baseline: `all-firmware`, `all-bootloader`, host tests, cppcheck gate, `make quality`, artifact sizes; update this file and the AGENTS.md §10 table; commit. | P0 | ⏳ this phase |
+
+**Explicitly out of scope (unchanged):** T69 (hardware validation — no boards),
+T74 (license), T81 (release-baseline/wideband FFT decision), T71/T72/T73
+(warnings, prototypes, file splits), T83/T84 (cppcheck style, type model), and the
+SDR extension Phases 80–84 (design-only). The audio ISR contract itself is *not*
+touched by this phase: the compiled ISR already lives in `hal/src/i2s/`.
+
+### 69.3 Execution log
+
+- [x] T77.1 flash migration committed (`1820725`)
+- [x] T77.2 ADC migrated (7 sites, 3 files)
+- [x] T77.3 TIM encoder migrated (+ counter get/set, 69.4)
+- [x] T77.4 DAC/I2C-lock migrated
+- [x] T77.5 device id/revision migrated
+- [x] T77.6 RTC migrated (whole file + 4 call sites)
+- [x] T77.7 dead i2s file removed
+- [x] T77.8 gates run, baselines updated
+
+### 69.4 The second wave — what the first measurement missed
+
+The first measurement above (19 sites / 9 files) was itself incomplete: it grepped
+`HAL_[A-Z]` and truncated at 40 lines. A second, exhaustive pass over the
+*compiled* sources (after the first wave was green) found three more families of
+leaks:
+
+| Family | Sites | Files | Migration |
+|---|---|---|---|
+| `__HAL_TIM_GET/SET_COUNTER` register access | 2 | `drivers/ui/encoder/ui_rotary.c` | `hal_tim_get_counter` / `hal_tim_set_counter` added |
+| `SI570_I2C->Lock == HAL_UNLOCKED` vendor field read | 2 | `osc_si570.c:619`, `osc_si5351a.c:415` | existing `hal_i2c_is_bus_free` |
+| Vendor status constants `HAL_OK` / `HAL_ERROR` used as **product** status codes (flash emulation + I2C helpers + config storage + serial EEPROM + codec + main) | 33 | `ui_configuration.c`, `config_storage.c`, `serial_eeprom.c`, `codec.c`, `uhsdr_hmc1023.h`, `uhsdr_main.c`, `ui_driver.c`, `osc_si5351a.c`, `osc_si570.c` | new `UHSDR_HW_I2C_OK` (`misc/…/hardware/uhsdr_hw_i2c.h`) for the I2C helper contract (0 = ok, 0xFF00 = error) and `FLASH_ERROR_NONE` / `FLASH_ERROR_OPERATION` for the flash-config storage contract |
+| Bootloader GPIO/NVIC/clock/tick | 19 | `src/bootloader/uhsdr_boot_hw.c`, `src/bootloader/bootloader_main.c` | new `hal_nvic.h` shim (`hal_nvic_enable_irq`, `hal_nvic_set_priority`), `hal_clock_gpio_enable`, `hal_get_tick`; existing `hal_gpio_init` / `hal_gpio_read_pin` / `hal_suspend_tick` / `hal_clock_deinit` / `hal_flash_ob_*`; `HAL_GPIO_MODE_EVT_FALLING` added to the `hal_gpio.h` mode enum + all 3 backends |
+| `__HAL_REMAPMEMORY_SYSTEMFLASH()` (F4 DFU entry) | 1 | `src/bootloader/bootloader_main.c` | `MCU_JumpToSystemFlash()` inline static in `uhsdr_mcu.h` — same `SYSCFG->MEMRMP` bits, no vendor include needed |
+
+**New shim APIs added by this phase** (header + all three backends, wired into the
+build): `hal_adc_get_value`, `hal_tim.{h,get_counter,set_counter,encoder_start}`,
+`hal_dac` channel/align normalisation, `hal_i2c_is_bus_free`, `hal_rtc.{h, …}`
+(10 functions), `hal_nvic.{h,…}`, `hal_clock_gpio_enable`,
+`hal_get_tick`, plus `hal_gpio.h` `HAL_GPIO_MODE_EVT_FALLING`.
+
+**Public API change worth remembering:** `uhsdr_rtc.h` no longer exposes the
+vendor `RTC_TimeTypeDef` / `RTC_HandleTypeDef`. The RTC API is now
+`Rtc_GetTime(uhsdr_rtc_time_t*)` / `Rtc_SetTime(const uhsdr_rtc_time_t*)` with a
+product-side `{hours, minutes, seconds}` struct; the sub-second, daylight-saving
+and store-operation fields disappear from the four product call sites (the
+backend passes the same values to the vendor call, so behaviour is unchanged).
+
+### 69.5 Verification (all measured on this checkout)
+
+| Gate | Result |
+|---|---|
+| `make -j4 all-firmware` | **4/4 targets, 0 errors** |
+| `make -j4 all-bootloader` | **3/3 targets, 0 errors** |
+| `make -C mchf-eclipse/test test` | **671 passed / 0 failed** |
+| `bash scripts/static_analysis.sh` | **gate PASS, 0 findings** (bounded, ~4 min) |
+| `make quality` | **PASS** — switch test 7/7, tests 671/0, identity 23/23, doctor PASSED |
+| Vendor HAL driver includes in compiled product code | **0** (was 5 files) |
+| Direct `HAL_*` calls in compiled product code | **0** — the one remaining match is the vendor-mandated callback name `HAL_GPIO_EXTI_Callback`, which the shim cannot rename (all others are comments) |
+| `__HAL_*` macros / vendor field access (`->Lock`, `HAL_UNLOCKED`) in product code | **0** (only comments) |
+| Vendor status constants (`HAL_OK`/`HAL_ERROR`/…) in product code | **0** (products codes only) |
+
+**Artifact sizes (ELF `text`, like with like):**
+
+| Target | Before Phase 69 | After | Delta |
+|---|---|---|---|
+| F4 mcHF | 427 065 B | **427 145 B** | +80 (+0.019 %) |
+| F4-512KB | 281 441 B | **281 577 B** | +136 (+0.048 %) |
+| F7 OVI40 | 539 153 B | **539 105 B** | −48 (−0.009 %) |
+| H7 OVI40 | 547 857 B | **547 873 B** | +16 (+0.003 %) |
+| bootloader F4 | 12 360 B | **12 576 B** | +216 (+1.75 %) |
+| bootloader F7 | 12 224 B | **12 496 B** | +272 (+2.22 %) |
+| bootloader H7 | 13 044 B | **13 388 B** | +344 (+2.64 %) |
+
+The firmware deltas are inside the <1 % tolerance and come from the new shim
+glue (the removed dead `uhsdr_hw_i2s.c` was never compiled, so it contributed
+nothing). The bootloader deltas are larger in relative terms because the
+bootloader is small: the NVIC/GPIO abstraction is genuinely new code there —
+before, the bootloader called the vendor HAL directly.
+
+### 69.6 Documented residuals (measured, deliberate, not debt)
+
+1. **CMSIS device headers in `board_configs/`** (3 includes:
+   `UHSDR_UI_mchf_config.h` → `stm32f4xx.h`,
+   `UHSDR_UI_ovi40_config.h` → `stm32f7xx.h` / `stm32h7xx.h`). The AGENTS.md
+   rule (§5.3/§9.4) forbids vendor **HAL driver** includes (`stm32*xx_hal*.h`),
+   which are now zero. The device header supplies the register bases that
+   `uhsdr_mcu.h` dereferences (`DBGMCU_BASE`, `UID_BASE`, `FLASHSIZE_BASE`,
+   `SYSCFG->MEMRMP`); the MCU abstraction is the designated place for that, so
+   the includes live in the board configuration that selects them.
+2. **`HAL_GPIO_EXTI_Callback`** in `src/uhsdr_main.c` — the vendor dispatches
+   EXTI callbacks by this exact name, so it is the shim boundary's bottom edge,
+   not a violation.
+3. **`NVIC->ICER/ICPR` and `FLASH->OPTCR` register writes** in
+   `src/bootloader/bootloader_main.c` (F7 DFU dual-bank setup, guarded by
+   `#if defined(FLASH_OPTCR_nDBANK)`) — CMSIS register access at the bootloader's
+   own hardware seam, no HAL include.
+4. **Dead code in comments** (`// HAL_SPI_DeInit`, `// __HAL_SPI_DISABLE`,
+   `// HAL_GetTick()/10`, `#if 0` GPIO block in `ui_rotary.c`) — removed by the
+   stop-at-zero grep, but left in the source as historical notes.
+
+> **Note for the next boundary audit:** the naive grep
+> `grep -rn 'HAL_' drivers/ hardware/ misc/ src/` still reports hits. All of them
+> are now comments, documentation, or the one callback name above. The audit
+> command that matters is the one in §69.5, restricted to compiled sources.
 
 ---
 

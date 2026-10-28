@@ -22,6 +22,7 @@
 #include <stdio.h>
 
 #include "uhsdr_hw_i2c.h"
+#include "hal_i2c.h"
 #include "osc_si570.h"
 
 // -------------------------------------------------------------------------------------
@@ -616,7 +617,11 @@ static Oscillator_ResultCodes_t Si570_PrepareNextFrequency(ulong freq, int temp_
  */
 bool Si570_ReadyForIrqCall()
 {
-    return (SI570_I2C->Lock == HAL_UNLOCKED);
+    uint8_t bus_free = 0;
+
+    (void)hal_i2c_is_bus_free(SI570_I2C, &bus_free);
+
+    return (bus_free != 0U);
 }
 
 static bool Oscillator_IsPresent()
@@ -681,7 +686,7 @@ void Si570_Init()
 	}
 
 
-	if (UhsdrHw_I2C_DeviceReady(SI570_I2C,os.si570_address) == HAL_OK)
+	if (UhsdrHw_I2C_DeviceReady(SI570_I2C,os.si570_address) == UHSDR_HW_I2C_OK)
 	{
 		// make sure everything is cleared and in initial state
 		Si570_ResetConfiguration();

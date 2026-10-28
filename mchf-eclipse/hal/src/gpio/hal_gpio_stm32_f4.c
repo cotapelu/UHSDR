@@ -34,6 +34,8 @@ static uint32_t hal_gpio_mode_to_hal(hal_gpio_mode_t mode)
             return GPIO_MODE_AF_PP;
         case HAL_GPIO_MODE_ANALOG:
             return GPIO_MODE_ANALOG;
+        case HAL_GPIO_MODE_EVT_FALLING:
+            return GPIO_MODE_EVT_FALLING;
         default:
             return GPIO_MODE_INPUT;
     }

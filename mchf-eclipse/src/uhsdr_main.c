@@ -422,7 +422,7 @@ int mchfMain(void)
     AudioDriver_Init();
 
     // Audio Driver Hardware Init
-    ts.codec_present = Codec_Reset(ts.samp_rate) == HAL_OK;
+    ts.codec_present = Codec_Reset(ts.samp_rate) == UHSDR_HW_I2C_OK;
 
     UiDriver_StartupScreen_LogIfProblem(ts.codec_present == false,
             "Audiocodec WM8731 NOT detected!");

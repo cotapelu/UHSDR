@@ -8,6 +8,7 @@ hal/src/delay/hal_delay_stm32_f4.c \
 hal/src/sram/hal_sram_stm32_f4.c \
 hal/src/flash/hal_flash_stm32_f4.c \
 hal/src/clock/hal_clock_stm32_f4.c \
+hal/src/nvic/hal_nvic_stm32_f4.c \
 basesw/mcHF/Src/adc.c \
 basesw/mcHF/Src/dac.c \
 basesw/mcHF/Src/dma.c \

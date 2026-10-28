@@ -8,6 +8,7 @@ hal/src/delay/hal_delay_stm32_f7.c \
 hal/src/sram/hal_sram_stm32_f7.c \
 hal/src/flash/hal_flash_stm32_f7.c \
 hal/src/clock/hal_clock_stm32_f7.c \
+hal/src/nvic/hal_nvic_stm32_f7.c \
 basesw/ovi40/Src/adc.c \
 basesw/ovi40/Src/dac.c \
 basesw/ovi40/Src/dma.c \

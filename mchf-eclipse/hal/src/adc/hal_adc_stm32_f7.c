@@ -36,3 +36,17 @@ hal_status_t hal_adc_start(hal_adc_handle_t handle)
 
     return HAL_STATUS_OK;
 }
+
+hal_status_t hal_adc_get_value(hal_adc_handle_t handle, uint32_t* value)
+{
+    if (handle == NULL || value == NULL)
+    {
+        return HAL_STATUS_ERR_INVALID_PARAM;
+    }
+
+    /* The result register is 32 bit wide on every supported family and holds
+     * the 12 bit right aligned conversion result. */
+    *value = HAL_ADC_GetValue((ADC_HandleTypeDef*)handle);
+
+    return HAL_STATUS_OK;
+}

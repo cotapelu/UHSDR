@@ -224,7 +224,7 @@ static uint16_t SerialEEPROM_24Cxx_ackPolling(uint32_t Addr, uint8_t Mem_Type)
 
     SerialEEPROM_24Cxx_AdjustAddrs(Mem_Type,&devaddr,&Addr);
 
-    uint16_t retVal = UhsdrHw_I2C_DeviceReady(&hi2c2,devaddr); // != HAL_OK?0xFD00:0;
+    uint16_t retVal = UhsdrHw_I2C_DeviceReady(&hi2c2,devaddr); // != UHSDR_HW_I2C_OK ? 0xFD00 : 0;
     return retVal;
 }
 
@@ -484,7 +484,7 @@ uint8_t SerialEEPROM_Detect() {
     uint16_t ser_eeprom_type = EEPROM_SER_UNKNOWN;
 
     // serial EEPROM init
-    if(SerialEEPROM_24Cxx_DeviceConnected() != HAL_OK || SerialEEPROM_24xx_Exists() == false)  // Issue with Ser EEPROM, either not available or other problems
+    if(SerialEEPROM_24Cxx_DeviceConnected() != UHSDR_HW_I2C_OK || SerialEEPROM_24xx_Exists() == false)  // Issue with Ser EEPROM, either not available or other problems
     {
         ser_eeprom_type = EEPROM_SER_NONE;             // no serial EEPROM available
 
@@ -589,7 +589,7 @@ uint16_t SerialEEPROM_ReadVariable(uint16_t addr, uint16_t *value)      // refer
 
     uint16_t retval = SerialEEPROM_24Cxx_ReadBulk(addr*2,bytes, 2, ts.ser_eeprom_type);
 
-    if (retval == HAL_OK)
+    if (retval == UHSDR_HW_I2C_OK)
     {
         *value =  ((uint16_t)bytes[0])<<8;
         *value |= bytes[1];

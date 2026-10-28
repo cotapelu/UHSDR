@@ -138,12 +138,12 @@ static void Board_Dac_Init(void)
 {
 
 #ifdef UI_BRD_OVI40
-    hal_dac_start(&hdac, DAC_CHANNEL_1);
-    hal_dac_set_value(&hdac, DAC_CHANNEL_1, DAC_ALIGN_8B_R, 0);
+    hal_dac_start(&hdac, HAL_DAC_CHANNEL_1);
+    hal_dac_set_value(&hdac, HAL_DAC_CHANNEL_1, HAL_DAC_ALIGN_8B_R, 0);
     // AUDIO PA volume zero
 #endif
-    hal_dac_start(&hdac, DAC_CHANNEL_2);
-    hal_dac_set_value(&hdac, DAC_CHANNEL_2, DAC_ALIGN_8B_R, 0);
+    hal_dac_start(&hdac, HAL_DAC_CHANNEL_2);
+    hal_dac_set_value(&hdac, HAL_DAC_CHANNEL_2, HAL_DAC_ALIGN_8B_R, 0);
 
 }
 
@@ -717,7 +717,7 @@ void Board_SetPaBiasValue(uint16_t bias)
 {
     // Set DAC Channel 1 DHR12L register
     // DAC_SetChannel2Data(DAC_Align_8b_R,bias);
-    hal_dac_set_value(&hdac, DAC_CHANNEL_2, DAC_ALIGN_8B_R, bias);
+    hal_dac_set_value(&hdac, HAL_DAC_CHANNEL_2, HAL_DAC_ALIGN_8B_R, bias);
 
 }
 

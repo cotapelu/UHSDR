@@ -19,6 +19,7 @@
 #include "config_storage.h"
 #include "ui_configuration.h"
 #include "serial_eeprom.h"
+#include "uhsdr_hw_i2c.h"
 #include "uhsdr_flash.h"
 
 static uint8_t config_ramcache[MAX_VAR_ADDR*2+2];
@@ -55,7 +56,7 @@ void ConfigStorage_CopySerial2Flash(void)
 
     for(count=1; count <= MAX_VAR_ADDR; count++)
     {
-        if (SerialEEPROM_ReadVariable(count, &data) == HAL_OK)
+        if (SerialEEPROM_ReadVariable(count, &data) == UHSDR_HW_I2C_OK)
         {
             Flash_UpdateVariable(count, data);
         }
@@ -74,7 +75,7 @@ static bool ConfigStorage_CheckSameContentSerialAndFlash(void)
     for(uint16_t count=1; retval == true && count <= MAX_VAR_ADDR; count++)
     {
         uint16_t data1, data2;
-        if (SerialEEPROM_ReadVariable(count, &data1) == HAL_OK)
+        if (SerialEEPROM_ReadVariable(count, &data1) == UHSDR_HW_I2C_OK)
         {
             Flash_ReadVariable(count, &data2);
             if(data1 != data2)
@@ -133,17 +134,17 @@ uint16_t ConfigStorage_ReadVariable(uint16_t addr, uint16_t *value)
 //* Object              :
 //* Object              :
 //* Input Parameters    : addr to write to, 16 bit value as data
-//* Output Parameters   : returns HAL_OK if OK, otherwise various error codes.
+//* Output Parameters   : returns FLASH_ERROR_NONE if OK, otherwise various error
 //*                       FLASH_ERROR_OPERATION is also returned if eeprom_in_use contains bogus values.
 //* Functions called    :
 //*----------------------------------------------------------------------------
 uint16_t ConfigStorage_WriteVariable(uint16_t addr, uint16_t value)
 {
-    HAL_StatusTypeDef status = HAL_ERROR;
+    uint16_t status = FLASH_ERROR_OPERATION;
     if(ts.configstore_in_use == CONFIGSTORE_IN_USE_I2C)
     {
         SerialEEPROM_UpdateVariable(addr, value);
-        status = HAL_OK;
+        status = FLASH_ERROR_NONE;
     }
     else if(ts.configstore_in_use == CONFIGSTORE_IN_USE_FLASH)
     {
@@ -158,7 +159,7 @@ uint16_t ConfigStorage_WriteVariable(uint16_t addr, uint16_t value)
          */
         if ( addr == 0 )
         {
-            status = HAL_ERROR;
+            status = FLASH_ERROR_OPERATION;
         }
         else
         {
@@ -169,7 +170,7 @@ uint16_t ConfigStorage_WriteVariable(uint16_t addr, uint16_t value)
             highbyte = (uint8_t)((0x00FF)&(value >> 8));
             config_ramcache[addr*2] = highbyte;
             config_ramcache[addr*2+1] = lowbyte;
-            status = HAL_OK;
+            status = FLASH_ERROR_NONE;
         }
     }
     return status;
@@ -181,10 +182,10 @@ void ConfigStorage_Init(void)
 #ifdef USE_CONFIGSTORAGE_FLASH
     ts.ee_init_stat = Flash_Init(); // get status of EEPROM initialization
 #else
-    ts.ee_init_stat = HAL_ERROR; // get status of EEPROM initialization
+    ts.ee_init_stat = FLASH_ERROR_OPERATION; // get status of EEPROM initialization
 #endif
 
-    ts.configstore_in_use = ts.ee_init_stat == HAL_OK? CONFIGSTORE_IN_USE_FLASH: CONFIGSTORE_IN_USE_ERROR;
+    ts.configstore_in_use = ts.ee_init_stat == FLASH_ERROR_NONE? CONFIGSTORE_IN_USE_FLASH: CONFIGSTORE_IN_USE_ERROR;
     // at this point, we have a working flash config storage (or not)
 
     ts.ser_eeprom_type = SerialEEPROM_Detect();
@@ -201,7 +202,7 @@ void ConfigStorage_Init(void)
 
 #ifdef USE_CONFIGSTORAGE_FLASH
             // if we have a flash storage available, copy its contents into EEPROM
-            if (ts.ee_init_stat == HAL_OK)
+            if (ts.ee_init_stat == FLASH_ERROR_NONE)
             {
                 ts.configstore_in_use = CONFIGSTORE_IN_USE_FLASH;
 
@@ -241,7 +242,7 @@ uint16_t ConfigStorage_CopyRAMCache2Serial(void)
 {
     // we start behind the signature, which we don't want to change
     uint16_t retval = SerialEEPROM_24Cxx_WriteBulk(2, config_ramcache+2, MAX_VAR_ADDR*2, ts.ser_eeprom_type);
-    if (retval == HAL_OK)
+    if (retval == UHSDR_HW_I2C_OK)
     {
         ts.configstore_in_use = CONFIGSTORE_IN_USE_I2C;
     }
@@ -251,7 +252,7 @@ uint16_t ConfigStorage_CopyRAMCache2Serial(void)
 //copy array directly to serial EEPROM
 uint16_t ConfigStorage_CopyArray2Serial(uint32_t Addr, const uint8_t *buffer, uint16_t length)
 {
-    uint16_t retval = HAL_OK;
+    uint16_t retval = UHSDR_HW_I2C_OK;
     if(ts.configstore_in_use == CONFIGSTORE_IN_USE_I2C)
     {
         retval = SerialEEPROM_24Cxx_WriteBulk(Addr, buffer, length, ts.ser_eeprom_type);

@@ -114,3 +114,17 @@ hal_status_t hal_i2c_change_speed(hal_i2c_handle_t handle, uint16_t speed)
 
     return HAL_STATUS_OK;
 }
+
+hal_status_t hal_i2c_is_bus_free(hal_i2c_handle_t handle, uint8_t* is_free)
+{
+    if (handle == NULL || is_free == NULL)
+    {
+        return HAL_STATUS_ERR_INVALID_PARAM;
+    }
+
+    /* Same condition the product code used to evaluate directly on the vendor
+     * handle: the bus is free when no transfer holds the handle lock. */
+    *is_free = (((I2C_HandleTypeDef*)handle)->Lock == HAL_UNLOCKED) ? 1U : 0U;
+
+    return HAL_STATUS_OK;
+}

@@ -394,9 +394,18 @@ HAL backends (hal/src/*/):
   (F7/H7 previously failed to link entirely; fixed in Phase 66)
 - ✅ **Bootloader builds:** F4, F7, H7 — 0 errors each
 - ✅ **Host tests:** 671 passing / 0 failing (53 files, 11 475 LOC)
-- ✅ *Vendor HAL `#include` in product code:* **0 files** — architecture goal met
-- ✅ *`HAL_*` calls in product code:* delay path now 0 (`HAL_Delay` → `hal_delay_ms`)
-- ✅ **HAL shim layer:** 14 abstract APIs in `hal/include`, backends per MCU
+- ✅ *Vendor HAL `#include` in compiled product code:* **0 files** — architecture goal met
+  (Phase 69 removed the last 5; only the CMSIS *device* headers in `board_configs/`
+  remain, which is deliberate: they supply the register bases `uhsdr_mcu.h` dereferences)
+- ✅ *`HAL_*` calls in compiled product code:* **0** — delay path was the first
+  (`HAL_Delay` → `hal_delay_ms`), Phase 69 closed the remaining 57 sites in
+  RTC, ADC, DAC, TIM, DEVID/REVID, bootloader GPIO/NVIC/clock and the oscillator
+  lock fields. The only `HAL_*` name left is the vendor-mandated callback
+  `HAL_GPIO_EXTI_Callback`; every other match is a comment
+- ✅ *`__HAL_*` macros, vendor field access (`->Lock`) and vendor status constants
+  (`HAL_OK`/`HAL_ERROR`)* in product code: **0** (Phase 69)
+- ✅ **HAL shim layer:** 19 abstract APIs in `hal/include`, backends per MCU
+  (`hal_rtc`, `hal_nvic`, `hal_tim` added in Phase 69)
 - ✅ Board config selection is now centralised in
   `hardware/board_configs/UHSDR_UI_board.h` (no product code names a board config)
 - ✅ Watchdog, fault dump, stack canary, cache maintenance, CRC32 bootloader
@@ -426,10 +435,11 @@ HAL backends (hal/src/*/):
 
 ## 11. Success Metrics
 
-| Metric | Measured (2026-10-24) | Target |
+| Metric | Measured (2026-10-28) | Target |
 |---|---|---|
 | Vendor HAL includes in product code | **0** | 0 ✅ |
-| Direct `HAL_*` calls in product code (delay) | **0** (was 26) | 0 ✅ |
+| Direct `HAL_*` calls in product code | **0** (was 57 across 12 files) | 0 ✅ |
+| `__HAL_*` macros / `->Lock` / vendor status constants in product code | **0** | 0 ✅ |
 | Platform `#ifdef` in product code | 542 | <50 feature flags |
 | Firmware targets building | **4 / 4** (was 2 / 4) | 4 ✅ |
 | Bootloader targets building | **3 / 3** | 3 ✅ |

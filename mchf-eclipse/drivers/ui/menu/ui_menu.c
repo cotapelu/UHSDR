@@ -571,7 +571,7 @@ const char* UiMenu_GetSystemInfo(uint32_t* m_clr_ptr, int info_item)
             snprintf(out,32,"%d",(STM32_GetFlashSize()));
             break;
     case INFO_CPU:
-            snprintf(out,32,"%3lx:%04lxh",(unsigned long)HAL_GetDEVID(),(unsigned long)HAL_GetREVID());
+            snprintf(out,32,"%3lx:%04lxh",(unsigned long)MCU_GetDeviceId(),(unsigned long)MCU_GetRevision());
             break;
     case INFO_RAM:
             snprintf(out,32,"%d",(ts.ramsize));
@@ -3538,59 +3538,53 @@ void UiMenu_UpdateItem(uint16_t select, MenuProcessingMode_t mode, int pos, int 
 #endif
     case CONFIG_RTC_HOUR:
     {
-        RTC_TimeTypeDef rtc;
-        Rtc_GetTime(&hrtc, &rtc, RTC_FORMAT_BIN);
-        rtc.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
-        rtc.StoreOperation = RTC_STOREOPERATION_SET;
+        uhsdr_rtc_time_t rtc;
+        Rtc_GetTime(&rtc);
 
-        var_change = UiDriverMenuItemChangeUInt8(var, mode, &rtc.Hours,
+        var_change = UiDriverMenuItemChangeUInt8(var, mode, &rtc.hours,
                                               0,
                                               23,
                                               0,
                                               1);
         if(var_change)      // did something change?
         {
-            HAL_RTC_SetTime(&hrtc, &rtc, RTC_FORMAT_BIN);
+            Rtc_SetTime(&rtc);
         }
-        snprintf(options,32, "  %2u", rtc.Hours);
+        snprintf(options,32, "  %2u", rtc.hours);
         break;
     }
     case CONFIG_RTC_MIN:
     {
-        RTC_TimeTypeDef rtc;
-        Rtc_GetTime(&hrtc, &rtc, RTC_FORMAT_BIN);
-        rtc.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
-        rtc.StoreOperation = RTC_STOREOPERATION_SET;
+        uhsdr_rtc_time_t rtc;
+        Rtc_GetTime(&rtc);
 
-        var_change = UiDriverMenuItemChangeUInt8(var, mode, &rtc.Minutes,
+        var_change = UiDriverMenuItemChangeUInt8(var, mode, &rtc.minutes,
                                               0,
                                               59,
                                               0,
                                               1);
         if(var_change)      // did something change?
         {
-            HAL_RTC_SetTime(&hrtc, &rtc, RTC_FORMAT_BIN);
+            Rtc_SetTime(&rtc);
         }
-        snprintf(options,32, "  %2u", rtc.Minutes);
+        snprintf(options,32, "  %2u", rtc.minutes);
         break;
     }
     case CONFIG_RTC_SEC:
     {
-        RTC_TimeTypeDef rtc;
-        Rtc_GetTime(&hrtc, &rtc, RTC_FORMAT_BIN);
-        rtc.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
-        rtc.StoreOperation = RTC_STOREOPERATION_SET;
+        uhsdr_rtc_time_t rtc;
+        Rtc_GetTime(&rtc);
 
-        var_change = UiDriverMenuItemChangeUInt8(var, mode, &rtc.Seconds,
+        var_change = UiDriverMenuItemChangeUInt8(var, mode, &rtc.seconds,
                                               0,
                                               59,
                                               0,
                                               1);
         if(var_change)      // did something change?
         {
-            HAL_RTC_SetTime(&hrtc, &rtc, RTC_FORMAT_BIN);
+            Rtc_SetTime(&rtc);
         }
-        snprintf(options,32, "  %2u", rtc.Seconds);
+        snprintf(options,32, "  %2u", rtc.seconds);
         break;
     }
 

@@ -17,6 +17,7 @@
 #include "radio_management.h"
 #include "profiling.h"
 #include "adc.h"
+#include "hal_adc.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -1712,6 +1713,21 @@ static void RadioManagement_PowerFromADCValue(float inval, float sensor_null, fl
     *pwr_ptr = pow10f(dbm/10)/1000;
 }
 
+/* -------------------------------------------------------------------------
+ * Reads one ADC channel through the HAL shim.
+ *
+ * Product code only passes the handle pointer; the vendor ADC handle type and
+ * the register width stay behind the abstraction. The conversion result is
+ * 12 bit on all supported MCU families and is returned as uint16_t, which is
+ * what the power/SWR accumulators consume.
+ * ------------------------------------------------------------------------- */
+static uint16_t adc_read_value(void* handle)
+{
+    uint32_t value = 0;
+    (void)hal_adc_get_value(handle, &value);
+    return (uint16_t)value;
+}
+
 /*
  * @brief Measures and calculates TX Power Output and SWR, has to be called regularly
  * @returns true if new values have been calculated
@@ -1729,13 +1745,13 @@ bool RadioManagement_UpdatePowerAndVSWR(void)
         // Get next sample
         if(!(ts.flags1 & FLAGS1_SWAP_FWDREV_SENSE))       // is bit NOT set?  If this is so, do NOT swap FWD/REV inputs from power detectors
         {
-            val_p = HAL_ADC_GetValue(&hadc2); // forward
-            val_s = HAL_ADC_GetValue(&hadc3); // return
+            val_p = adc_read_value(&hadc2); // forward
+            val_s = adc_read_value(&hadc3); // return
         }
         else        // FWD/REV bits should be swapped
         {
-            val_p = HAL_ADC_GetValue(&hadc3); // forward
-            val_s = HAL_ADC_GetValue(&hadc2); // return
+            val_p = adc_read_value(&hadc3); // forward
+            val_s = adc_read_value(&hadc2); // return
         }
 
         // Add to accumulator to average A/D values

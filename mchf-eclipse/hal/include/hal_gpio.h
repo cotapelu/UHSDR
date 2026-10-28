@@ -26,6 +26,7 @@ typedef enum {
     HAL_GPIO_MODE_OUTPUT_PP = 0x01,
     HAL_GPIO_MODE_AF = 0x02,
     HAL_GPIO_MODE_ANALOG = 0x03,
+    HAL_GPIO_MODE_EVT_FALLING = 0x04,
 } hal_gpio_mode_t;
 
 /* -------------------------------------------------------------------------

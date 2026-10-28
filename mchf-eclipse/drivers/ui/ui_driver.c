@@ -16,6 +16,7 @@
 #include <stdbool.h>
 #include "uhsdr_board.h"
 #include "hal_delay.h"
+#include "hal_adc.h"
 #include "profiling.h"
 #include <assert.h>
 
@@ -5012,7 +5013,7 @@ void UiDriver_StartUpScreenFinish()
 	if(ts.configstore_in_use == CONFIGSTORE_IN_USE_ERROR)                                   // problem with EEPROM init
 	{
 #ifdef USE_CONFIGSTORAGE_FLASH
-	    UiDriver_StartupScreen_LogIfProblem(ts.ee_init_stat != HAL_OK, "Config Flash Error");
+	    UiDriver_StartupScreen_LogIfProblem(ts.ee_init_stat != FLASH_ERROR_NONE, "Config Flash Error");
 #endif
 	    if (SerialEEPROM_eepromTypeDescs[ts.ser_eeprom_type].size == 0)
 	    {
@@ -5022,7 +5023,10 @@ void UiDriver_StartUpScreenFinish()
 	}
 
 	if(!Si5351a_IsPresent()) {
-	  UiDriver_StartupScreen_LogIfProblem((HAL_ADC_GetValue(&hadc2) > MAX_VSWR_MOD_VALUE) && (HAL_ADC_GetValue(&hadc3) > MAX_VSWR_MOD_VALUE),
+	  uint32_t vswr_mod_adc2 = 0, vswr_mod_adc3 = 0;
+	  (void)hal_adc_get_value(&hadc2, &vswr_mod_adc2);
+	  (void)hal_adc_get_value(&hadc3, &vswr_mod_adc3);
+	  UiDriver_StartupScreen_LogIfProblem((vswr_mod_adc2 > MAX_VSWR_MOD_VALUE) && (vswr_mod_adc3 > MAX_VSWR_MOD_VALUE),
 			"SWR Bridge resistor mod NOT completed!");
 	}
 
@@ -6258,13 +6262,12 @@ void UiDriver_TaskHandler_MainTasks()
 			{
 				if (ts.rtc_present)
 				{
-					RTC_TimeTypeDef sTime;
+					uhsdr_rtc_time_t sTime;
 
-
-					Rtc_GetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
+					Rtc_GetTime(&sTime);
 
 					char str[20];
-					snprintf(str,20,"%2u:%02u:%02u",sTime.Hours,sTime.Minutes,sTime.Seconds);
+					snprintf(str,20,"%2u:%02u:%02u",sTime.hours,sTime.minutes,sTime.seconds);
 					UiLcdHy28_PrintText(ts.Layout->RTC_IND.x, ts.Layout->RTC_IND.y, str, White, Black, 0);
 				}
 			}

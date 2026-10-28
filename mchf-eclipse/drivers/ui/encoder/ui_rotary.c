@@ -18,6 +18,7 @@
 #include "stdlib.h"
 #include "ui_rotary.h"
 #include "tim.h"
+#include "hal_tim.h"
 // ------------------------------------------------
 // Encoder 1-4 Array
 __IO EncoderSelection		encSel[4];
@@ -85,7 +86,7 @@ void UiRotaryEncoderInit(uint8_t id)
     encSel[id].value_new          = ENCODER_RANGE;
     encSel[id].de_detent          = 0;
     encSel[id].tim                = encIO->tim;
-    HAL_TIM_Encoder_Start(encIO->htim, TIM_CHANNEL_1 | TIM_CHANNEL_2);
+    (void)hal_tim_encoder_start(encIO->htim, HAL_TIM_ENCODER_CHANNELS);
 
 #if 0
     GPIO_InitTypeDef            GPIO_InitStructure;
@@ -284,8 +285,9 @@ void UiDriverEncoderSetDelta(uint32_t encId, int8_t delta)
 {
     if (encId < ENC_MAX)
     {
-        uint32_t cnt = __HAL_TIM_GET_COUNTER(encoderIO[encId].htim);
-        __HAL_TIM_SET_COUNTER(encoderIO[encId].htim, cnt + delta);
+        uint32_t cnt = 0;
+        (void)hal_tim_get_counter(encoderIO[encId].htim, &cnt);
+        (void)hal_tim_set_counter(encoderIO[encId].htim, cnt + (uint32_t)delta);
         encSel[encId].value_old = cnt;
         uint8_t abs_delta = (delta < 0) ? (uint8_t)(-delta) : (uint8_t)delta;
         if (abs_delta < USE_DETENTED_VALUE)

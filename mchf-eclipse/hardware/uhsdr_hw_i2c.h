@@ -20,6 +20,10 @@
 
 #define I2C_BUS_SPEED_MULT                      20000 // 20kHz is multiplier for config var
 
+/* Success code of the I2C bus helpers below. Historically the vendor HAL_OK
+ * was used here; the helpers report failure as 0xFF00. */
+#define UHSDR_HW_I2C_OK                          ((uint16_t)0)
+
 #define I2C1_SPEED_DEFAULT                      (100000/I2C_BUS_SPEED_MULT) // 20 * 20kHz == 200kHz 400000 does not work, may need resistor mod (now reduced to 100KHz)
 #define I2C2_SPEED_DEFAULT                      (100000/I2C_BUS_SPEED_MULT) // 10 * 20kHz == 100kHz, was 25000, 400000 does not work, , may need resistor mod
 

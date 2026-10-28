@@ -25,6 +25,7 @@
 #include "adc.h"
 #include "uhsdr_keypad.h"
 #include "hal_delay.h"
+#include "hal_adc.h"
 #include "radio_management.h"
 
 void UiDriver_CreateVoltageDisplay(void)
@@ -161,6 +162,18 @@ void UiDriver_DisplayVoltage(void)
  * @brief Measures Voltage and controls undervoltage detection
  * @returns true if display update is required, false if not
  */
+/* -------------------------------------------------------------------------
+ * Reads the supply voltage ADC channel through the HAL shim. Only the handle
+ * pointer crosses the abstraction boundary; the vendor ADC type stays inside
+ * the backend.
+ * ------------------------------------------------------------------------- */
+static uint16_t adc_read_value(void* handle)
+{
+    uint32_t value = 0;
+    (void)hal_adc_get_value(handle, &value);
+    return (uint16_t)value;
+}
+
 bool UiDriver_HandleVoltage(void)
 {
 	bool retval = false;
@@ -170,7 +183,7 @@ bool UiDriver_HandleVoltage(void)
 	if(pwmt.p_curr < POWER_SAMPLES_CNT)
 	{
 		// Add to accumulator
-		pwmt.pwr_aver = pwmt.pwr_aver + HAL_ADC_GetValue(&hadc1);
+		pwmt.pwr_aver = pwmt.pwr_aver + adc_read_value(&hadc1);
 		pwmt.p_curr++;
 	}
 	else

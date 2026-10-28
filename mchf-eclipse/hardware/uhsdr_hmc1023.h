@@ -11,8 +11,9 @@
 #ifndef __UHSDR_HMC1023_H
 #define __UHSDR_HMC1023_H
 #include "uhsdr_board.h"
+#include "uhsdr_hw_i2c.h"
 
-#define HMC1023_OK (HAL_OK)
+#define HMC1023_OK (UHSDR_HW_I2C_OK)
 #define HMC1023_ERROR (0xffffffff)
 
 typedef struct

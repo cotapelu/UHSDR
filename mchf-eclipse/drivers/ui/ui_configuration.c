@@ -14,6 +14,7 @@
 
 #include "ui_configuration.h"
 #include "config_storage.h"
+#include "uhsdr_flash.h"
 
 #include "ui_driver.h"
 
@@ -482,7 +483,7 @@ static uint16_t UiWriteSettingEEPROM_UInt32(uint16_t addrH, uint16_t addrL, uint
 {
     uint16_t retval = ConfigStorage_WriteVariable(addrH, (uint16_t)(set_val >> 16));
 
-    if (retval == HAL_OK)
+    if (retval == FLASH_ERROR_NONE)
     {
         retval = ConfigStorage_WriteVariable(addrL, (uint16_t)(set_val));
     }
@@ -575,7 +576,7 @@ static uint16_t UiWriteSettingsBandMode(const uint16_t i,const uint16_t band_mod
     uint16_t retval = UiWriteSettingEEPROM_UInt8x2(band_mode + i, value);
 
     // Try to read Freq saved values - update if changed
-    if (retval == HAL_OK)
+    if (retval == FLASH_ERROR_NONE)
     {
         retval = UiWriteSettingEEPROM_UInt32(band_freq_high+i,band_freq_low+i, vforeg->dial_value);
     }
@@ -586,11 +587,11 @@ static uint16_t UiWriteSettingsBandMode(const uint16_t i,const uint16_t band_mod
 #if 0
 static uint16_t UiWriteSettingEEPROM_UInt16_Array_2_Dim(uint16_t* array_ptr, const uint16_t base_idx, const size_t dim1, const size_t dim2)
 {
-    uint16_t retval = HAL_OK;
+    uint16_t retval = FLASH_ERROR_NONE;
 
-    for (uint16_t idx1 = 0; retval == HAL_OK && idx1 < dim1; idx1++)
+    for (uint16_t idx1 = 0; retval == FLASH_ERROR_NONE && idx1 < dim1; idx1++)
     {
-        for (uint16_t idx2 = 0; retval == HAL_OK && idx2 < dim2; idx2++)
+        for (uint16_t idx2 = 0; retval == FLASH_ERROR_NONE && idx2 < dim2; idx2++)
         {
             retval = UiWriteSettingEEPROM_UInt16(base_idx+(idx1*dim2)+idx2, array_ptr+(idx1*dim2)+idx2);
         }
@@ -601,11 +602,11 @@ static uint16_t UiWriteSettingEEPROM_UInt16_Array_2_Dim(uint16_t* array_ptr, con
 
 static uint16_t UiWriteSettingEEPROM_Filter()
 {
-    uint16_t retval = HAL_OK;
+    uint16_t retval = FLASH_ERROR_NONE;
 
-    for (uint16_t idx = 0; retval == HAL_OK && idx < FILTER_MODE_MAX; idx++)
+    for (uint16_t idx = 0; retval == FLASH_ERROR_NONE && idx < FILTER_MODE_MAX; idx++)
     {
-        for (uint16_t mem_idx = 0; retval == HAL_OK && mem_idx < FILTER_PATH_MEM_MAX; mem_idx++)
+        for (uint16_t mem_idx = 0; retval == FLASH_ERROR_NONE && mem_idx < FILTER_PATH_MEM_MAX; mem_idx++)
         {
             retval = UiWriteSettingEEPROM_UInt16(EEPROM_FILTER_PATH_MAP_BASE+idx*FILTER_PATH_MEM_MAX+mem_idx,ts.filter_path_mem[idx][mem_idx]);
         }
@@ -714,7 +715,7 @@ void UiConfiguration_ReadConfigEntryData(const ConfigEntryDescriptor* ced_ptr, b
 }
 uint16_t UiConfiguration_WriteConfigEntryData(const ConfigEntryDescriptor* ced_ptr)
 {
-    uint16_t retval = HAL_ERROR;
+    uint16_t retval = FLASH_ERROR_OPERATION;
     switch(ced_ptr->typeId & ConfigEntry_TypeMask)
     {
 
@@ -756,7 +757,7 @@ uint16_t UiConfiguration_WriteConfigEntryData(const ConfigEntryDescriptor* ced_p
 
 uint16_t UiConfiguration_WriteConfigEntries()
 {
-    uint16_t retval = HAL_OK;
+    uint16_t retval = FLASH_ERROR_NONE;
     int idx;
     for (idx = 0; ConfigEntryInfo[idx].typeId != ConfigEntry_Stop ; idx++)
     {
@@ -979,7 +980,7 @@ uint16_t UiConfiguration_SaveEepromValues(void)
                                        ((uint16_t)ts.band->band_mode| dmod_mode << 8));
 
             // TODO: move value to a static variable, so that it can be read/written with standard approach
-            if (retval == HAL_OK)
+            if (retval == FLASH_ERROR_NONE)
             {
                 retval = UiWriteSettingEEPROM_UInt32(EEPROM_FREQ_HIGH,EEPROM_FREQ_LOW, df.tune_new);
             }
@@ -990,37 +991,37 @@ uint16_t UiConfiguration_SaveEepromValues(void)
         }
 
         // Save stored band/mode/frequency memory from RAM
-        for(i = 0; retval == HAL_OK && i < MAX_BANDS; i++)      // scan through each band's frequency/mode data
+        for(i = 0; retval == FLASH_ERROR_NONE && i < MAX_BANDS; i++)      // scan through each band's frequency/mode data
         {
             // UiWriteSettingsBandMode(i,EEPROM_BAND0_MODE,EEPROM_BAND0_FREQ_HIGH,EEPROM_BAND0_FREQ_LOW,  &vfo[VFO_WORK].band[i]);
             retval = UiWriteSettingsBandMode(i,EEPROM_BAND0_MODE_A,EEPROM_BAND0_FREQ_HIGH_A,EEPROM_BAND0_FREQ_LOW_A, &vfo[VFO_A].band[i]);
-            if (retval == HAL_OK)
+            if (retval == FLASH_ERROR_NONE)
             {
                 UiWriteSettingsBandMode(i,EEPROM_BAND0_MODE_B,EEPROM_BAND0_FREQ_HIGH_B,EEPROM_BAND0_FREQ_LOW_B, &vfo[VFO_B].band[i]);
             }
         }
 
-        if (retval == HAL_OK)
+        if (retval == FLASH_ERROR_NONE)
         {
             retval = UiConfiguration_WriteConfigEntries();
         }
 
 
-        if (retval == HAL_OK)
+        if (retval == FLASH_ERROR_NONE)
         {
             retval = UiWriteSettingEEPROM_UInt32(EEPROM_XVERTER_OFFSET_HIGH,EEPROM_XVERTER_OFFSET_LOW,ts.xverter_offset);
         }
-        if (retval == HAL_OK)
+        if (retval == FLASH_ERROR_NONE)
         {
             retval = UiWriteSettingEEPROM_UInt32(EEPROM_XVERTER_OFFSET_TX_HIGH,EEPROM_XVERTER_OFFSET_TX_LOW,ts.xverter_offset_tx);
         }
 
-        if (retval == HAL_OK)
+        if (retval == FLASH_ERROR_NONE)
         {
             retval = UiWriteSettingEEPROM_Filter();
         }
 
-        if(retval == HAL_OK && ts.configstore_in_use == CONFIGSTORE_IN_USE_RAMCACHE)
+        if(retval == FLASH_ERROR_NONE && ts.configstore_in_use == CONFIGSTORE_IN_USE_RAMCACHE)
         {
             retval = ConfigStorage_CopyRAMCache2Serial();
             // write ram cache to EEPROM and switch back to I2C EEPROM use

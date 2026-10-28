@@ -18,6 +18,7 @@
 #include <math.h>
 
 #include "uhsdr_hw_i2c.h"
+#include "hal_i2c.h"
 #include "osc_si5351a.h"
 
 #ifdef USE_OSC_SI5351A
@@ -148,7 +149,7 @@ static bool Si5351a_SetupPLL(uint8_t pll, uint8_t mult, uint32_t num, uint32_t d
 			P2 & 0x000000FF
 	};
 
-	return Si5351a_WriteRegisters(pll, pll_data, 8) == HAL_OK;
+	return Si5351a_WriteRegisters(pll, pll_data, 8) == UHSDR_HW_I2C_OK;
 }
 
 
@@ -175,7 +176,7 @@ static bool Si5351a_SetupMultisynthInteger(uint8_t synth, uint32_t divider, uint
 			(P2 & 0x000000FF)
 	};
 
-	return Si5351a_WriteRegisters(synth, synth_data, 8) == HAL_OK;
+	return Si5351a_WriteRegisters(synth, synth_data, 8) == UHSDR_HW_I2C_OK;
 }
 
 static bool Si5351a_ValidateConfig(Si5351a_Config_t* config)
@@ -412,7 +413,11 @@ static bool              Si5351a_IsNextStepLarge()
  */
 bool Si5351a_ReadyForIrqCall()
 {
-    return (SI5351A_I2C->Lock == HAL_UNLOCKED);
+    uint8_t bus_free = 0;
+
+    (void)hal_i2c_is_bus_free(SI5351A_I2C, &bus_free);
+
+    return (bus_free != 0U);
 }
 
 // FIXME: The limits assume a 4x johnson counter, not the
@@ -453,7 +458,7 @@ void Si5351a_Init()
 	si5351a_state.current.multisynth_divider = 0;
 	si5351a_state.next.multisynth_divider = 0;
 
-	si5351a_state.is_present = UhsdrHw_I2C_DeviceReady(SI5351A_I2C,SI5351_I2C_WRITE) == HAL_OK;
+	si5351a_state.is_present = UhsdrHw_I2C_DeviceReady(SI5351A_I2C,SI5351_I2C_WRITE) == UHSDR_HW_I2C_OK;
 
 	if (si5351a_state.is_present)
 	{

@@ -26,3 +26,8 @@ void hal_delay_ms(uint32_t ms)
 {
     HAL_Delay(ms);
 }
+
+uint32_t hal_get_tick(void)
+{
+    return HAL_GetTick();
+}

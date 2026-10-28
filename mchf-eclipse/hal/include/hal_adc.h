@@ -28,4 +28,10 @@ typedef void* hal_adc_handle_t;
  * ------------------------------------------------------------------------- */
 hal_status_t hal_adc_start(hal_adc_handle_t handle);
 
+/* Reads the last converted value of the given ADC handle. The conversion
+ * result is 12 bit on all supported MCU families; the shim returns it as a
+ * 32 bit value so that the product code never has to model the vendor
+ * register width. */
+hal_status_t hal_adc_get_value(hal_adc_handle_t handle, uint32_t* value);
+
 #endif /* __HAL_ADC_H */

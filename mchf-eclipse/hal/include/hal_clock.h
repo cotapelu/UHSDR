@@ -22,6 +22,11 @@
  * Abstract clock API
  * ------------------------------------------------------------------------- */
 hal_status_t hal_clock_deinit(void);
+
+/* Enables the peripheral clock of the GPIO port the given port handle refers
+ * to (the port handle is the opaque GPIO_TypeDef* of hal_gpio.h). */
+hal_status_t hal_clock_gpio_enable(void* port);
+
 hal_status_t hal_suspend_tick(void);
 hal_status_t hal_resume_tick(void);
 

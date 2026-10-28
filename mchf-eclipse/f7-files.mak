@@ -12,6 +12,8 @@ hal/src/watchdog/hal_watchdog_stm32_f7.c \
 hal/src/clock/hal_clock_stm32_f7.c \
 hal/src/uart/hal_uart_stm32_f7.c \
 hal/src/dac/hal_dac_stm32_f7.c \
+hal/src/tim/hal_tim_stm32_f7.c \
+hal/src/rtc/hal_rtc_stm32_f7.c \
 hal/src/adc/hal_adc_stm32_f7.c \
 hal/src/delay/hal_delay_stm32_f7.c \
 hal/src/sram/hal_sram_stm32_f7.c \

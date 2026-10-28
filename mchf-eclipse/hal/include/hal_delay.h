@@ -23,4 +23,7 @@
  * ------------------------------------------------------------------------- */
 void hal_delay_ms(uint32_t ms);
 
+/* Milliseconds since the HAL time base was started. */
+uint32_t hal_get_tick(void);
+
 #endif /* __HAL_DELAY_H */

@@ -20,16 +20,36 @@
 #include "stm32h7xx_hal.h"
 
 /* -------------------------------------------------------------------------
+ * Vendor constant mapping. The shim API uses its own channel/alignment
+ * numbering; the vendor constants differ between the MCU families.
+ * ------------------------------------------------------------------------- */
+static uint32_t hal_dac_vendor_channel(hal_dac_channel_t channel)
+{
+    return (channel == HAL_DAC_CHANNEL_2) ? DAC_CHANNEL_2 : DAC_CHANNEL_1;
+}
+
+static uint32_t hal_dac_vendor_align(hal_dac_align_t align)
+{
+    switch (align)
+    {
+        case HAL_DAC_ALIGN_12B_L: return DAC_ALIGN_12B_L;
+        case HAL_DAC_ALIGN_8B_R:  return DAC_ALIGN_8B_R;
+        case HAL_DAC_ALIGN_12B_R:
+        default:                  return DAC_ALIGN_12B_R;
+    }
+}
+
+/* -------------------------------------------------------------------------
  * API implementation
  * ------------------------------------------------------------------------- */
-hal_status_t hal_dac_start(hal_dac_handle_t handle, uint32_t channel)
+hal_status_t hal_dac_start(hal_dac_handle_t handle, hal_dac_channel_t channel)
 {
     if (handle == NULL)
     {
         return HAL_STATUS_ERR_INVALID_PARAM;
     }
 
-    if (HAL_DAC_Start((DAC_HandleTypeDef*)handle, channel) != HAL_OK)
+    if (HAL_DAC_Start((DAC_HandleTypeDef*)handle, hal_dac_vendor_channel(channel)) != HAL_OK)
     {
         return HAL_STATUS_ERR_HW_FAILURE;
     }
@@ -37,14 +57,14 @@ hal_status_t hal_dac_start(hal_dac_handle_t handle, uint32_t channel)
     return HAL_STATUS_OK;
 }
 
-hal_status_t hal_dac_set_value(hal_dac_handle_t handle, uint32_t channel, uint32_t align, uint32_t value)
+hal_status_t hal_dac_set_value(hal_dac_handle_t handle, hal_dac_channel_t channel, hal_dac_align_t align, uint32_t value)
 {
     if (handle == NULL)
     {
         return HAL_STATUS_ERR_INVALID_PARAM;
     }
 
-    if (HAL_DAC_SetValue((DAC_HandleTypeDef*)handle, channel, align, value) != HAL_OK)
+    if (HAL_DAC_SetValue((DAC_HandleTypeDef*)handle, hal_dac_vendor_channel(channel), hal_dac_vendor_align(align), value) != HAL_OK)
     {
         return HAL_STATUS_ERR_HW_FAILURE;
     }

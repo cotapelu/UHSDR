@@ -6,13 +6,17 @@
  **                                                                                 **
  **---------------------------------------------------------------------------------**
  **                                                                                 **
- **  File name:                                                                     **
- **  Description:                                                                   **
- **  Last Modified:                                                                 **
+ **  File name:     uhsdr_boot_hw.c                                                 **
+ **  Description:   Bootloader board level hardware access (LEDs and buttons)      **
+ **                 All vendor HAL access goes through the HAL shim layer.         **
+ **  Last Modified: 2026-10-28                                                      **
  **  Licence:		GNU GPLv3                                                      **
  ************************************************************************************/
 
 #include "uhsdr_boot_hw.h"
+#include "hal_clock.h"
+#include "hal_gpio.h"
+#include "hal_nvic.h"
 
 
 static GPIO_TypeDef* GPIO_PORT[LEDn] = {LEDGREEN_GPIO_PORT, LEDRED_GPIO_PORT, POWER_ON_GPIO_PORT, BACKLIGHT_ON_GPIO_PORT, TP_CS_PIO};
@@ -24,58 +28,27 @@ static const uint16_t BUTTON_PIN[BUTTONn] = {BANDM_BUTTON_PIN,POWER_BUTTON_PIN, 
 
 static const uint8_t BUTTON_IRQn[BUTTONn] = {BANDM_BUTTON_EXTI_IRQn,POWER_BUTTON_EXTI_IRQn,BANDP_BUTTON_EXTI_IRQn};
 
-void mchfBl_PortClock(uint32_t port)
+void mchfBl_PortClock(hal_gpio_port_t port)
 {
-
-    /* Enable the BUTTON Clock */
-    switch(port)
-    {
-    case (uint32_t)GPIOA:
-        __HAL_RCC_GPIOA_CLK_ENABLE();
-        break;
-    case (uint32_t)GPIOB:
-        __HAL_RCC_GPIOB_CLK_ENABLE();
-        break;
-    case (uint32_t)GPIOC:
-        __HAL_RCC_GPIOC_CLK_ENABLE();
-        break;
-    case (uint32_t)GPIOD:
-        __HAL_RCC_GPIOD_CLK_ENABLE();
-        break;
-#if 0
-    case (uint32_t)GPIOE:
-        __HAL_RCC_GPIOE_CLK_ENABLE();
-        break;
-    case (uint32_t)GPIOF:
-        __HAL_RCC_GPIOF_CLK_ENABLE();
-        break;
-    case (uint32_t)GPIOG:
-        __HAL_RCC_GPIOG_CLK_ENABLE();
-        break;
-    case (uint32_t)GPIOH:
-        __HAL_RCC_GPIOH_CLK_ENABLE();
-        break;
-    case (uint32_t)GPIOI:
-        __HAL_RCC_GPIOI_CLK_ENABLE();
-        break;
-#endif
-    }
+    /* Enable the GPIO port clock through the HAL shim; the shim knows which
+     * RCC bit belongs to the given port on the actual MCU family. */
+    (void)hal_clock_gpio_enable(port);
 }
 
 void mchfBl_LEDInit(Led_TypeDef Led)
 {
-    GPIO_InitTypeDef  GPIO_InitStructure;
+    hal_gpio_config_t pinConfig;
 
-    mchfBl_PortClock((uint32_t)GPIO_PORT[Led]);
+    mchfBl_PortClock(GPIO_PORT[Led]);
     /* Enable the GPIO_LED Clock */
 
     /* Configure the GPIO_LED pin */
-    GPIO_InitStructure.Pin = GPIO_PIN[Led];
-    GPIO_InitStructure.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStructure.Pull = GPIO_PULLUP;
-    GPIO_InitStructure.Speed = GPIO_SPEED_FREQ_HIGH;
+    pinConfig.pin   = GPIO_PIN[Led];
+    pinConfig.mode  = HAL_GPIO_MODE_OUTPUT_PP;
+    pinConfig.pull  = HAL_GPIO_PULL_UP;
+    pinConfig.speed = HAL_GPIO_SPEED_HIGH;
 
-    HAL_GPIO_Init(GPIO_PORT[Led], &GPIO_InitStructure);
+    (void)hal_gpio_init(GPIO_PORT[Led], &pinConfig);
 }
 
 void mchfBl_PinOn(Led_TypeDef Led)
@@ -90,49 +63,48 @@ void mchfBl_PinOff(Led_TypeDef Led)
 
 void mchfBl_PinToggle(Led_TypeDef Led)
 {
-    GPIO_PORT[Led]->ODR ^= GPIO_PIN[Led];
+    GPIO_ToggleBits(GPIO_PORT[Led],GPIO_PIN[Led]);
 }
 
 void mchfBl_ButtonInit(Button_TypeDef Button, ButtonMode_TypeDef Button_Mode)
 {
-    GPIO_InitTypeDef GPIO_InitStructure;
+    hal_gpio_config_t pinConfig;
 
-    mchfBl_PortClock((uint32_t)BUTTON_PORT[Button]);
+    mchfBl_PortClock(BUTTON_PORT[Button]);
 
     /* Configure Button pin as input */
-    GPIO_InitStructure.Mode = GPIO_MODE_INPUT;
-    GPIO_InitStructure.Pull = GPIO_PULLUP;
-    GPIO_InitStructure.Pin = BUTTON_PIN[Button];
-    GPIO_InitStructure.Speed = GPIO_SPEED_FREQ_HIGH;
+    pinConfig.pin   = BUTTON_PIN[Button];
+    pinConfig.mode  = HAL_GPIO_MODE_INPUT;
+    pinConfig.pull  = HAL_GPIO_PULL_UP;
+    pinConfig.speed = HAL_GPIO_SPEED_HIGH;
 
     if (Button_Mode == BUTTON_MODE_EXTI)
     {
         /* Configure Button EXTI line */
-        GPIO_InitStructure.Mode = GPIO_MODE_EVT_FALLING;
-
+        pinConfig.mode = HAL_GPIO_MODE_EVT_FALLING;
 
         /* Enable and set Button EXTI Interrupt to the lowest priority */
-        HAL_NVIC_EnableIRQ(BUTTON_IRQn[Button]);
-        HAL_NVIC_SetPriority(BUTTON_IRQn[Button],15,0);
+        (void)hal_nvic_enable_irq(BUTTON_IRQn[Button]);
+        (void)hal_nvic_set_priority(BUTTON_IRQn[Button], 15, 0);
     }
-    HAL_GPIO_Init(BUTTON_PORT[Button], &GPIO_InitStructure);
+    (void)hal_gpio_init(BUTTON_PORT[Button], &pinConfig);
 }
 
 uint32_t mchfBl_ButtonGetState(Button_TypeDef Button)
 {
-    return HAL_GPIO_ReadPin(BUTTON_PORT[Button], BUTTON_PIN[Button]);
+    return (hal_gpio_read_pin(BUTTON_PORT[Button], BUTTON_PIN[Button]) == HAL_GPIO_PIN_RESET) ? 0U : 1U;
 }
 
 void mcHF_PowerOff()
 {
-    GPIO_InitTypeDef GPIO_InitStructure;
+    hal_gpio_config_t pinConfig;
 
-    GPIO_InitStructure.Mode = GPIO_MODE_INPUT;
-    GPIO_InitStructure.Pull = GPIO_PULLUP;
-    GPIO_InitStructure.Pin = GPIO_PIN[PWR_HOLD];
-    GPIO_InitStructure.Speed = GPIO_SPEED_FREQ_HIGH;
+    pinConfig.pin   = GPIO_PIN[PWR_HOLD];
+    pinConfig.mode  = HAL_GPIO_MODE_INPUT;
+    pinConfig.pull  = HAL_GPIO_PULL_UP;
+    pinConfig.speed = HAL_GPIO_SPEED_HIGH;
 
-    HAL_GPIO_Init(GPIO_PORT[PWR_HOLD], &GPIO_InitStructure);
+    (void)hal_gpio_init(GPIO_PORT[PWR_HOLD], &pinConfig);
 
     while(1) { asm("nop"); }
     // never reached
