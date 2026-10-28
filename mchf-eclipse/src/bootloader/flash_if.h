@@ -29,9 +29,17 @@ extern "C" {
 
 /* Includes ------------------------------------------------------------------*/
 #include "uhsdr_mcu.h"
+#include "hal_flash.h"
 
 /* Exported types ------------------------------------------------------------*/
 typedef  void (*pFunction)(void);
+
+/* Result of a read-out-protection query. The values match the historic
+ * FlagStatus/RESET/SET semantics (0 = not protected). */
+typedef enum {
+    FLASH_FLAG_RESET = 0,
+    FLASH_FLAG_SET = 1
+} flash_flag_status_t;
 /* Exported constants --------------------------------------------------------*/
 /* extern const char* version;
 extern const char* author; */
@@ -69,9 +77,9 @@ static inline uint32_t flashIf_userFlashSize()  {  return ((STM32_GetFlashSize()
 /* Exported functions ------------------------------------------------------- */
 void flashIf_FlashUnlock(void);
 void flashIf_FlashLock(void);
-FlagStatus flashIf_ReadOutProtectionStatus(void);
-uint32_t flashIf_EraseSectors(uint32_t Address, uint32_t Length);
-HAL_StatusTypeDef flashIf_Program256Bit(uint32_t Address, uint32_t Data[8]);
+flash_flag_status_t flashIf_ReadOutProtectionStatus(void);
+hal_status_t flashIf_EraseSectors(uint32_t Address, uint32_t Length);
+hal_status_t flashIf_Program256Bit(uint32_t Address, uint32_t Data[HAL_FLASH_WORD_BYTES]);
 
 
 #ifdef __cplusplus

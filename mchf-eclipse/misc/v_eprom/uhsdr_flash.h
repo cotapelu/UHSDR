@@ -25,6 +25,13 @@
 #ifndef __UHSDR_FLASH_H
 #define __UHSDR_FLASH_H
 
+#include <stdint.h>
+#include "hal_flash.h"
+
+/* Error codes of the flash emulation API: 0 means success. */
+#define FLASH_ERROR_NONE                 ((uint16_t)0x00)
+#define FLASH_ERROR_OPERATION            ((uint16_t)0x01)
+
 /* Exported constants --------------------------------------------------------*/
 #if defined(STM32F4) || defined(STM32F7)
     /* Define the size of the sectors to be used */
@@ -35,8 +42,8 @@
     #define EEPROM_START_ADDRESS  ((uint32_t)0x08008000) /* EEPROM emulation start address:
                                                             from sector2 : after 32KByte of used
                                                             Flash memory */
-    #define PAGE0_ID               FLASH_SECTOR_2
-    #define PAGE1_ID               FLASH_SECTOR_3
+    #define PAGE0_ID               HAL_FLASH_SECTOR_2
+    #define PAGE1_ID               HAL_FLASH_SECTOR_3
 #elif defined(STM32H7)
     /* Define the size of the sectors to be used */
     #define PAGE_SIZE               (uint32_t)0x20000  /* Page size = 128KByte */
@@ -44,8 +51,8 @@
     #define EEPROM_START_ADDRESS  ((uint32_t)0x08020000) /* EEPROM emulation start address:
                                                             from sector1 : after 128KByte of used
                                                             Flash memory */
-    #define PAGE0_ID               FLASH_SECTOR_1
-    #define PAGE1_ID               FLASH_SECTOR_2
+    #define PAGE0_ID               HAL_FLASH_SECTOR_1
+    #define PAGE1_ID               HAL_FLASH_SECTOR_2
 #endif
 
 

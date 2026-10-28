@@ -49,6 +49,96 @@ hal_status_t hal_flash_program_word(uint32_t address, uint32_t data)
     return HAL_STATUS_OK;
 }
 
+hal_status_t hal_flash_program_flashword(uint32_t address, const uint32_t data[HAL_FLASH_WORD_BYTES])
+{
+    for (uint32_t idx = 0; idx < HAL_FLASH_WORD_BYTES; idx++)
+    {
+        if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, address + (idx * 4U), data[idx]) != HAL_OK)
+        {
+            return HAL_STATUS_ERR_HW_FAILURE;
+        }
+    }
+
+    return HAL_STATUS_OK;
+}
+
+hal_status_t hal_flash_erase_sector(uint32_t bank, uint32_t sector, uint32_t *failed_sector)
+{
+    FLASH_EraseInitTypeDef eraseOp;
+    uint32_t sectorError = 0;
+
+    /* The F7 has a single flash bank, the argument is ignored. */
+    (void)bank;
+
+    eraseOp.TypeErase = FLASH_TYPEERASE_SECTORS;
+    eraseOp.Banks = FLASH_BANK_1;
+    eraseOp.Sector = sector;
+    eraseOp.NbSectors = 1;
+    eraseOp.VoltageRange = VOLTAGE_RANGE_3;
+
+    if (HAL_FLASHEx_Erase(&eraseOp, &sectorError) != HAL_OK)
+    {
+        if (failed_sector != NULL)
+        {
+            *failed_sector = sectorError;
+        }
+        return HAL_STATUS_ERR_HW_FAILURE;
+    }
+
+    return HAL_STATUS_OK;
+}
+
+hal_status_t hal_flash_get_rdp_level(hal_flash_rdp_level_t *level)
+{
+    FLASH_OBProgramInitTypeDef obInit;
+
+    if (level == NULL)
+    {
+        return HAL_STATUS_ERR_INVALID_PARAM;
+    }
+
+    HAL_FLASHEx_OBGetConfig(&obInit);
+
+    if (obInit.RDPLevel == OB_RDP_LEVEL_0)
+    {
+        *level = HAL_FLASH_RDP_LEVEL_0;
+    }
+    else if (obInit.RDPLevel == OB_RDP_LEVEL_1)
+    {
+        *level = HAL_FLASH_RDP_LEVEL_1;
+    }
+    else if (obInit.RDPLevel == OB_RDP_LEVEL_2)
+    {
+        *level = HAL_FLASH_RDP_LEVEL_2;
+    }
+    else
+    {
+        *level = HAL_FLASH_RDP_LEVEL_UNKNOWN;
+    }
+
+    return HAL_STATUS_OK;
+}
+
+hal_status_t hal_flash_set_single_bank_mode(void)
+{
+    /* The F7 can run in dual bank mode, which changes the sector layout. The
+     * product expects the single bank layout, so the nDBANK option bit is
+     * cleared. The launch resets the MCU, the new layout is active after the
+     * reset. */
+    if (HAL_FLASH_OB_Unlock() != HAL_OK)
+    {
+        return HAL_STATUS_ERR_HW_FAILURE;
+    }
+
+    FLASH->OPTCR &= ~FLASH_OPTCR_nDBANK;
+
+    HAL_FLASH_OB_Launch();
+
+    HAL_FLASH_OB_Lock();
+
+    return HAL_STATUS_OK;
+}
+
 hal_status_t hal_flash_ob_unlock(void)
 {
     if (HAL_FLASH_OB_Unlock() != HAL_OK)

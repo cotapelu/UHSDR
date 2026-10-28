@@ -27,9 +27,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "uhsdr_mcu.h"
 #include "config_storage.h"
-/* Device voltage range supposed to be [2.7V to 3.6V], the operation will
-       be done by word  */
-#define VOLTAGE_RANGE           VOLTAGE_RANGE_3
+#include "hal_flash.h"
 
 /* Pages 0 and 1 base and end addresses */
 #define PAGE0_BASE_ADDRESS    ((uint32_t)(EEPROM_START_ADDRESS + 0x0000))
@@ -65,13 +63,6 @@
     #define USE_HAL_DRIVER
 #endif
 #include "uhsdr_board.h"
-#ifdef STM32F7
-#include "stm32f7xx_hal_flash_ex.h"
-#elif defined(STM32H7)
-#include "stm32h7xx_hal_flash_ex.h"
-#elif defined(STM32F4)
-#include "stm32f4xx_hal_flash_ex.h"
-#endif
 /* Includes ------------------------------------------------------------------*/
 #include "uhsdr_flash.h"
 
@@ -93,27 +84,25 @@ static uint16_t DataVar = 0;
 
 /* Private function prototypes -----------------------------------------------*/
 /* Private functions ---------------------------------------------------------*/
-static HAL_StatusTypeDef Flash_Format(void);
+/* The flash emulation API reports success as 0 and a failure as a non zero
+ * error code through a uint16_t return value. The HAL shim uses its own
+ * status codes, so they are translated at this boundary. */
+static uint16_t Flash_StatusToError(hal_status_t status)
+{
+    return (status == HAL_STATUS_OK) ? FLASH_ERROR_NONE : FLASH_ERROR_OPERATION;
+}
+
+static uint16_t Flash_Format(void);
 static uint16_t Flash_FindPage(uint8_t Operation);
 static uint16_t Flash_WriteVariableToPage(uint16_t VirtAddress, uint16_t Data, uint8_t pageType);
 static uint16_t Flash_PageTransfer(uint16_t VirtAddress);
 
 
-static HAL_StatusTypeDef Flash_Erase(uint32_t sector)
+static uint16_t Flash_Erase(uint32_t sector)
 {
-FLASH_EraseInitTypeDef flashEraseOp;
 uint32_t sectorError = 0;
 
-flashEraseOp.Sector = sector;
-flashEraseOp.NbSectors = 1;
-flashEraseOp.VoltageRange = VOLTAGE_RANGE;
-flashEraseOp.TypeErase = FLASH_TYPEERASE_SECTORS;
-
-#if defined(STM32H7)
-flashEraseOp.Banks = FLASH_BANK_1;
-#endif
-
-return HAL_FLASHEx_Erase(&flashEraseOp, &sectorError);
+return Flash_StatusToError(hal_flash_erase_sector(HAL_FLASH_BANK_1, sector, &sectorError));
 
 }
 /**
@@ -127,39 +116,13 @@ static uint16_t Flash_GetVirtAddrForId(uint16_t id)
     return VAR_ADDR_START + id;
 }
 
-static HAL_StatusTypeDef Flash_Program(uint32_t toAddress,uint16_t value, uint16_t virtaddr)
+static uint16_t Flash_Program(uint32_t toAddress,uint16_t value, uint16_t virtaddr)
 {
-	HAL_StatusTypeDef retval = HAL_ERROR;
 	uint32_t word = (((uint32_t)virtaddr) << 16)| value;
 	// combine both parameters into a single 32bit word
-#if defined(STM32F4) || defined(STM32F7)
-    retval = HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD,toAddress, word);
-#elif defined(STM32H7)
-    // this code is used to simulate 32bit wide writing on a 256bit flash word
-    // this adds 8 times the amount of writing to a 256 bit location but what can we
-    // do, either this or we waste up to 78.5% of the config flash
-    uint32_t data[8];
-    uint32_t* startaddr = (uint32_t*)(toAddress & ~0xFFFFFFE0);
-    // mask out the lower 5 bits, we have to read 8x4 = 32 bytes aligned to a 32byte address;
-    uint32_t wordidx = (toAddress % 32) / 4; // now figure out where our data goes
-    for (int idx = 0; idx < 8; idx++)
-    {
-        if (idx != wordidx)
-        {
-            data[idx] = startaddr[idx];
-        }
-        else
-        {
-            data[idx] = word;
-        }
-
-    }
-    retval = HAL_FLASH_Program(FLASH_TYPEPROGRAM_FLASHWORD,toAddress, (uint32_t)&data[0]);
-#else
-    #error "No support for unknown processor implemented"
-#endif
-
-	return retval;
+	// The MCU specific handling (the H7 can only program whole 256 bit flash
+	// words and therefore needs a read-modify-write) lives in the HAL shim.
+	return Flash_StatusToError(hal_flash_program_word(toAddress, word));
 }
 
 static bool Flash_PageIsErased(uint8_t page)
@@ -176,9 +139,9 @@ static bool Flash_PageIsErased(uint8_t page)
     }
     return retval;
 }
-static HAL_StatusTypeDef Flash_Check_And_EraseIfNeeded(uint8_t page)
+static uint16_t Flash_Check_And_EraseIfNeeded(uint8_t page)
 {
-    HAL_StatusTypeDef retval = HAL_OK;
+    uint16_t retval = FLASH_ERROR_NONE;
     if (Flash_PageIsErased(page) == false)
     {
         retval =Flash_Erase(page == PAGE0? PAGE0_ID : PAGE1_ID);
@@ -192,10 +155,10 @@ static uint16_t Flash_TransferFullPage(uint8_t fromPage, uint8_t toPage, bool sk
     uint32_t toPageBaseAddress = toPage==PAGE0?PAGE0_BASE_ADDRESS:PAGE1_BASE_ADDRESS;
     // uint32_t fromPageBaseAddress = fromPage==PAGE0?PAGE0_BASE_ADDRESS:PAGE1_BASE_ADDRESS;
 
-    uint16_t retval = HAL_OK;
+    uint16_t retval = FLASH_ERROR_NONE;
 
     /* Transfer data from Page0 to Page1 */
-    for (uint16_t VarIdx = 0; retval == HAL_OK && VarIdx < NB_OF_VAR; VarIdx++)
+    for (uint16_t VarIdx = 0; retval == FLASH_ERROR_NONE && VarIdx < NB_OF_VAR; VarIdx++)
     {
         uint16_t virtAddress = Flash_GetVirtAddrForId(VarIdx);
 
@@ -209,7 +172,7 @@ static uint16_t Flash_TransferFullPage(uint8_t fromPage, uint8_t toPage, bool sk
                 /* Transfer the variable to the Page1 */
                 retval = Flash_WriteVariableToPage(virtAddress, DataVar, RECEIVE_WRITE_PAGE);
                 /* If program operation was failed, a Flash error code is returned */
-                if (retval != HAL_OK)
+                if (retval != FLASH_ERROR_NONE)
                 {
                     break;
                 }
@@ -219,7 +182,7 @@ static uint16_t Flash_TransferFullPage(uint8_t fromPage, uint8_t toPage, bool sk
     /* Mark toPage as valid */
     retval = Flash_Program(toPageBaseAddress, VALID_PAGE, 0xFFFF);
     /* If program operation was failed, a Flash error code is returned */
-    if (retval == HAL_OK)
+    if (retval == FLASH_ERROR_NONE)
     {
         /* Erase Page0 */
         retval = Flash_Erase(fromPage);
@@ -234,7 +197,7 @@ static uint16_t Flash_TransferFullPage(uint8_t fromPage, uint8_t toPage, bool sk
   *   corruption after a power loss.
   * @param  None.
   * @retval - Flash error code: on write Flash error
-  *         - HAL_OK: on success
+  *         - FLASH_ERROR_NONE: on success
   */
 static uint16_t Flash_InitA(void)
 {
@@ -259,12 +222,9 @@ static uint16_t Flash_InitA(void)
     // if the process can do dual bank mode,
     // switch this ON, otherwise we have already the correct
     // sector layout
-    #if defined (FLASH_OPTCR_nDBANK)
-        HAL_FLASH_OB_Unlock();
-        FLASH->OPTCR &= ~FLASH_OPTCR_nDBANK;
-        HAL_FLASH_OB_Launch();
-        HAL_FLASH_OB_Lock();
-    #endif
+    // Only the F7 supports the dual bank option; the shim reports
+    // HAL_STATUS_ERR_NOT_SUPPORTED on the other MCU families.
+    hal_flash_set_single_bank_mode();
 
 
     /* Get Page0 status */
@@ -286,7 +246,7 @@ static uint16_t Flash_InitA(void)
             /* Erase Page0 */
             retval = Flash_Check_And_EraseIfNeeded(PAGE0);
             /* If erase operation was failed, a Flash error code is returned */
-            if (retval == HAL_OK)
+            if (retval == FLASH_ERROR_NONE)
             {
                 /* Mark Page1 as valid */
                 retval = Flash_Program(PAGE1_BASE_ADDRESS, VALID_PAGE, 0xFFFF);
@@ -306,7 +266,7 @@ static uint16_t Flash_InitA(void)
             /* Erase Page1 */
             retval = Flash_Check_And_EraseIfNeeded(PAGE0);
             /* If erase operation was failed, a Flash error code is returned */
-            if (retval == HAL_OK)
+            if (retval == FLASH_ERROR_NONE)
             {
                 /* Mark Page0 as valid */
                 retval = Flash_Program(PAGE0_BASE_ADDRESS, VALID_PAGE, 0xFFFF);
@@ -360,9 +320,9 @@ uint16_t Flash_Init(void)
     uint16_t res;
 
 
-    HAL_FLASH_Unlock();
+    hal_flash_unlock();
     res = Flash_InitA();
-    HAL_FLASH_Lock();
+    hal_flash_lock();
 
     return res;
 }
@@ -432,7 +392,7 @@ uint16_t Flash_ReadVariable(uint16_t addr, uint16_t* value)
   * @param  VirtAddress: Variable virtual address
   * @param  Data: 16 bit data to be written
   * @retval Success or error status:
-  *           - HAL_OK: on success
+  *           - FLASH_ERROR_NONE: on success
   *           - PAGE_FULL: if valid page is full
   *           - NO_VALID_PAGE: if no valid page was found
   *           - Flash error code: on write Flash error
@@ -446,7 +406,7 @@ uint16_t Flash_UpdateVariable(uint16_t addr, uint16_t value)
     // -> no need to write it again
     if (Status == 0 && DataRead == value)
     {
-        Status = HAL_OK;
+        Status = FLASH_ERROR_NONE;
     }
     else
     {
@@ -460,7 +420,7 @@ uint16_t Flash_UpdateVariable(uint16_t addr, uint16_t value)
   * @param  VirtAddress: Variable virtual address
   * @param  Data: 16 bit data to be written
   * @retval Success or error status:
-  *           - HAL_OK: on success
+  *           - FLASH_ERROR_NONE: on success
   *           - PAGE_FULL: if valid page is full
   *           - NO_VALID_PAGE: if no valid page was found
   *           - Flash error code: on write Flash error
@@ -470,7 +430,7 @@ uint16_t Flash_WriteVariable(uint16_t addr, uint16_t value)
     uint16_t retval = 0;
     uint16_t VirtAddress = Flash_GetVirtAddrForId(addr);
 
-    HAL_FLASH_Unlock();
+    hal_flash_unlock();
 
     /* Write the variable virtual address and value in the EEPROM */
     retval = Flash_WriteVariableToPage(VirtAddress, value,WRITE_TO_VALID_PAGE);
@@ -480,13 +440,13 @@ uint16_t Flash_WriteVariable(uint16_t addr, uint16_t value)
     {
         /* Perform Page transfer and retry write*/
         retval = Flash_PageTransfer(VirtAddress);
-        if (retval == HAL_OK)
+        if (retval == FLASH_ERROR_NONE)
         {
             retval = Flash_WriteVariableToPage(VirtAddress, value,WRITE_TO_VALID_PAGE);
         }
     }
 
-    HAL_FLASH_Lock();
+    hal_flash_lock();
 
     /* Return last operation status */
     return retval;
@@ -498,15 +458,15 @@ uint16_t Flash_WriteVariable(uint16_t addr, uint16_t value)
   * @retval Status of the last operation (Flash write or erase) done during
   *         EEPROM formating
   */
-static HAL_StatusTypeDef Flash_Format(void)
+static uint16_t Flash_Format(void)
 {
-    HAL_StatusTypeDef FlashStatus;
+    uint16_t FlashStatus;
 
     /* Erase Page0 */
     FlashStatus = Flash_Erase(PAGE0_ID);
 
     /* If erase operation was failed, a Flash error code is returned */
-    if (FlashStatus != HAL_OK)
+    if (FlashStatus != FLASH_ERROR_NONE)
     {
         return FlashStatus;
     }
@@ -515,7 +475,7 @@ static HAL_StatusTypeDef Flash_Format(void)
     FlashStatus = Flash_Program(PAGE0_BASE_ADDRESS, VALID_PAGE, 0xFFFF);
 
     /* If program operation was failed, a Flash error code is returned */
-    if (FlashStatus != HAL_OK)
+    if (FlashStatus != FLASH_ERROR_NONE)
     {
         return FlashStatus;
     }
@@ -599,7 +559,7 @@ static uint16_t Flash_FindPage(uint8_t Operation)
   * @param  VirtAddress: 16 bit virtual address of the variable
   * @param  Data: 16 bit data to be written as variable value
   * @retval Success or error status:
-  *           - HAL_OK: on success
+  *           - FLASH_ERROR_NONE: on success
   *           - PAGE_FULL: if valid page is full
   *           - NO_VALID_PAGE: if no valid page was found
   *           - Flash error code: on write Flash error
@@ -649,7 +609,7 @@ static uint16_t Flash_WriteVariableToPage(uint16_t VirtAddress, uint16_t Data, u
   * @param  VirtAddress: 16 bit virtual address of the variable
   * @param  Data: 16 bit data to be written as variable value
   * @retval Success or error status:
-  *           - HAL_OK: on success
+  *           - FLASH_ERROR_NONE: on success
   *           - PAGE_FULL: if valid page is full
   *           - NO_VALID_PAGE: if no valid page was found
   *           - Flash error code: on write Flash error
@@ -659,7 +619,7 @@ static uint16_t Flash_PageTransfer(uint16_t VirtAddress)
     uint32_t NewPageAddress;
     uint16_t ValidPage;
     uint16_t NewPage;
-    uint16_t retval = HAL_OK;
+    uint16_t retval = FLASH_ERROR_NONE;
 
     /* Get active Page for read operation */
     ValidPage = Flash_FindPage(READ_FROM_VALID_PAGE);
@@ -681,12 +641,12 @@ static uint16_t Flash_PageTransfer(uint16_t VirtAddress)
         retval = NO_VALID_PAGE;       /* No valid Page */
     }
 
-    if (retval == HAL_OK )
+    if (retval == FLASH_ERROR_NONE )
     {
         /* Set the new Page status to RECEIVE_DATA status */
         retval = Flash_Program(NewPageAddress, RECEIVE_DATA, 0xFFFF);
         /* If program operation was failed, a Flash error code is returned */
-        if (retval == HAL_OK)
+        if (retval == FLASH_ERROR_NONE)
         {
             retval = Flash_TransferFullPage(ValidPage,NewPage,true,VirtAddress);
         }

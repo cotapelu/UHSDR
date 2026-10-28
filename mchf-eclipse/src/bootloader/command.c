@@ -176,7 +176,7 @@ mchf_bootloader_error_t COMMAND_ProgramFlashMemory(uint32_t* out_crc)
             {
                 uint32_t* RAM_Address = (uint32_t*)&RAM_Buf[programcounter];
 
-                if (flashIf_Program256Bit(LastPGAddress,    RAM_Address) != HAL_OK)
+                if (flashIf_Program256Bit(LastPGAddress,    RAM_Address) != HAL_STATUS_OK)
                 {
                     /* Flash programming error */
                     retval = BL_ERR_FLASHPROG;
@@ -206,7 +206,7 @@ void COMMAND_UPLOAD(void)
     /* green LED on command upload */
     mchfBl_PinOn(LEDGREEN);
     /* Get the read out protection status */
-    FlagStatus readoutstatus = flashIf_ReadOutProtectionStatus();
+    flash_flag_status_t readoutstatus = flashIf_ReadOutProtectionStatus();
     if (readoutstatus == 0)
     {
         /* Remove UPLOAD file if exist on flash disk */
@@ -267,7 +267,7 @@ void COMMAND_DOWNLOAD(void)
         if (f_size(&fileR) > flashIf_userFlashSize())
         {
             retval = BL_ERR_FLASHTOOSMALL;
-        } else if ( flashIf_EraseSectors(APPLICATION_ADDRESS,f_size(&fileR)) != HAL_OK)
+        } else if ( flashIf_EraseSectors(APPLICATION_ADDRESS,f_size(&fileR)) != HAL_STATUS_OK)
         {
             /* Flash erase error */
             retval = BL_ERR_FLASHERASE;

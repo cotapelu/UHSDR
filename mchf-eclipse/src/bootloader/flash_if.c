@@ -12,16 +12,7 @@
  **  Licence:		GNU GPLv3                                                      **
  ************************************************************************************/
 #include "uhsdr_board_config.h"
-
-#if defined(STM32F7)
-    #include "stm32f7xx_hal_flash.h"
-#elif defined(STM32H7)
-    #include "stm32h7xx_hal_flash.h"
-#elif defined(STM32F4)
-    #include "stm32f4xx_hal_flash.h"
-#else
-    #error Unknown processor
-#endif
+#include "hal_flash.h"
 
 #include "flash_if.h"
 
@@ -89,9 +80,6 @@ static const flash_sectorinfo_t flash_sector_addr[] = {
 static const uint32_t flash_sector_max = sizeof(flash_sector_addr)/sizeof(flash_sectorinfo_t)-1;
 // we have one extra entry at the end, hence we need to reduce number of sectors by one
 
-#define RESET 0
-#define SET 1
-
 /**
   * Return the Flash sector Number of the address
   * retval The Flash sector Number of the address
@@ -124,46 +112,44 @@ static uint32_t flashIf_GetSectorNumber(uint32_t idx)
     }
     return retval;
 }
-#if defined(STM32H7)
 static uint32_t flashIf_GetSectorBank(uint32_t idx)
 {
     uint32_t retval = FLASH_NO_SECTOR;
     if (idx < flash_sector_max)
     {
-        retval = idx < 8? FLASH_BANK_1:FLASH_BANK_2; // 2x8 sectors
+#if defined(STM32H7)
+        retval = idx < 8? HAL_FLASH_BANK_1:HAL_FLASH_BANK_2; // 2x8 sectors
+#else
+        retval = HAL_FLASH_BANK_1; // single bank
+#endif
     }
     return retval;
 }
-#endif
 
 
 void flashIf_FlashUnlock()
 {
-    HAL_FLASH_Unlock();
+    hal_flash_unlock();
 }
 
 void flashIf_FlashLock()
 {
-    HAL_FLASH_Lock();
+    hal_flash_lock();
 }
 
 
-FlagStatus flashIf_ReadOutProtectionStatus()
+flash_flag_status_t flashIf_ReadOutProtectionStatus()
 {
-    FLASH_OBProgramInitTypeDef OBInit;
+    hal_flash_rdp_level_t level = HAL_FLASH_RDP_LEVEL_UNKNOWN;
 
-    HAL_FLASHEx_OBGetConfig(&OBInit);
-    FlagStatus readoutstatus = RESET;
+    hal_flash_get_rdp_level(&level);
 
-    if (OBInit.RDPLevel != OB_RDP_LEVEL0)
+    if (level == HAL_FLASH_RDP_LEVEL_0)
     {
-        readoutstatus = SET;
+        return FLASH_FLAG_RESET;
     }
-    else
-    {
-        readoutstatus = RESET;
-    }
-    return readoutstatus;
+
+    return FLASH_FLAG_SET;
 }
 
 /**
@@ -172,11 +158,10 @@ FlagStatus flashIf_ReadOutProtectionStatus()
   *  HAL_OK: Erase sectors done with success
   *  Anything else: Erase error
   */
-uint32_t flashIf_EraseSectors(uint32_t Address, uint32_t Length)
+hal_status_t flashIf_EraseSectors(uint32_t Address, uint32_t Length)
 {
-    FLASH_EraseInitTypeDef flashEraseOp;
     uint32_t sectorError = 0;
-    uint32_t retval = HAL_ERROR;
+    hal_status_t retval = HAL_STATUS_ERR_INVALID_PARAM;
 
     /* Erase Flash sectors */
     uint32_t startsector = flashIf_GetSectorInfoIndex(Address);
@@ -185,19 +170,14 @@ uint32_t flashIf_EraseSectors(uint32_t Address, uint32_t Length)
     if (startsector != FLASH_NO_SECTOR && endsector != FLASH_NO_SECTOR)
 
     {
-        retval = HAL_OK;
+        retval = HAL_STATUS_OK;
 
-        for (int idx = startsector; retval == HAL_OK && idx <= endsector; idx++)
+        for (uint32_t idx = startsector; retval == HAL_STATUS_OK && idx <= endsector; idx++)
         {
             /* Erase FLASH sectors to download image */
-            flashEraseOp.Sector = flashIf_GetSectorNumber(idx);
-            flashEraseOp.NbSectors = 1;
-            flashEraseOp.VoltageRange = VOLTAGE_RANGE_3;
-            flashEraseOp.TypeErase = FLASH_TYPEERASE_SECTORS;
-#if defined(STM32H7)
-            flashEraseOp.Banks = flashIf_GetSectorBank(idx);
-#endif
-            retval = HAL_FLASHEx_Erase(&flashEraseOp, &sectorError);
+            retval = hal_flash_erase_sector(flashIf_GetSectorBank(idx),
+                                             flashIf_GetSectorNumber(idx),
+                                             &sectorError);
         }
     }
     return retval;
@@ -210,17 +190,11 @@ uint32_t flashIf_EraseSectors(uint32_t Address, uint32_t Length)
   * retval FLASH Status: The returned value can be: FLASH_ERROR_PG,
   * FLASH_ERROR_WRP, HAL_OK or FLASH_TIMEOUT.
   */
-HAL_StatusTypeDef flashIf_Program256Bit(uint32_t Address, uint32_t Data[8])
+hal_status_t flashIf_Program256Bit(uint32_t Address, uint32_t Data[HAL_FLASH_WORD_BYTES])
 {
-    HAL_StatusTypeDef retval = HAL_OK;
-#ifndef STM32H7
-    for (int i=0; retval == HAL_OK && i < 8; i++)
-    {
-        retval = HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD,Address+(i*4), Data[i]);
-    }
-#else
-    retval = HAL_FLASH_Program(FLASH_TYPEPROGRAM_FLASHWORD,Address, (uint32_t)&Data[0]);
-#endif
-    return retval;
+    /* The MCU specific handling lives in the HAL shim: the F4/F7 program the
+     * 32 bytes as eight 32 bit words, the H7 programs one 256 bit flash
+     * word. */
+    return hal_flash_program_flashword(Address, Data);
 }
 
