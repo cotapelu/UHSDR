@@ -1,7 +1,7 @@
 # UHSDR Platform TODO — STM32 Optimization Roadmap
 
 > **Architecture:** AGENTS.md v6.0  
-> **Last updated:** 2026-10-28 (Phase 69: HAL boundary migration finished — T77)
+> **Last updated:** 2026-10-28 (Phase 69: HAL boundary migration finished (T77) + CMSIS-DSP table reclaim (T81))
 > **Scope:** STM32F4/F7/H7 — mcHF, OVI40
 
 ---
@@ -17,10 +17,10 @@
 
 | Category | Measured | Notes |
 |---|---|---|
-| Firmware build — F4 | ✅ 0 errors | `fw-mchf.elf` 426 961 + 1 968 + 96 444 = 525 373 B |
-| Firmware build — F4-512KB | ✅ 0 errors | 283 285 B, fits 512 KB flash |
-| Firmware build — F7 | ✅ 0 errors | ⚠️ **was failing to build** before Phase 66 (11 errors) |
-| Firmware build — H7 | ✅ 0 errors | ⚠️ **was failing to build** before Phase 66 (11 errors) |
+| Firmware build — F4 | ✅ 0 errors | `fw-mchf.elf` text **357 857 B** (−16.2 % in Phase 69.7: CMSIS-DSP tables reclaimed) |
+| Firmware build — F4-512KB | ✅ 0 errors | 281 577 B, fits 512 KB flash |
+| Firmware build — F7 | ✅ 0 errors | text **471 257 B** (−12.6 % in Phase 69.7); ⚠️ **was failing to build** before Phase 66 (11 errors) |
+| Firmware build — H7 | ✅ 0 errors | text **480 025 B** (−12.4 % in Phase 69.7); ⚠️ **was failing to build** before Phase 66 (11 errors) |
 | Bootloader build — F4 / F7 / H7 | ✅ 0 errors | all three |
 | Host unit tests | ✅ 670/670 pass | 53 test files, 11 475 LOC, no hardware needed |
 | Vendor HAL `#include` in compiled product code | ✅ **0 files** | Phase 69 closed the 5 remaining files (`uhsdr_rtc.c`, `uhsdr_flash.c`, bootloader `flash_if.c`, …); only the CMSIS device headers in `board_configs/` remain, deliberately |
@@ -44,7 +44,7 @@
 | Cross-target dirty-tree build | ✅ **fixed (T75)** | config fingerprint/stamp invalidates stale objects; `make build-switch-test` passes 7/7 |
 | Root `make clean` completeness | ✅ **fixed (T79)** | `make clean` now leaves **0** `.o` files, including `basesw/` and `build/bootloader/` |
 | Transceiver identity per board | ✅ **fixed (T80)** | was: every target reported `mchf Transceiver`; now `mcHF QRP` / `OVI40 F7` / `OVI40 H7`; `make check-identity` passes 23/23 |
-| Release artifact size baseline | ⚠️ **re-baselined (T81)** | the old "release" builds were actually DEBUG builds; corrected true-release sizes are below |
+| Release artifact size baseline | ⚠️ **re-baselined (T81)** | the old "release" builds were actually DEBUG builds; Phase 69.7 additionally reclaimed ~68 kB of CMSIS-DSP tables per target (see §69.7) |
 | Vendor HAL boundary claim | ✅ **true for the compiled product tree** | was ❌ in Phase 68; closed by Phase 69 — see §69.5/§69.6 for the measurement and the 4 documented residuals |
 | Static-analysis gate runtime | ✅ **4 m 15 s** (was ~25 min) | parallel `-j$(nproc)` + no duplicate scan + hard timeout; tracked as T78 |
 | SDR extension implementation | ❌ not started | no `drivers/modem`, `drivers/mesh`, or `drivers/video` directories; Phases 80–84 remain design-only |
@@ -132,6 +132,8 @@ Ordered by measured risk, not by how visible the task is.
 | T73 | Continue `ui_driver.c` split (6 430 L) | Long-standing, already partially done | P2 |
 | T74 | License decision (GPL-3.0) | Blocks commercial distribution of firmware | P0 (business) |
 | T75 | Make single-`make <target>` builds robust on a dirty tree | A `make f4-mchf` after a prior F7/H7 build **fails to link** on stale in-tree objects; only a full `make clean` recovers. Root `clean` also leaves ~800 `basesw/*.o`. CI works around it by building `all-firmware` (which cleans per config) but interactive use breaks | ✅ done (Phase 68) |
+| T81 | Re-baseline release sizes + reclaim CMSIS-DSP tables | FFT-init fix landed in Phase 69.7 → ~68 kB/target reclaimed, sizes re-baselined; the *track reclaim* part is **closed** | ✅ **tables reclaimed (Phase 69.7)**; wideband-path recovery = T85 |
+| **T85** | Restore the codec2 700C wideband path through the vendored kiss FFT | `wideband_enc_dec` needs 60/16-point real FFTs that CMSIS-DSP cannot serve; `kiss_fft.c`/`kiss_fftr.c` are compiled but unused (`-DFDV_ARM_MATH` wins). Tagged cfg with both backends; keep the 671-test suite green | P2 — new, Phase 69.7 |
 | T76 | Pay down the cppcheck product baseline (mostly `invalidPrintfArgType`) | ~16 `%u/%lu/%ld` vs `int`/`uint`/`long` format drifts in `ui_menu.c`, `ui_spectrum.c`, `ui_driver*.c`, `freedv_uhsdr.c`, `misc/profiling.c`; then remove each baseline line | ✅ done (Phase 68.9) |
 | ~~T77~~ | ✅ **Finish the HAL boundary migration** — **DONE (Phase 69)** | 19 sites were only the first wave; the complete list was 57 sites / 12 files including the bootloader, TIM counters, oscillator lock fields and vendor status constants | — |
 
@@ -699,6 +701,65 @@ before, the bootloader called the vendor HAL directly.
 > `grep -rn 'HAL_' drivers/ hardware/ misc/ src/` still reports hits. All of them
 > are now comments, documentation, or the one callback name above. The audit
 > command that matters is the one in §69.5, restricted to compiled sources.
+
+### 69.7 T81 (partial): the uninitialised wideband FFT — closed, and the CMSIS-DSP tables reclaimed
+
+Phase 68.6 left this task open with the note that the runtime-sized
+`arm_rfft_fast_init_f32()` call in `drivers/freedv/dct2.c` (sizes **60** and
+**16**, from `c2wideband.c` with `C2WB_K=30` / `C2WB_NT=8`) is **not supported by
+CMSIS-DSP** (valid lengths: 32, 64, 128, 256, 512, 1024, 2048, 4096), so the
+wideband path received an uninitialised FFT instance — and that the same call
+kept every twiddle/bit-reversal table linked (≈68 kB).
+
+**Measured this session, the picture is now complete:**
+
+| Fact | Evidence |
+|---|---|
+| `arm_rfft_fast_init_f32(S, 60)` and `(S, 16)` set `fftLenRFFT`/`Sint->fftLen` but hit the `default:` branch → `ARM_MATH_ARGUMENT_ERROR`, twiddle + bit-reversal pointers left unset | CMSIS `arm_rfft_fast_init_f32.c`, `default:` case |
+| `codec2_fftr_alloc()` **ignored that return value** | old `codec2_fft.c:112` |
+| its sibling `codec2_fft_alloc()` already fails loudly: `default: abort();` | same file |
+| the 60/16 sizes are requested only by `dct_config()`/`idct_config()` ← `wideband_enc_dec()` | `dct2.c:39,49` ← `c2wideband.c:415-418` |
+| `wideband_enc_dec()` is **dead on the target**: its only caller is inside a `C2WB_PLOT`-guarded block, and `codec2_encode_wb`/`codec2_encode_700c` do not use it (700C uses `K=20` via `newamp1_model_to_indexes`) | `c2wideband.c:700` inside `#ifdef C2WB_PLOT`; `codec2.c:1977` |
+| the only *live* real-FFT user is `codec2.c` `codec2_fftr_alloc(FFT_ENC/FFT_DEC=512)`; all other FFTs use the constant instances `arm_cfft_sR_f32_len{128,256,512}` (spectrum, noise reduction, codec2) | grep + `nm` |
+
+**Fix applied** (fail-fast, matching the sibling function's convention):
+
+- `drivers/freedv/codec2_fft.c` — `codec2_fftr_alloc()` now checks the
+  `arm_rfft_fast_init_f32()` return, handles `MALLOC` failure and releases the
+  half-built config, returning **NULL** for any length CMSIS-DSP cannot
+  initialise (60 and 16 are the only such lengths this tree asks for);
+  `codec2_fftr_free()` is NULL-tolerant so a partial config is always
+  releasable.
+- `drivers/freedv/c2wideband.c` — `wideband_enc_dec()` creates its four DCT
+  configs **once** (the old code allocated four malloc'd configs per block and
+  never released them) and, when the one-time init fails, disables the wideband
+  path for the rest of the run instead of transforming with an uninitialised
+  FFT instance.
+
+**Result — a real, deterministic size win** (causality verified by reverting
+`codec2_fft.c` to `HEAD` and rebuilding: F7 returns to 539 105 B):
+
+| Target | Before T81 fix | After | Delta |
+|---|---|---|---|
+| F4 mcHF | 427 145 B | **357 857 B** | **−69 288 B (−16.2 %)** |
+| F4-512KB | 281 577 B | 281 577 B | 0 (no codec2 FFT path in this config) |
+| F7 OVI40 | 539 105 B | **471 257 B** | **−67 848 B (−12.6 %)** |
+| H7 OVI40 | 547 873 B | **480 025 B** | **−67 848 B (−12.4 %)** |
+
+Mechanism: with the init return value now *checked*, LTO/IPA-CP clones
+`arm_rfft_fast_init_f32` for the single live constant size (512) and the
+generic body — which is what kept `twiddleCoef_{2048,4096,rfft_1024/2048/4096}`
+and `armBitRevIndexTable{1024,2048}` linked — is no longer referenced.
+`nm` confirms only `twiddleCoef_128/256/512`, `twiddleCoef_rfft_512` and
+`armBitRevIndexTable128/…` remain, i.e. exactly what the live FFTs use.
+
+**What T81 did *not* restore:** the codec2 700C **wideband** path is still
+non-functional on device — it needs real FFTs of 60 and 16 points, which no
+CMSIS-DSP length can serve. Recovering it means routing only that path through
+the vendored **kiss FFT** (`drivers/freedv/kiss_fft.c` / `kiss_fftr.c` are
+compiled but unused: `-DFDV_ARM_MATH` selects CMSIS in `codec2_fft.h`), i.e. a
+tagged cfg that carries both backends. That is a scoped, behaviour-changing
+DSP task — **tracked as T85**, not silently claimed as done.
 
 ---
 

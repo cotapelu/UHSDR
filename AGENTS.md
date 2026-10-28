@@ -447,7 +447,7 @@ HAL backends (hal/src/*/):
 | Host test coverage | **unknown** | >90% measured |
 | Product-code compiler warnings | 260 (→ ~219 after Phase 67) | <25 |
 | `-Wlto-type-mismatch` | 57 (→ **0** after Phase 67) | 0 |
-| F4 binary (text) | 426 961 B (→ 434 897 B, +0.055 % after Phase 67) | < 1 % regression/step |
+| F4 binary (text) | 426 961 B (→ 434 897 B, +0.055 % after Phase 67) → **357 857 B** after Phase 69.7 | < 1 % regression/step |
 | Time to add new STM32 MCU | 1 week (HAL backend + `uhsdr_mcu.h`) | ≤ 1 week ✅ |
 | Time to add new board | 1 config header + `UI_BRD_*` flag | ≤ 1 day ✅ |
 | Binary size regression tolerance | — | < 1% |

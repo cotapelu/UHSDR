@@ -106,10 +106,33 @@ codec2_fftr_cfg codec2_fftr_alloc(int nfft, int inverse_fft, void* mem, size_t* 
 #ifdef USE_KISS_FFT
     retval = kiss_fftr_alloc(nfft, inverse_fft, mem, lenmem);
 #else
+    /* UHSDR: validate the initialisation. CMSIS-DSP's arm_rfft_fast_init_f32()
+     * initialises only the power-of-two real FFT lengths 32..4096; for any
+     * other length it returns ARM_MATH_ARGUMENT_ERROR and leaves the twiddle
+     * and bit-reversal pointers of the malloc'd instance unset, so a
+     * subsequent transform would dereference them. The number of parameters
+     * the wideband DCT needs (2*C2WB_K = 60 and 2*C2WB_NT = 16 point
+     * transforms) is not in that set. The half built config is released and
+     * NULL is returned, so that the caller can detect and handle the
+     * unsupported size instead of running with an uninitialised instance. */
     retval = MALLOC(sizeof(codec2_fftr_struct));
+    if (retval == NULL)
+    {
+        return NULL;
+    }
     retval->inverse  = inverse_fft;
     retval->instance = MALLOC(sizeof(arm_rfft_fast_instance_f32));
-    arm_rfft_fast_init_f32(retval->instance,nfft);
+    if (retval->instance == NULL)
+    {
+        FREE(retval);
+        return NULL;
+    }
+    if (arm_rfft_fast_init_f32(retval->instance,(uint16_t)nfft) != ARM_MATH_SUCCESS)
+    {
+        FREE(retval->instance);
+        FREE(retval);
+        return NULL;
+    }
     // memcpy(&retval->instance->Sint,arm_fft_cache_get(&retval->instance->Sint),sizeof(arm_cfft_instance_f32));
 #endif
     return retval;
@@ -119,8 +142,13 @@ void codec2_fftr_free(codec2_fftr_cfg cfg)
 #ifdef USE_KISS_FFT
     KISS_FFT_FREE(cfg);
 #else
-    FREE(cfg->instance);
-    FREE(cfg);
+    /* UHSDR: NULL tolerant, so that a partially created config (see
+     * codec2_fftr_alloc) can always be released safely. */
+    if (cfg != NULL)
+    {
+        FREE(cfg->instance);
+        FREE(cfg);
+    }
 #endif
 }
 

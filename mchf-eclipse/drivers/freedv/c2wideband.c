@@ -27,6 +27,7 @@
  */
 
 #include <assert.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -411,11 +412,45 @@ void wideband_enc_dec(C2CONST *c2const, int n_block_frames, MODEL model_block[n_
     int dec = C2WB_DEC;
 
     // one time configuration of DCT & IDCT
+    //
+    // UHSDR: the four configs are created once and kept for the lifetime of
+    // the program. The original code allocated them on every block (four
+    // mallocs per encode/decode call) and never released them, so the heap
+    // drained steadily while 700C was in use. If a config cannot be created
+    // (CMSIS-DSP cannot initialise the 60 and 16 point real FFTs this codec
+    // needs, see codec2_fftr_alloc), the wideband path is disabled for the
+    // rest of the run instead of transforming with an uninitialised FFT
+    // instance.
+    static codec2_dct_cfg dct_cfg_n  = NULL;
+    static codec2_dct_cfg dct_cfg_m  = NULL;
+    static codec2_dct_cfg idct_cfg_n = NULL;
+    static codec2_dct_cfg idct_cfg_m = NULL;
+    static bool wideband_fft_unsupported = false;
 
-    codec2_dct_cfg dct_cfg_n = dct_config(cols);
-    codec2_dct_cfg dct_cfg_m = dct_config(rows);
-    codec2_dct_cfg idct_cfg_n = idct_config(cols);
-    codec2_dct_cfg idct_cfg_m = idct_config(rows);
+    if (wideband_fft_unsupported)
+    {
+        return;
+    }
+
+    if (dct_cfg_n == NULL)
+    {
+        dct_cfg_n  = dct_config(cols);
+        dct_cfg_m  = dct_config(rows);
+        idct_cfg_n = idct_config(cols);
+        idct_cfg_m = idct_config(rows);
+
+        if ((dct_cfg_n == NULL) || (dct_cfg_m == NULL) ||
+            (idct_cfg_n == NULL) || (idct_cfg_m == NULL))
+        {
+            codec2_fftr_free((codec2_fftr_cfg)dct_cfg_n);
+            codec2_fftr_free((codec2_fftr_cfg)dct_cfg_m);
+            codec2_fftr_free((codec2_fftr_cfg)idct_cfg_n);
+            codec2_fftr_free((codec2_fftr_cfg)idct_cfg_m);
+            dct_cfg_n = NULL;
+            wideband_fft_unsupported = true;
+            return;
+        }
+    }
 
     //printf("starting iteration\n");
     // iterate through the frames in the block
